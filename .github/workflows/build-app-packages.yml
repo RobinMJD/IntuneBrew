@@ -16,7 +16,7 @@ concurrency:
 
 jobs:
   collect:
-    runs-on: [self-hosted, Linux, X64, intunebrew-linux]
+    runs-on: ubuntu-latest
     timeout-minutes: 120
     outputs:
       scope: ${{ steps.scope.outputs.scope }}
@@ -29,9 +29,9 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Set up Python
-        run: |
-          python3 -m venv "$RUNNER_TEMP/venv"
-          echo "$RUNNER_TEMP/venv/bin" >> "$GITHUB_PATH"
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.x"
 
       - name: Install dependencies
         run: |
@@ -113,6 +113,7 @@ jobs:
   build:
     needs: collect
     runs-on: macos-latest
+    environment: catalog-storage
 
     # The job-scoped token is sufficient for catalog commits and issue comments.
     permissions:
@@ -147,7 +148,7 @@ jobs:
           done
 
           if [ ${#missing[@]} -gt 0 ]; then
-            echo "::error::Missing required GitHub Actions repository variables: ${missing[*]}"
+            echo "::error::Missing required catalog-storage environment variables: ${missing[*]}"
             exit 1
           fi
 

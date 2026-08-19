@@ -171,7 +171,7 @@ class ApprovalWorkflowTests(unittest.TestCase):
         self.assertIn("issues: write", workflow)
         self.assertIn("id-token: write", workflow)
 
-    def test_catalog_collection_runs_on_isolated_linux_runner(self):
+    def test_catalog_collection_runs_on_hosted_ubuntu(self):
         workflow = (
             ROOT / ".github" / "workflows" / "build-app-packages.yml"
         ).read_text(encoding="utf-8")
@@ -184,12 +184,14 @@ class ApprovalWorkflowTests(unittest.TestCase):
 
         self.assertLess(collect, collect_app_info)
         self.assertLess(collect_app_info, build)
-        self.assertIn(
-            "runs-on: [self-hosted, Linux, X64, intunebrew-linux]",
-            workflow[collect:build],
-        )
-        self.assertIn('python3 -m venv "$RUNNER_TEMP/venv"', workflow[collect:build])
-        self.assertIn("actions/upload-artifact@v4", workflow[collect:build])
+        collect_job = workflow[collect:build]
+        self.assertIn("runs-on: ubuntu-latest", collect_job)
+        self.assertNotIn("self-hosted", collect_job)
+        self.assertIn("uses: actions/setup-python@v5", collect_job)
+        self.assertIn('python-version: "3.x"', collect_job)
+        self.assertIn("contents: read", collect_job)
+        self.assertNotIn("contents: write", collect_job)
+        self.assertIn("actions/upload-artifact@v4", collect_job)
         self.assertIn("needs: collect", workflow[build:])
         self.assertIn("runs-on: macos-latest", workflow[build:])
         self.assertIn("actions/download-artifact@v4", workflow[build:])
@@ -202,7 +204,7 @@ class CatalogStorageWorkflowTests(unittest.TestCase):
             ROOT / ".github" / "workflows" / "build-app-packages.yml"
         ).read_text(encoding="utf-8")
 
-    def test_storage_uses_oidc_repository_variables(self):
+    def test_storage_uses_oidc_environment_variables(self):
         self.assertNotIn("AZURE_STORAGE_CONNECTION_STRING", self.workflow)
         self.assertNotIn("secrets.", self.workflow)
 
@@ -240,6 +242,25 @@ class CatalogStorageWorkflowTests(unittest.TestCase):
                 self.workflow,
             )
 
+    def test_oidc_job_uses_catalog_storage_environment_subject(self):
+        build = self.workflow.index("  build:")
+        permissions = self.workflow.index("    permissions:", build)
+        build_header = self.workflow[build:permissions]
+
+        self.assertIn("    environment: catalog-storage", build_header)
+        self.assertIn("    runs-on: macos-latest", build_header)
+
+        for workflow_path in (ROOT / ".github" / "workflows").glob("*.yml"):
+            workflow = workflow_path.read_text(encoding="utf-8")
+            if "uses: azure/login@" in workflow or "vars.AZURE_" in workflow:
+                with self.subTest(workflow=workflow_path.name):
+                    self.assertIn(
+                        "environment: catalog-storage",
+                        workflow,
+                        "Azure OIDC jobs must bind the environment-scoped "
+                        "variables and federated subject",
+                    )
+
     def test_storage_configuration_is_validated_before_login(self):
         validation = self.workflow.index(
             "- name: Validate Azure storage configuration"
@@ -257,7 +278,17 @@ class CatalogStorageWorkflowTests(unittest.TestCase):
             "AZURE_STORAGE_BASE_URL",
         ):
             self.assertIn(variable, validation_step)
-        self.assertIn("::error::Missing required GitHub Actions", validation_step)
+        self.assertIn(
+            "::error::Missing required catalog-storage environment variables",
+            validation_step,
+        )
+
+    def test_collector_scrapers_are_hosted_ubuntu_compatible(self):
+        scraper_dir = ROOT / ".github" / "scripts" / "scrapers"
+        for scraper_path in scraper_dir.glob("*.sh"):
+            scraper = scraper_path.read_text(encoding="utf-8")
+            with self.subTest(scraper=scraper_path.name):
+                self.assertNotIn("sed -i ''", scraper)
 
     def test_blob_commands_use_configured_login_authentication(self):
         logical_workflow = self.workflow.replace("\\\n", " ")

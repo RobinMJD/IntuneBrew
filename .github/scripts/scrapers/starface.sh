@@ -52,7 +52,7 @@ if [ -f "supported_apps.json" ]; then
     # Check if starface entry already exists
     if ! grep -q '"starface":' supported_apps.json; then
         # Remove the last closing brace, add the new entry, and close the JSON
-        sed -i '' '$ d' supported_apps.json
+        sed -i '$ d' supported_apps.json
         if [ "$(wc -l < supported_apps.json)" -gt 1 ]; then
             echo "    ," >> supported_apps.json
         fi
