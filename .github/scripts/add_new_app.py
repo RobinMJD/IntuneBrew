@@ -34,8 +34,6 @@ SEARCH_THRESHOLD = 0.5
 DEPLOYABLE_ARTIFACT_TYPES = frozenset({
     'app',
     'pkg',
-    'suite',
-    'prefpane',
 })
 
 

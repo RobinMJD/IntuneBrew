@@ -93,6 +93,30 @@ class CaskArtifactValidationTests(unittest.TestCase):
 
         self.assertIsNotNone(add_new_app.binary_only_cask_reason(cli))
 
+    def test_binary_with_suite_artifact_is_rejected(self):
+        flutter = cask_data(
+            "https://example.test/flutter-macos.zip",
+            [
+                {"suite": ["flutter"]},
+                {"binary": ["flutter/bin/flutter"]},
+            ],
+        )
+
+        self.assertIsNotNone(add_new_app.binary_only_cask_reason(flutter))
+
+    def test_binary_with_prefpane_artifact_is_rejected(self):
+        preference_pane = cask_data(
+            "https://example.test/SwiftDefaultApps.prefPane.zip",
+            [
+                {"prefpane": ["SwiftDefaultApps.prefPane"]},
+                {"binary": ["swda"]},
+            ],
+        )
+
+        self.assertIsNotNone(
+            add_new_app.binary_only_cask_reason(preference_pane)
+        )
+
     def test_deployable_app_archive_is_accepted(self):
         desktop_app = cask_data(
             "https://example.test/DesktopApp.zip",
@@ -104,6 +128,14 @@ class CaskArtifactValidationTests(unittest.TestCase):
             add_new_app.determine_app_type(desktop_app),
             ("app_urls", "app"),
         )
+
+    def test_archive_with_pkg_artifact_is_accepted(self):
+        packaged_app = cask_data(
+            "https://example.test/DesktopApp.zip",
+            [{"pkg": ["Desktop App.pkg"]}],
+        )
+
+        self.assertIsNone(add_new_app.binary_only_cask_reason(packaged_app))
 
 
 class ApprovalWorkflowTests(unittest.TestCase):
