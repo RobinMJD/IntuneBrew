@@ -25,6 +25,12 @@ jobs:
       contents: read
 
     steps:
+      - name: Require main branch
+        if: github.ref != 'refs/heads/main'
+        run: |
+          echo "::error::Catalog publication runs must use refs/heads/main"
+          exit 1
+
       - name: Checkout repository
         uses: actions/checkout@v4
 
@@ -318,7 +324,6 @@ jobs:
 
       - name: Process apps
         id: process-apps
-        if: env.APPS_TO_BUILD != ''
         env:
           AZURE_STORAGE_ACCOUNT: ${{ vars.AZURE_STORAGE_ACCOUNT }}
           AZURE_STORAGE_CONTAINER: ${{ vars.AZURE_STORAGE_CONTAINER }}
@@ -532,6 +537,8 @@ jobs:
                   echo "✅ JSON file updated (SHA preserved)"
                 else
                   echo "Failed to update JSON file for $app_name, it keeps its previous contents"
+                  FAILED_APPS+=("$app_name")
+                  ERROR_LOG+=("$app_name: Failed to update catalog JSON for existing package")
                 fi
               else
                 echo "⚠️ SHA missing in JSON file, downloading to calculate..."
@@ -561,6 +568,8 @@ jobs:
                     echo "✅ JSON file updated with SHA256"
                   else
                     echo "Failed to update JSON file for $app_name, it keeps its previous contents"
+                    FAILED_APPS+=("$app_name")
+                    ERROR_LOG+=("$app_name: Failed to add SHA to catalog JSON")
                   fi
                 else
                   echo "❌ Could not download file to calculate SHA256"
@@ -571,6 +580,8 @@ jobs:
                   else
                     echo "Failed to update JSON file for $app_name, it keeps its previous contents"
                   fi
+                  FAILED_APPS+=("$app_name")
+                  ERROR_LOG+=("$app_name: Could not verify SHA for existing package")
                 fi
               fi
               
@@ -718,6 +729,11 @@ jobs:
                       echo "🔗 New URL: $azure_url"
                     else
                       echo "❌ Failed to update JSON file"
+                      FAILED_APPS+=("$app_name")
+                      ERROR_LOG+=("$app_name: Failed to update catalog JSON after Azure upload")
+                      rm -f "${download_path}.pkg"
+                      rm -rf "$temp_dir"
+                      continue
                     fi
                   else
                     echo "❌ Failed to upload to Azure"
@@ -842,6 +858,7 @@ jobs:
                     echo "🔗 New URL: $azure_url"
                   else
                     echo "❌ Failed to update JSON file"
+                    pkg_in_dmg_error="Failed to update catalog JSON after Azure upload"
                   fi
                 else
                   echo "❌ Failed to upload to Azure"
@@ -1154,6 +1171,11 @@ jobs:
                       echo "🔗 New URL: $azure_url"
                     else
                       echo "❌ Failed to update JSON file"
+                      cd "$WORKSPACE_DIR"
+                      rm -rf "${app_name}_extracted"
+                      FAILED_APPS+=("$app_name")
+                      ERROR_LOG+=("$app_name: Failed to update catalog JSON after Azure upload")
+                      continue
                     fi
                   else
                     echo "❌ Failed to upload to Azure"
@@ -1233,7 +1255,13 @@ jobs:
               # rather than take the remaining apps down with it.
               # Braces keep the negation on the whole list: "!" alone would bind
               # to jq and turn mv into the failure branch.
-              { jq --arg url "$azure_url" --arg filename "${app_name}_${version}.pkg" --arg sha "$file_hash" --arg bundleid "$extracted_bundle_id" '(if has("vendor_url") then .vendor_url else .url end) as $vurl | .url = $url | .vendor_url = $vurl | .fileName = $filename | .sha = $sha | (if $bundleid == "" then . else .bundleId = $bundleid end)' "$WORKSPACE_DIR/Apps/${app_name}.json" > temp.json && mv temp.json "$WORKSPACE_DIR/Apps/${app_name}.json"; } || echo "❌ Failed to update JSON file"
+              if ! { jq --arg url "$azure_url" --arg filename "${app_name}_${version}.pkg" --arg sha "$file_hash" --arg bundleid "$extracted_bundle_id" '(if has("vendor_url") then .vendor_url else .url end) as $vurl | .url = $url | .vendor_url = $vurl | .fileName = $filename | .sha = $sha | (if $bundleid == "" then . else .bundleId = $bundleid end)' "$WORKSPACE_DIR/Apps/${app_name}.json" > temp.json && mv temp.json "$WORKSPACE_DIR/Apps/${app_name}.json"; }; then
+                echo "❌ Failed to update JSON file"
+                sudo rm -rf "${app_name}_extracted"
+                FAILED_APPS+=("$app_name")
+                ERROR_LOG+=("$app_name: Failed to update catalog JSON after Azure upload")
+                continue
+              fi
 
               # Cleanup
               sudo rm -rf "${app_name}_extracted"
@@ -1299,6 +1327,11 @@ jobs:
           # packaging-failures tracking issue. Absolute path: the loop above
           # cds into $HOME/Desktop for downloads and does not always return.
           echo "failed_count=${#FAILED_APPS[@]}" >> "$GITHUB_OUTPUT"
+          if [ ${#FAILED_APPS[@]} -eq 0 ]; then
+            echo "packaging_succeeded=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "packaging_succeeded=false" >> "$GITHUB_OUTPUT"
+          fi
           {
             echo "Automated packaging report from $(date -u +%Y-%m-%d)."
             echo ""
@@ -1355,6 +1388,7 @@ jobs:
           echo "Reverted $reverted out-of-scope app files"
 
       - name: Commit and push changes
+        id: catalog-snapshot
         run: |
           git config --local user.email "action@github.com"
           git config --local user.name "GitHub Action"
@@ -1362,48 +1396,33 @@ jobs:
 
           if git diff --staged --quiet; then
             echo "No changes to commit"
-            exit 0
+          else
+            git commit -m "Update app information and supported apps list"
+            if ! git push origin HEAD:main; then
+              echo "::error::main changed while this run was building the catalog"
+              exit 1
+            fi
           fi
 
-          git commit -m "Update app information and supported apps list"
-
-          MAX_RETRIES=5
-          RETRY_COUNT=0
-          RETRY_DELAY=5
-
-          while [ $RETRY_COUNT -lt $MAX_RETRIES ]; do
-            echo "Attempt $((RETRY_COUNT + 1)) of $MAX_RETRIES"
-
-            # Clean up any failed rebase state
-            git rebase --abort 2>/dev/null || true
-
-            # Stash any unstaged changes before rebasing to avoid conflicts
-            git stash --include-untracked || true
-
-            if git pull --rebase origin main; then
-              # Restore stashed changes after successful rebase
-              git stash pop || true
-
-              if git push; then
-                echo "Push successful"
-                exit 0
-              fi
-            else
-              # Abort failed rebase and restore stashed changes
-              git rebase --abort 2>/dev/null || true
-              git stash pop || true
-            fi
-
-            RETRY_COUNT=$((RETRY_COUNT + 1))
-            if [ $RETRY_COUNT -lt $MAX_RETRIES ]; then
-              echo "Push failed, retrying in ${RETRY_DELAY} seconds..."
-              sleep $RETRY_DELAY
-              RETRY_DELAY=$((RETRY_DELAY * 2))
-            fi
-          done
-
-          echo "Push failed after $MAX_RETRIES attempts"
-          exit 1
+          # Capture the commit that proved catalog publication completed. The
+          # final marker parent may also include this run's request bookkeeping,
+          # so the marker step verifies this SHA remains in its ancestry.
+          git fetch origin main
+          catalog_commit=$(git rev-parse HEAD)
+          remote_commit=$(git rev-parse origin/main)
+          if [ "$catalog_commit" != "$remote_commit" ]; then
+            echo "::error::Local catalog snapshot is not the current main commit"
+            exit 1
+          fi
+          case "$catalog_commit" in
+            [0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f]) ;;
+            *)
+              echo "::error::Catalog snapshot is not an exact 40-character SHA"
+              exit 1
+              ;;
+          esac
+          git cat-file -e "$catalog_commit:supported_apps.json"
+          echo "catalog_commit=$catalog_commit" >> "$GITHUB_OUTPUT"
 
       # Keep one tracking issue in sync with the packaging failures of full
       # builds. Scoped builds only process the apps a push added, so their
@@ -1433,6 +1452,14 @@ jobs:
             gh issue close "$number" --repo "$GITHUB_REPOSITORY" \
               --comment "Every app packaged successfully in the latest full build."
           fi
+
+      - name: Require successful packaging
+        if: steps.process-apps.outputs.packaging_succeeded != 'true'
+        env:
+          FAILED_COUNT: ${{ steps.process-apps.outputs.failed_count }}
+        run: |
+          echo "::error::Catalog publication blocked because ${FAILED_COUNT:-unknown} apps failed packaging"
+          exit 1
 
       # Apps are only downloadable once the steps above have published them, so
       # this is the first point at which a requester can be told their app is live.
@@ -1473,7 +1500,6 @@ jobs:
             }
 
       - name: Commit resolved requests
-        if: steps.pending.outputs.notify_count != '0'
         run: |
           git config --local user.email "action@github.com"
           git config --local user.name "GitHub Action"
@@ -1485,5 +1511,83 @@ jobs:
           fi
 
           git commit -m "Clear resolved app requests [skip ci]"
-          git pull --rebase origin main || git rebase --abort || true
-          git push || echo "Push failed, entries will resolve on the next run"
+          if ! git push origin HEAD:main; then
+            echo "::error::main changed before pending requests could be committed"
+            exit 1
+          fi
+
+      - name: Publish catalog state
+        if: success() && steps.process-apps.outputs.packaging_succeeded == 'true'
+        env:
+          PUBLISHED_CATALOG_COMMIT: ${{ steps.catalog-snapshot.outputs.catalog_commit }}
+          PACKAGE_STORAGE_BASE_URL: ${{ vars.AZURE_STORAGE_BASE_URL }}
+          RUN_ID: ${{ github.run_id }}
+          WORKFLOW_NAME: Build App Packages and Collect App Information
+          WORKFLOW_PATH: .github/workflows/build-app-packages.yml
+        run: |
+          # Do not rebase the marker. It is valid only when this checkout is still
+          # the exact tip of main; a normal push also closes the remaining race.
+          git fetch origin main
+          local_head=$(git rev-parse HEAD)
+          remote_head=$(git rev-parse origin/main)
+          if [ "$local_head" != "$remote_head" ]; then
+            echo "::error::main changed before catalog state publication"
+            exit 1
+          fi
+          if ! git diff --quiet || ! git diff --cached --quiet; then
+            echo "::error::Tracked working tree changes remain before marker publication"
+            exit 1
+          fi
+          if ! git merge-base --is-ancestor "$PUBLISHED_CATALOG_COMMIT" "$local_head"; then
+            echo "::error::Catalog snapshot is not an ancestor of the marker parent"
+            exit 1
+          fi
+          if git cat-file -e "$local_head:.github/catalog-state.json" 2>/dev/null; then
+            existing_run_id=$(git show "$local_head:.github/catalog-state.json" \
+              | python -c 'import json, sys; value=json.load(sys.stdin)["runId"]; assert type(value) is int and value > 0; print(value)')
+            if [ "$existing_run_id" -ge "$RUN_ID" ]; then
+              echo "::error::Existing catalog marker belongs to run $existing_run_id, which is not older than $RUN_ID"
+              exit 1
+            fi
+          fi
+          CATALOG_COMMIT="$local_head"
+
+          python .github/scripts/catalog_state.py generate \
+            --catalog-commit "$CATALOG_COMMIT" \
+            --repository "$GITHUB_REPOSITORY" \
+            --workflow-name "$WORKFLOW_NAME" \
+            --workflow-path "$WORKFLOW_PATH" \
+            --run-id "$RUN_ID" \
+            --package-storage-base-url "$PACKAGE_STORAGE_BASE_URL" \
+            --output .github/catalog-state.json
+          python .github/scripts/catalog_state.py validate \
+            --state-file .github/catalog-state.json \
+            --catalog-commit "$CATALOG_COMMIT" \
+            --repository "$GITHUB_REPOSITORY" \
+            --workflow-name "$WORKFLOW_NAME" \
+            --workflow-path "$WORKFLOW_PATH" \
+            --run-id "$RUN_ID"
+
+          git config --local user.email "action@github.com"
+          git config --local user.name "GitHub Action"
+          git add .github/catalog-state.json
+          staged_files=$(git diff --cached --name-only)
+          if [ "$staged_files" != ".github/catalog-state.json" ]; then
+            echo "::error::Catalog marker commit would contain unexpected files"
+            exit 1
+          fi
+
+          git commit -m "Publish catalog state for run $RUN_ID [skip ci]"
+          marker_parent=$(git rev-parse HEAD^)
+          if [ "$marker_parent" != "$local_head" ]; then
+            echo "::error::Catalog marker parent changed unexpectedly"
+            exit 1
+          fi
+          recorded_commit=$(python -c 'import json; print(json.load(open(".github/catalog-state.json"))["catalogCommit"])')
+          if [ "$recorded_commit" != "$marker_parent" ]; then
+            echo "::error::Catalog marker does not record its exact parent snapshot"
+            exit 1
+          fi
+
+          # Never force: a concurrent main update must reject this publication.
+          git push origin HEAD:main
