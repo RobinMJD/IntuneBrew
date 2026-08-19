@@ -194,6 +194,44 @@ class ApprovalWorkflowTests(unittest.TestCase):
         self.assertIn("actions/download-artifact@v4", workflow[build:])
         self.assertIn("needs.collect.outputs.scope", workflow[build:])
 
+    def test_catalog_storage_uses_oidc_and_configurable_names(self):
+        workflows = {
+            "apps": (
+                ROOT / ".github" / "workflows" / "build-app-packages.yml"
+            ).read_text(encoding="utf-8"),
+            "formulas": (
+                ROOT / ".github" / "workflows" / "build-formula-packages.yml"
+            ).read_text(encoding="utf-8"),
+        }
+
+        for name, workflow in workflows.items():
+            with self.subTest(workflow=name):
+                self.assertNotIn("AZURE_STORAGE_CONNECTION_STRING", workflow)
+                self.assertNotIn("intunebrew.blob.core.windows.net", workflow)
+                self.assertNotIn("secrets.PAT", workflow)
+                self.assertIn("environment: catalog-storage", workflow)
+                self.assertIn("id-token: write", workflow)
+                self.assertIn("uses: azure/login@v2", workflow)
+                for variable in (
+                    "AZURE_CLIENT_ID",
+                    "AZURE_TENANT_ID",
+                    "AZURE_SUBSCRIPTION_ID",
+                    "AZURE_STORAGE_ACCOUNT",
+                    "AZURE_STORAGE_CONTAINER",
+                ):
+                    self.assertIn(f"vars.{variable}", workflow)
+                self.assertIn("--auth-mode login", workflow)
+                self.assertIn(
+                    '--account-name "$AZURE_STORAGE_ACCOUNT"',
+                    workflow,
+                )
+                self.assertIn(
+                    '--container-name "$AZURE_STORAGE_CONTAINER"',
+                    workflow,
+                )
+
+        self.assertGreaterEqual(workflows["apps"].count("--auth-mode login"), 6)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -11,11 +11,14 @@ on:
 jobs:
   build-formulas:
     runs-on: macos-15  # Apple Silicon (arm64) - Sequoia
+    environment: catalog-storage
+    permissions:
+      contents: write
+      id-token: write
+
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
-        with:
-          token: ${{ secrets.PAT }}
 
       - name: Read formula list
         id: formulas
@@ -29,15 +32,45 @@ jobs:
         run: |
           brew install azure-cli
 
+      - name: Validate Azure storage configuration
+        env:
+          AZURE_CLIENT_ID: ${{ vars.AZURE_CLIENT_ID }}
+          AZURE_TENANT_ID: ${{ vars.AZURE_TENANT_ID }}
+          AZURE_SUBSCRIPTION_ID: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+          AZURE_STORAGE_ACCOUNT: ${{ vars.AZURE_STORAGE_ACCOUNT }}
+          AZURE_STORAGE_CONTAINER: ${{ vars.AZURE_STORAGE_CONTAINER }}
+        run: |
+          for name in \
+            AZURE_CLIENT_ID \
+            AZURE_TENANT_ID \
+            AZURE_SUBSCRIPTION_ID \
+            AZURE_STORAGE_ACCOUNT \
+            AZURE_STORAGE_CONTAINER; do
+            if [ -z "${!name}" ]; then
+              echo "::error::Missing catalog-storage environment variable: $name"
+              exit 1
+            fi
+          done
+
+      - name: Log in to Azure with GitHub OIDC
+        uses: azure/login@v2
+        with:
+          client-id: ${{ vars.AZURE_CLIENT_ID }}
+          tenant-id: ${{ vars.AZURE_TENANT_ID }}
+          subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+
       - name: Create Formulas directory
         run: |
           mkdir -p Formulas
 
       - name: Process each formula
         env:
-          AZURE_STORAGE_CONNECTION_STRING: ${{ secrets.AZURE_STORAGE_CONNECTION_STRING }}
+          AZURE_STORAGE_ACCOUNT: ${{ vars.AZURE_STORAGE_ACCOUNT }}
+          AZURE_STORAGE_CONTAINER: ${{ vars.AZURE_STORAGE_CONTAINER }}
           FORMULAS: ${{ steps.formulas.outputs.formulas }}
         run: |
+          AZURE_STORAGE_BLOB_BASE_URL="https://${AZURE_STORAGE_ACCOUNT}.blob.core.windows.net/${AZURE_STORAGE_CONTAINER}"
+
           for formula in $FORMULAS; do
             echo "=== Processing $formula ==="
 
@@ -54,7 +87,13 @@ jobs:
             # 2. Check if already exists in Azure
             arch=$(uname -m)
             pkg_name="${formula}_${version}_${arch}.pkg"
-            existing=$(az storage blob list --container-name pkg --prefix "${formula}_${version}" --query "[].name" -o tsv 2>/dev/null || echo "")
+            existing=$(az storage blob list \
+              --account-name "$AZURE_STORAGE_ACCOUNT" \
+              --container-name "$AZURE_STORAGE_CONTAINER" \
+              --prefix "${formula}_${version}" \
+              --auth-mode login \
+              --query "[].name" \
+              -o tsv 2>/dev/null || echo "")
 
             if [ -n "$existing" ]; then
               echo "Package already exists in Azure, creating JSON file only"
@@ -67,7 +106,7 @@ jobs:
               fi
 
               # Create JSON file for existing package (without SHA - can be added later if needed)
-              azure_url="https://intunebrew.blob.core.windows.net/pkg/$pkg_name"
+              azure_url="${AZURE_STORAGE_BLOB_BASE_URL}/$pkg_name"
               jq -n \
                 --arg name "$formula" \
                 --arg description "$description" \
@@ -144,10 +183,16 @@ jobs:
             sha=$(shasum -a 256 "$pkg_name" | awk '{print $1}')
 
             # 12. Upload to Azure
-            az storage blob upload --container-name pkg --file "$pkg_name" --name "$pkg_name" --overwrite true
+            az storage blob upload \
+              --account-name "$AZURE_STORAGE_ACCOUNT" \
+              --container-name "$AZURE_STORAGE_CONTAINER" \
+              --file "$pkg_name" \
+              --name "$pkg_name" \
+              --auth-mode login \
+              --overwrite true
 
             # 13. Create/Update JSON file using jq
-            azure_url="https://intunebrew.blob.core.windows.net/pkg/$pkg_name"
+            azure_url="${AZURE_STORAGE_BLOB_BASE_URL}/$pkg_name"
 
             # Handle empty dependencies
             if [ -z "$deps" ]; then
@@ -236,7 +281,7 @@ jobs:
               # Restore stashed changes after successful rebase
               git stash pop || true
 
-              if git push https://${{ secrets.PAT }}@github.com/${{ github.repository }}.git; then
+              if git push; then
                 echo "Push successful"
                 exit 0
               fi

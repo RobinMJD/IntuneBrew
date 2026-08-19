@@ -113,11 +113,13 @@ jobs:
   build:
     needs: collect
     runs-on: macos-latest
+    environment: catalog-storage
 
     # The job-scoped token is sufficient for catalog commits and issue comments.
     permissions:
       contents: write
       issues: write
+      id-token: write
 
     steps:
       - name: Checkout repository
@@ -145,6 +147,33 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install requests
+
+      - name: Validate Azure storage configuration
+        env:
+          AZURE_CLIENT_ID: ${{ vars.AZURE_CLIENT_ID }}
+          AZURE_TENANT_ID: ${{ vars.AZURE_TENANT_ID }}
+          AZURE_SUBSCRIPTION_ID: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+          AZURE_STORAGE_ACCOUNT: ${{ vars.AZURE_STORAGE_ACCOUNT }}
+          AZURE_STORAGE_CONTAINER: ${{ vars.AZURE_STORAGE_CONTAINER }}
+        run: |
+          for name in \
+            AZURE_CLIENT_ID \
+            AZURE_TENANT_ID \
+            AZURE_SUBSCRIPTION_ID \
+            AZURE_STORAGE_ACCOUNT \
+            AZURE_STORAGE_CONTAINER; do
+            if [ -z "${!name}" ]; then
+              echo "::error::Missing catalog-storage environment variable: $name"
+              exit 1
+            fi
+          done
+
+      - name: Log in to Azure with GitHub OIDC
+        uses: azure/login@v2
+        with:
+          client-id: ${{ vars.AZURE_CLIENT_ID }}
+          tenant-id: ${{ vars.AZURE_TENANT_ID }}
+          subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
 
       - name: Find apps needing packaging
         id: find-apps
@@ -264,9 +293,11 @@ jobs:
         id: process-apps
         if: env.APPS_TO_BUILD != ''
         env:
-          AZURE_STORAGE_CONNECTION_STRING: ${{ secrets.AZURE_STORAGE_CONNECTION_STRING }}
+          AZURE_STORAGE_ACCOUNT: ${{ vars.AZURE_STORAGE_ACCOUNT }}
+          AZURE_STORAGE_CONTAINER: ${{ vars.AZURE_STORAGE_CONTAINER }}
         run: |
           WORKSPACE_DIR=$(pwd)
+          AZURE_STORAGE_BLOB_BASE_URL="https://${AZURE_STORAGE_ACCOUNT}.blob.core.windows.net/${AZURE_STORAGE_CONTAINER}"
 
           # bundleId drives Intune app detection, so it is read back from the
           # artifact that was actually built instead of trusting the cask
@@ -352,7 +383,11 @@ jobs:
             while IFS= read -r blob_name; do
               if [ -n "$blob_name" ] && [ "$blob_name" != "${cleanup_app}_${cleanup_version}.pkg" ]; then
                 echo "Deleting old version: $blob_name"
-                az storage blob delete --container-name pkg --name "$blob_name" \
+                az storage blob delete \
+                  --account-name "$AZURE_STORAGE_ACCOUNT" \
+                  --container-name "$AZURE_STORAGE_CONTAINER" \
+                  --name "$blob_name" \
+                  --auth-mode login \
                   || echo "Could not delete $blob_name, leaving it in the container"
               fi
             done <<< "$cleanup_blobs"
@@ -402,7 +437,13 @@ jobs:
             fi
             
             # List existing versions of this app in Azure storage
-            existing_versions=$(az storage blob list --container-name pkg --prefix "${app_name}_" --query "[].name" -o tsv)
+            existing_versions=$(az storage blob list \
+              --account-name "$AZURE_STORAGE_ACCOUNT" \
+              --container-name "$AZURE_STORAGE_CONTAINER" \
+              --prefix "${app_name}_" \
+              --auth-mode login \
+              --query "[].name" \
+              -o tsv)
             
             # Check if the exact version already exists
             reuse_existing_blob=false
@@ -439,7 +480,7 @@ jobs:
               # run still carries the Azure URL in .url, and comparing that
               # against a vendor URL would repackage every night for nothing.
               case "$url" in
-                *intunebrew.blob.core.windows.net*) built_from_url="" ;;
+                "$AZURE_STORAGE_BLOB_BASE_URL"/*) built_from_url="" ;;
               esac
 
               if [ -n "$built_from_url" ] && [ -n "$url" ] && [ "$built_from_url" != "$url" ]; then
@@ -457,7 +498,7 @@ jobs:
               if [ -n "$existing_sha" ]; then
                 echo "✅ SHA already exists in JSON file: $existing_sha"
                 # Update only URL and version without downloading
-                azure_url="https://intunebrew.blob.core.windows.net/pkg/${app_name}_${version}.pkg"
+                azure_url="${AZURE_STORAGE_BLOB_BASE_URL}/${app_name}_${version}.pkg"
                 current_version=$(jq -r '.version' "$WORKSPACE_DIR/Apps/${app_name}.json")
                 if jq --arg url "$azure_url" --arg version "$version" --arg prev_version "$current_version" --arg filename "${app_name}_${version}.pkg" '(if has("vendor_url") then .vendor_url else .url end) as $vurl | .url = $url | .vendor_url = $vurl | .version = $version | .previous_version = $prev_version | .fileName = $filename' "$WORKSPACE_DIR/Apps/${app_name}.json" > temp.json && mv temp.json "$WORKSPACE_DIR/Apps/${app_name}.json"; then
                   echo "✅ JSON file updated (SHA preserved)"
@@ -470,7 +511,13 @@ jobs:
                 temp_pkg="${app_name}_${version}_temp.pkg"
                 # A failed download must not abort the step: the -f test below is
                 # what decides, and it owns the "could not download" arm.
-                az storage blob download --container-name pkg --name "${app_name}_${version}.pkg" --file "$temp_pkg" --no-progress || true
+                az storage blob download \
+                  --account-name "$AZURE_STORAGE_ACCOUNT" \
+                  --container-name "$AZURE_STORAGE_CONTAINER" \
+                  --name "${app_name}_${version}.pkg" \
+                  --file "$temp_pkg" \
+                  --auth-mode login \
+                  --no-progress || true
                 
                 if [ -f "$temp_pkg" ]; then
                   # Calculate SHA256 hash
@@ -480,7 +527,7 @@ jobs:
                   rm -f "$temp_pkg"
                   
                   # Update JSON with SHA
-                  azure_url="https://intunebrew.blob.core.windows.net/pkg/${app_name}_${version}.pkg"
+                  azure_url="${AZURE_STORAGE_BLOB_BASE_URL}/${app_name}_${version}.pkg"
                   current_version=$(jq -r '.version' "$WORKSPACE_DIR/Apps/${app_name}.json")
                   if jq --arg url "$azure_url" --arg version "$version" --arg prev_version "$current_version" --arg sha "$file_hash" --arg filename "${app_name}_${version}.pkg" '(if has("vendor_url") then .vendor_url else .url end) as $vurl | .url = $url | .vendor_url = $vurl | .version = $version | .previous_version = $prev_version | .sha = $sha | .fileName = $filename' "$WORKSPACE_DIR/Apps/${app_name}.json" > temp.json && mv temp.json "$WORKSPACE_DIR/Apps/${app_name}.json"; then
                     echo "✅ JSON file updated with SHA256"
@@ -489,7 +536,7 @@ jobs:
                   fi
                 else
                   echo "❌ Could not download file to calculate SHA256"
-                  azure_url="https://intunebrew.blob.core.windows.net/pkg/${app_name}_${version}.pkg"
+                  azure_url="${AZURE_STORAGE_BLOB_BASE_URL}/${app_name}_${version}.pkg"
                   current_version=$(jq -r '.version' "$WORKSPACE_DIR/Apps/${app_name}.json")
                   if jq --arg url "$azure_url" --arg version "$version" --arg prev_version "$current_version" --arg filename "${app_name}_${version}.pkg" '(if has("vendor_url") then .vendor_url else .url end) as $vurl | .url = $url | .vendor_url = $vurl | .version = $version | .previous_version = $prev_version | .fileName = $filename' "$WORKSPACE_DIR/Apps/${app_name}.json" > temp.json && mv temp.json "$WORKSPACE_DIR/Apps/${app_name}.json"; then
                     echo "⚠️ JSON file updated without SHA256"
@@ -624,9 +671,11 @@ jobs:
                   # Upload to Azure
                   echo "☁️ Uploading to Azure Blob Storage..."
                   if az storage blob upload \
-                    --container-name pkg \
+                    --account-name "$AZURE_STORAGE_ACCOUNT" \
+                    --container-name "$AZURE_STORAGE_CONTAINER" \
                     --file "${app_name}_${version}.pkg" \
                     --name "${app_name}_${version}.pkg" \
+                    --auth-mode login \
                     --overwrite true; then
                     echo "✅ Upload successful"
 
@@ -635,7 +684,7 @@ jobs:
 
                     # Update JSON with Azure URL and SHA256
                     echo "📝 Updating JSON file with new Azure URL and SHA256..."
-                    azure_url="https://intunebrew.blob.core.windows.net/pkg/${app_name}_${version}.pkg"
+                    azure_url="${AZURE_STORAGE_BLOB_BASE_URL}/${app_name}_${version}.pkg"
                     if jq --arg url "$azure_url" --arg filename "${app_name}_${version}.pkg" --arg sha "$file_hash" --arg bundleid "$extracted_bundle_id" '(if has("vendor_url") then .vendor_url else .url end) as $vurl | .url = $url | .vendor_url = $vurl | .fileName = $filename | .sha = $sha | (if $bundleid == "" then . else .bundleId = $bundleid end)' "$WORKSPACE_DIR/Apps/${app_name}.json" > temp.json && mv temp.json "$WORKSPACE_DIR/Apps/${app_name}.json"; then
                       echo "✅ JSON file updated successfully"
                       echo "🔗 New URL: $azure_url"
@@ -746,9 +795,11 @@ jobs:
                 # Upload to Azure
                 echo "☁️ Uploading to Azure Blob Storage..."
                 if az storage blob upload \
-                  --container-name pkg \
+                  --account-name "$AZURE_STORAGE_ACCOUNT" \
+                  --container-name "$AZURE_STORAGE_CONTAINER" \
                   --file "${app_name}_${version}.pkg" \
                   --name "${app_name}_${version}.pkg" \
+                  --auth-mode login \
                   --overwrite true; then
                   echo "✅ Upload successful"
 
@@ -757,7 +808,7 @@ jobs:
 
                   # Update JSON with Azure URL and SHA256
                   echo "📝 Updating JSON file with new Azure URL and SHA256..."
-                  azure_url="https://intunebrew.blob.core.windows.net/pkg/${app_name}_${version}.pkg"
+                  azure_url="${AZURE_STORAGE_BLOB_BASE_URL}/${app_name}_${version}.pkg"
                   if jq --arg url "$azure_url" --arg filename "${app_name}_${version}.pkg" --arg sha "$file_hash" --arg bundleid "$extracted_bundle_id" '(if has("vendor_url") then .vendor_url else .url end) as $vurl | .url = $url | .vendor_url = $vurl | .fileName = $filename | .sha = $sha | (if $bundleid == "" then . else .bundleId = $bundleid end)' "$WORKSPACE_DIR/Apps/${app_name}.json" > temp.json && mv temp.json "$WORKSPACE_DIR/Apps/${app_name}.json"; then
                     echo "✅ JSON file updated successfully"
                     echo "🔗 New URL: $azure_url"
@@ -1054,9 +1105,11 @@ jobs:
                   # Upload to Azure
                   echo "☁️ Uploading to Azure Blob Storage..."
                   if az storage blob upload \
-                    --container-name pkg \
+                    --account-name "$AZURE_STORAGE_ACCOUNT" \
+                    --container-name "$AZURE_STORAGE_CONTAINER" \
                     --file "${app_name}_${version}.pkg" \
                     --name "${app_name}_${version}.pkg" \
+                    --auth-mode login \
                     --overwrite true; then
                     echo "✅ Upload successful"
 
@@ -1067,7 +1120,7 @@ jobs:
 
                     # Update JSON with Azure URL and SHA256
                     echo "📝 Updating JSON file with new Azure URL and SHA256..."
-                    azure_url="https://intunebrew.blob.core.windows.net/pkg/${app_name}_${version}.pkg"
+                    azure_url="${AZURE_STORAGE_BLOB_BASE_URL}/${app_name}_${version}.pkg"
                     if jq --arg url "$azure_url" --arg filename "${app_name}_${version}.pkg" --arg sha "$file_hash" --arg bundleid "$extracted_bundle_id" '(if has("vendor_url") then .vendor_url else .url end) as $vurl | .url = $url | .vendor_url = $vurl | .fileName = $filename | .sha = $sha | (if $bundleid == "" then . else .bundleId = $bundleid end)' "$WORKSPACE_DIR/Apps/${app_name}.json" > temp.json && mv temp.json "$WORKSPACE_DIR/Apps/${app_name}.json"; then
                       echo "✅ JSON file updated successfully"
                       echo "🔗 New URL: $azure_url"
@@ -1128,9 +1181,11 @@ jobs:
               # last working package and leave the catalog pointing at nothing.
               echo "Uploading $app_name version $version to Azure Blob Storage..."
               if ! az storage blob upload \
-                --container-name pkg \
+                --account-name "$AZURE_STORAGE_ACCOUNT" \
+                --container-name "$AZURE_STORAGE_CONTAINER" \
                 --file "${app_name}_${version}.pkg" \
                 --name "${app_name}_${version}.pkg" \
+                --auth-mode login \
                 --overwrite true; then
                 echo "❌ Failed to upload ${app_name}_${version}.pkg to Azure"
                 sudo rm -rf "${app_name}_extracted"
@@ -1144,7 +1199,7 @@ jobs:
               delete_superseded_blobs "$app_name" "$version" "$existing_versions"
 
               # Update the JSON file with Azure URL, filename and SHA256
-              azure_url="https://intunebrew.blob.core.windows.net/pkg/${app_name}_${version}.pkg"
+              azure_url="${AZURE_STORAGE_BLOB_BASE_URL}/${app_name}_${version}.pkg"
               # The package is already uploaded at this point, so a failed
               # rewrite must leave the JSON alone and let the loop continue
               # rather than take the remaining apps down with it.
