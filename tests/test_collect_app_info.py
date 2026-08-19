@@ -240,6 +240,37 @@ class CollectAppInfoTests(unittest.TestCase):
         self.assertEqual(app_info["archive_format"], "zip")
         self.assertEqual(app_info["type"], "app")
 
+    def test_existing_manifest_receives_fresh_routing_metadata(self):
+        existing = {
+            "artifact_app": "Old.app",
+            "artifact_pkg": "Old.pkg",
+            "artifact_kind": "archive",
+            "archive_format": "tar.gz",
+        }
+        fresh = {
+            "artifact_app": "Postman.app",
+            "artifact_kind": "archive",
+            "archive_format": "zip",
+        }
+
+        collect_app_info.sync_artifact_metadata(existing, fresh)
+
+        self.assertEqual(existing["artifact_app"], "Postman.app")
+        self.assertEqual(existing["artifact_kind"], "archive")
+        self.assertEqual(existing["archive_format"], "zip")
+        self.assertNotIn("artifact_pkg", existing)
+
+    def test_existing_manifest_drops_stale_archive_format(self):
+        existing = {"artifact_kind": "archive", "archive_format": "zip"}
+
+        collect_app_info.sync_artifact_metadata(
+            existing,
+            {"artifact_kind": "dmg"},
+        )
+
+        self.assertEqual(existing["artifact_kind"], "dmg")
+        self.assertNotIn("archive_format", existing)
+
     def test_installer_only_cask_is_rejected(self):
         url = "https://formulae.brew.sh/api/cask/battle-net.json"
         payload = {

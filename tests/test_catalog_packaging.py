@@ -184,6 +184,29 @@ class WorkflowPackagingRegressionTests(unittest.TestCase):
         )
         self.assertIn('failed_count=${#FAILED_APPS[@]}', self.process)
 
+    def test_blob_deletion_is_deferred_until_after_marker_publication(self):
+        marker = self.workflow.index("- name: Publish catalog state")
+        refresh_login = self.workflow.index(
+            "- name: Refresh Azure login for package cleanup"
+        )
+        cleanup = self.workflow.index("- name: Delete superseded package blobs")
+        self.assertNotIn("az storage blob delete", self.workflow[:marker])
+        self.assertLess(marker, refresh_login)
+        self.assertLess(refresh_login, cleanup)
+        self.assertIn("uses: azure/login@v3", self.workflow[refresh_login:cleanup])
+        self.assertLess(marker, cleanup)
+        self.assertIn("git push origin HEAD:main", self.workflow[marker:cleanup])
+
+    def test_failed_or_unpublished_run_cannot_delete_old_blobs(self):
+        require = self.workflow.index("- name: Require successful packaging")
+        marker = self.workflow.index("- name: Publish catalog state")
+        cleanup = self.workflow.index("- name: Delete superseded package blobs")
+        self.assertLess(require, marker)
+        self.assertLess(marker, cleanup)
+        cleanup_step = self.workflow[cleanup:]
+        self.assertIn("if ! az storage blob delete", cleanup_step)
+        self.assertIn("::warning::Could not delete superseded blob", cleanup_step)
+
     def test_strict_index_generation_runs_after_packaging(self):
         pre = self.workflow.index(
             "python .github/scripts/generate_supported_apps.py --allow-incomplete"

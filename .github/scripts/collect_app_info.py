@@ -72,6 +72,14 @@ def has_installer_artifact(data):
     )
 
 
+def sync_artifact_metadata(existing_data, app_info):
+    for key in ("artifact_app", "artifact_pkg", "artifact_kind", "archive_format"):
+        if app_info.get(key):
+            existing_data[key] = app_info[key]
+        else:
+            existing_data.pop(key, None)
+
+
 def get_bundle_id_override(cask_token):
     override_path = Path(__file__).resolve().parents[1] / "data" / "bundle-id-overrides.json"
     try:
@@ -2121,11 +2129,7 @@ def main():
                     # if it saw the refreshed value.
                     existing_data["type"] = "app"
                     existing_data["vendor_url"] = app_info["vendor_url"]
-                    for artifact_key in ("artifact_app", "artifact_pkg"):
-                        if app_info.get(artifact_key):
-                            existing_data[artifact_key] = app_info[artifact_key]
-                        else:
-                            existing_data.pop(artifact_key, None)
+                    sync_artifact_metadata(existing_data, app_info)
 
                     # Calculate new hash if version changed
                     if version_changed:

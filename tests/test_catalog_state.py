@@ -141,18 +141,20 @@ class CatalogWorkflowTests(unittest.TestCase):
     def setUpClass(cls):
         cls.workflow = WORKFLOW_PATH.read_text(encoding="utf-8")
 
-    def test_marker_is_last_and_follows_all_catalog_and_reporting_steps(self):
+    def test_marker_follows_publication_steps_and_cleanup_is_last(self):
         process = self.workflow.index("- name: Process apps")
         commit = self.workflow.index("- name: Commit and push changes")
         report = self.workflow.index("- name: Report packaging failures")
         requests = self.workflow.index("- name: Commit resolved requests")
         marker = self.workflow.index("- name: Publish catalog state")
+        cleanup = self.workflow.index("- name: Delete superseded package blobs")
 
         self.assertLess(process, commit)
         self.assertLess(commit, report)
         self.assertLess(report, requests)
         self.assertLess(requests, marker)
-        self.assertNotIn("- name:", self.workflow[marker + 1 :])
+        self.assertLess(marker, cleanup)
+        self.assertNotIn("- name:", self.workflow[cleanup + 1 :])
         request_commit = self.workflow[requests:marker]
         self.assertNotIn("if: steps.pending.outputs.notify_count", request_commit)
 
