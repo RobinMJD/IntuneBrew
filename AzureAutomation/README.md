@@ -74,8 +74,10 @@ Production has no app-creation path. Before any write it:
    expected Graph type.
 4. Validates the package filename, SHA256, URL, positive `Content-Length`, and
    downloaded length inside an isolated temporary directory.
-5. Re-reads the target, requires an ETag, creates and commits only a new content
-   version, then patches version fields with `If-Match`.
+5. Re-reads and fully revalidates the target immediately before creating the
+   content version and again immediately before patching version fields. If
+   Graph returns an ETag, the final patch includes `If-Match`; otherwise the
+   patch proceeds from the fresh validated snapshot.
 
 Zero, multiple, partial, duplicate, or incomplete mappings are skipped or fail
 closed before mutation. Existing assignments and logo are not changed.

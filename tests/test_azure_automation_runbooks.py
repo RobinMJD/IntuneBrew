@@ -136,8 +136,25 @@ class AzureAutomationRunbookTests(unittest.TestCase):
         ):
             self.assertIn(field, target_validation)
         self.assertIn("-ResponseHeadersVariable responseHeaders", target_validation)
-        self.assertIn("Microsoft Graph returned no ETag", target_validation)
+        self.assertNotIn("Microsoft Graph returned no ETag", target_validation)
         self.assertIn("'If-Match' = $targetEtag", self.production)
+        self.assertIn(
+            "if (-not [string]::IsNullOrWhiteSpace($targetEtag))",
+            self.production,
+        )
+        first_revalidation = self.production.index(
+            "Get-ValidatedIntuneTarget -App $app | Out-Null"
+        )
+        first_mutation = self.production.index(
+            "$contentVersion = Invoke-MgGraphRequest -Method POST"
+        )
+        final_revalidation = self.production.index(
+            "$targetBeforePatch = Get-ValidatedIntuneTarget -App $app"
+        )
+        final_patch = self.production.index("Invoke-MgGraphRequest @patchParameters")
+        self.assertLess(first_revalidation, first_mutation)
+        self.assertLess(first_mutation, final_revalidation)
+        self.assertLess(final_revalidation, final_patch)
 
     def test_exact_match_requires_name_bundle_and_graph_type(self):
         for name, script in {

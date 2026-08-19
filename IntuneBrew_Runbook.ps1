@@ -1419,10 +1419,9 @@ function Get-ValidatedIntuneTarget {
     if ([string]::IsNullOrWhiteSpace($targetEtag)) {
         $targetEtag = [string]$responseHeaders.ETag
     }
-    if ([string]::IsNullOrWhiteSpace($targetEtag)) {
-        throw "Microsoft Graph returned no ETag for $($App.Name); refusing an unguarded update."
+    if (-not [string]::IsNullOrWhiteSpace($targetEtag)) {
+        $target | Add-Member -NotePropertyName '@odata.etag' -NotePropertyValue $targetEtag -Force
     }
-    $target | Add-Member -NotePropertyName '@odata.etag' -NotePropertyValue $targetEtag -Force
 
     $target
 }
@@ -2005,7 +2004,9 @@ foreach ($app in $appsToUpload) {
             Body   = ($updateData | ConvertTo-Json -Depth 10)
         }
         $targetEtag = [string]$targetBeforePatch.'@odata.etag'
-        $patchParameters.Headers = @{ 'If-Match' = $targetEtag }
+        if (-not [string]::IsNullOrWhiteSpace($targetEtag)) {
+            $patchParameters.Headers = @{ 'If-Match' = $targetEtag }
+        }
         Invoke-MgGraphRequest @patchParameters
 
             # Apply assignments if the flag is set and assignments were successfully fetched
