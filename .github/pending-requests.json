@@ -1,24 +1,10 @@
 [
   {
-    "issue": 261,
-    "casks": [
-      "codex"
-    ],
-    "recorded_at": "2026-08-08T21:39:56.567800+00:00"
-  },
-  {
     "issue": 264,
     "casks": [
       "macusb"
     ],
     "recorded_at": "2026-08-08T21:40:40.830980+00:00"
-  },
-  {
-    "issue": 266,
-    "casks": [
-      "copilot-cli"
-    ],
-    "recorded_at": "2026-08-08T21:41:00.810429+00:00"
   },
   {
     "issue": 267,

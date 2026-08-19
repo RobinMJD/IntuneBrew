@@ -624,6 +624,24 @@ class CatalogConsistencyTests(unittest.TestCase):
         )
         self.assertEqual(codex["homebrew_cask"], "codex-app")
 
+    def test_binary_only_incident_casks_are_not_configured(self):
+        configured_urls = (
+            collect_app_info.app_urls
+            + collect_app_info.homebrew_cask_urls
+            + collect_app_info.pkg_in_pkg_urls
+            + collect_app_info.pkg_urls
+            + collect_app_info.pkg_in_dmg_urls
+        )
+
+        self.assertNotIn(
+            "https://formulae.brew.sh/api/cask/codex.json",
+            configured_urls,
+        )
+        self.assertNotIn(
+            "https://formulae.brew.sh/api/cask/copilot-cli.json",
+            configured_urls,
+        )
+
     def test_supported_catalog_matches_non_deprecated_apps(self):
         apps = {
             path.stem: json.loads(path.read_text(encoding="utf-8"))
