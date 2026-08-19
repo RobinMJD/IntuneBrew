@@ -1,7 +1,7 @@
 {
   "version": 1,
   "description": "Cache file tracking which apps have had their bundle IDs verified by OpenAI",
-  "last_full_scan": "2026-08-19T00:16:07.882Z",
+  "last_full_scan": "2026-08-19T22:45:55.858Z",
   "apps": {
     "1password": {
       "last_checked": "2026-01-15T09:38:57.586Z",
@@ -4342,8 +4342,8 @@
       "name": "LocationSimulator"
     },
     "logitech_g_hub": {
-      "last_checked": "2026-01-17T08:37:42.122Z",
-      "bundle_id": "com.logi.ghub",
+      "last_checked": "2026-08-19T22:45:55.845Z",
+      "bundle_id": "com.logi.ghub.installer",
       "status": "verified",
       "source": "file",
       "name": "Logitech G HUB"
@@ -5546,8 +5546,8 @@
       "name": "OmniPlan"
     },
     "omnissa_horizon_client": {
-      "last_checked": "2026-01-17T08:37:42.146Z",
-      "bundle_id": "com.omnissa.horizonapp",
+      "last_checked": "2026-08-19T22:45:55.848Z",
+      "bundle_id": "org.cef.html5videoplayer",
       "status": "verified",
       "source": "file",
       "name": "Omnissa Horizon Client"
@@ -9321,6 +9321,47 @@
       "status": "verified",
       "source": "file",
       "name": "ChatGPT Classic"
+    },
+    "cmtrace_open": {
+      "last_checked": "2026-08-19T22:45:55.837Z",
+      "bundle_id": null,
+      "status": "unknown",
+      "methods_tried": [
+        "mac_app_store",
+        "pkg_inspection",
+        "github_search",
+        "openai_improved",
+        "openai_alternative"
+      ],
+      "name": "CMTrace Open"
+    },
+    "ddpm": {
+      "last_checked": "2026-08-19T22:45:55.838Z",
+      "bundle_id": "Qisda.pkg.DDPM",
+      "status": "verified",
+      "source": "file",
+      "name": "DDPM"
+    },
+    "macusb": {
+      "last_checked": "2026-08-19T22:45:55.846Z",
+      "bundle_id": "com.kruszoneq.macUSB",
+      "status": "verified",
+      "source": "file",
+      "name": "macUSB"
+    },
+    "monotype_desktop_app": {
+      "last_checked": "2026-08-19T22:45:55.847Z",
+      "bundle_id": "com.monotype.monotype-fonts",
+      "status": "verified",
+      "source": "file",
+      "name": "Monotype Desktop App"
+    },
+    "vorssaint": {
+      "last_checked": "2026-08-19T22:45:55.856Z",
+      "bundle_id": "com.vorssaint.utils",
+      "status": "verified",
+      "source": "file",
+      "name": "Vorssaint"
     }
   }
 }
