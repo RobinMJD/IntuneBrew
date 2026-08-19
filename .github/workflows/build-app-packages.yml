@@ -18,7 +18,7 @@ jobs:
   build:
     runs-on: macos-latest
 
-    # Pushing uses secrets.PAT; these are for commenting on resolved requests.
+    # The job-scoped token is sufficient for catalog commits and issue comments.
     permissions:
       contents: write
       issues: write
@@ -26,8 +26,6 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
-        with:
-          token: ${{ secrets.PAT }}
 
       - name: Set up Python
         uses: actions/setup-python@v2
@@ -1252,7 +1250,7 @@ jobs:
               # Restore stashed changes after successful rebase
               git stash pop || true
 
-              if git push https://${{ secrets.PAT }}@github.com/${{ github.repository }}.git; then
+              if git push; then
                 echo "Push successful"
                 exit 0
               fi
@@ -1354,4 +1352,4 @@ jobs:
 
           git commit -m "Clear resolved app requests [skip ci]"
           git pull --rebase origin main || git rebase --abort || true
-          git push https://${{ secrets.PAT }}@github.com/${{ github.repository }}.git || echo "Push failed, entries will resolve on the next run"
+          git push || echo "Push failed, entries will resolve on the next run"

@@ -129,6 +129,15 @@ class ApprovalWorkflowTests(unittest.TestCase):
                 self.assertNotIn("actions: write", workflow)
                 self.assertIn("contents: read", workflow)
 
+    def test_catalog_workflow_uses_only_its_job_scoped_token(self):
+        workflow = (
+            ROOT / ".github" / "workflows" / "build-app-packages.yml"
+        ).read_text(encoding="utf-8")
+
+        self.assertNotIn("secrets.PAT", workflow)
+        self.assertIn("contents: write", workflow)
+        self.assertIn("issues: write", workflow)
+
 
 if __name__ == "__main__":
     unittest.main()
