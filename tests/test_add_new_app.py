@@ -155,6 +155,7 @@ class ApprovalWorkflowTests(unittest.TestCase):
             "runs-on: [self-hosted, Linux, X64, intunebrew-linux]",
             workflow[collect:build],
         )
+        self.assertIn('python3 -m venv "$RUNNER_TEMP/venv"', workflow[collect:build])
         self.assertIn("actions/upload-artifact@v4", workflow[collect:build])
         self.assertIn("needs: collect", workflow[build:])
         self.assertIn("runs-on: macos-latest", workflow[build:])
