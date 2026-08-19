@@ -29,6 +29,37 @@ AUTO_ADD_THRESHOLD = 0.85
 # Minimum score for a cask to be offered as a candidate at all.
 SEARCH_THRESHOLD = 0.5
 
+# A cask can expose helper binaries alongside a deployable macOS payload. Reject
+# it only when Homebrew installs binaries without an app/package-style artifact.
+DEPLOYABLE_ARTIFACT_TYPES = frozenset({
+    'app',
+    'pkg',
+    'suite',
+    'prefpane',
+})
+
+
+def artifact_types(homebrew_data):
+    """Return the Homebrew artifact stanza names used by a cask."""
+    return {
+        artifact_type
+        for artifact in homebrew_data.get('artifacts', [])
+        if isinstance(artifact, dict)
+        for artifact_type in artifact
+    }
+
+
+def binary_only_cask_reason(homebrew_data):
+    """Explain why a cask is not deployable when it only installs CLI binaries."""
+    types = artifact_types(homebrew_data)
+    if 'binary' in types and types.isdisjoint(DEPLOYABLE_ARTIFACT_TYPES):
+        return (
+            "Homebrew installs only command-line binaries; IntuneBrew requires "
+            "a deployable app or package artifact"
+        )
+    return None
+
+
 def set_output(name, value):
     """Set GitHub Actions output."""
     output_file = os.environ.get('GITHUB_OUTPUT')
@@ -441,6 +472,12 @@ def main():
         if not homebrew_data:
             print(f"Failed {cask_name}: not found on Homebrew")
             failed_apps.append({'cask': cask_name, 'reason': 'not found on Homebrew'})
+            continue
+
+        validation_error = binary_only_cask_reason(homebrew_data)
+        if validation_error:
+            print(f"Failed {cask_name}: {validation_error}")
+            failed_apps.append({'cask': cask_name, 'reason': validation_error})
             continue
 
         # Get app name

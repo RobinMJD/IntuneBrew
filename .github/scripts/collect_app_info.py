@@ -481,8 +481,6 @@ app_urls = [
     "https://formulae.brew.sh/api/cask/sipgate.json",
     "https://formulae.brew.sh/api/cask/support.json",
     "https://formulae.brew.sh/api/cask/thaw.json",
-    "https://formulae.brew.sh/api/cask/codex.json",
-    "https://formulae.brew.sh/api/cask/copilot-cli.json",
     "https://formulae.brew.sh/api/cask/ddpm.json",
     "https://formulae.brew.sh/api/cask/monotype.json",
 ]

@@ -18,9 +18,8 @@ jobs:
     runs-on: ubuntu-latest
 
     permissions:
-      contents: write
+      contents: read
       issues: write
-      actions: write
 
     steps:
       - name: Check user permission
@@ -82,6 +81,10 @@ jobs:
           ISSUE_BODY: ${{ github.event.issue.body }}
           COMMENT_BODY: ${{ github.event.comment.body }}
         run: python .github/scripts/add_new_app.py
+
+      - name: Run catalog regression tests
+        if: steps.add-app.outputs.app_added == 'true'
+        run: python -m unittest discover -s tests -p "test_*.py"
 
       - name: Commit changes
         if: steps.add-app.outputs.app_added == 'true'
