@@ -270,7 +270,7 @@ jobs:
           subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
 
       - name: Create supported_apps.json
-        run: python .github/scripts/generate_supported_apps.py
+        run: python .github/scripts/generate_supported_apps.py --allow-incomplete
 
       - name: Process apps
         id: process-apps
@@ -357,7 +357,7 @@ jobs:
             case "$path" in
               *.pkg) echo "pkg" ;;
               *.dmg) echo "dmg" ;;
-              *.zip|*.tar.gz|*.tar.xz|*.tar.bz2|*.tbz) echo "archive" ;;
+              *.zip|*.tar.gz|*.tgz|*.tar.xz|*.tar.bz2|*.tbz) echo "archive" ;;
               *) echo "unknown" ;;
             esac
           }
@@ -899,7 +899,9 @@ jobs:
               mkdir -p "$extract_dir"
               declared_app=$(jq -r '.artifact_app // empty' "$WORKSPACE_DIR/Apps/${app_name}.json")
               declared_pkg=$(jq -r '.artifact_pkg // empty' "$WORKSPACE_DIR/Apps/${app_name}.json")
-              kind=$(artifact_kind "$url")
+              kind=$(jq -r '.artifact_kind // empty' "$WORKSPACE_DIR/Apps/${app_name}.json")
+              archive_format=$(jq -r '.archive_format // empty' "$WORKSPACE_DIR/Apps/${app_name}.json")
+              [ -n "$kind" ] || kind=$(artifact_kind "$url")
 
               case "$kind" in
                 pkg)
@@ -944,22 +946,30 @@ jobs:
                     rm -rf "$extract_dir"
                     continue
                   fi
-                  url_path="${url%%\?*}"
-                  url_path=$(printf '%s' "$url_path" | tr '[:upper:]' '[:lower:]')
-                  case "$url_path" in
-                    *.zip)
+                  if [ -z "$archive_format" ]; then
+                    url_path="${url%%\?*}"
+                    url_path=$(printf '%s' "$url_path" | tr '[:upper:]' '[:lower:]')
+                    case "$url_path" in
+                      *.zip) archive_format="zip" ;;
+                      *.tar.gz|*.tgz) archive_format="tar.gz" ;;
+                      *.tar.xz) archive_format="tar.xz" ;;
+                      *.tar.bz2|*.tbz) archive_format="tar.bz2" ;;
+                    esac
+                  fi
+                  case "$archive_format" in
+                    zip)
                       extraction_ok=false
                       ditto -x -k "$archive_path" "$extract_dir" && extraction_ok=true
                       ;;
-                    *.tar.gz)
+                    tar.gz)
                       extraction_ok=false
                       tar -xzf "$archive_path" -C "$extract_dir" && extraction_ok=true
                       ;;
-                    *.tar.xz)
+                    tar.xz)
                       extraction_ok=false
                       tar -xJf "$archive_path" -C "$extract_dir" && extraction_ok=true
                       ;;
-                    *.tar.bz2|*.tbz)
+                    tar.bz2)
                       extraction_ok=false
                       tar -xjf "$archive_path" -C "$extract_dir" && extraction_ok=true
                       ;;

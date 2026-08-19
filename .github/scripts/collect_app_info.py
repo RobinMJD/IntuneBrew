@@ -13,7 +13,12 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from urllib.parse import urlparse, unquote
 
 
-ARCHIVE_EXTENSIONS = (".zip", ".tar.gz", ".tar.xz", ".tar.bz2", ".tbz")
+ARCHIVE_EXTENSIONS = (".zip", ".tar.gz", ".tgz", ".tar.xz", ".tar.bz2", ".tbz")
+ARTIFACT_KIND_OVERRIDES = {
+    "postman": ("archive", "zip"),
+    "visual-studio-code": ("archive", "zip"),
+    "whatsapp": ("archive", "zip"),
+}
 
 
 def get_artifact_kind(url):
@@ -26,6 +31,21 @@ def get_artifact_kind(url):
     if path.endswith(ARCHIVE_EXTENSIONS):
         return "archive"
     return "unknown"
+
+
+def get_archive_format(url):
+    parsed = urlparse(url)
+    path = unquote(parsed.path).lower()
+    query = parsed.query.lower()
+    if path.endswith(".zip") or "extension=zip" in query:
+        return "zip"
+    if path.endswith((".tar.gz", ".tgz")):
+        return "tar.gz"
+    if path.endswith(".tar.xz"):
+        return "tar.xz"
+    if path.endswith((".tar.bz2", ".tbz")):
+        return "tar.bz2"
+    return None
 
 
 def get_installable_artifacts(data):
@@ -43,6 +63,13 @@ def get_installable_artifacts(data):
             elif isinstance(value, list) and value and isinstance(value[0], str):
                 result[kind] = value[0]
     return result
+
+
+def has_installer_artifact(data):
+    return any(
+        isinstance(artifact, dict) and artifact.get("installer")
+        for artifact in data.get("artifacts", [])
+    )
 
 
 def get_bundle_id_override(cask_token):
@@ -75,7 +102,7 @@ def get_filename_from_url(url, app_name=None, version=None, default_ext=".dmg"):
     filename = os.path.basename(path)
 
     # Check if the filename has a valid extension
-    valid_extensions = ['.dmg', '.pkg', '.zip', '.app', '.tar.gz', '.tar.xz', '.tar.bz2', '.tbz']
+    valid_extensions = ['.dmg', '.pkg', '.zip', '.app', '.tar.gz', '.tgz', '.tar.xz', '.tar.bz2', '.tbz']
     has_valid_ext = any(filename.lower().endswith(ext) for ext in valid_extensions)
 
     # If no valid extension found, try to construct a proper filename
@@ -1777,6 +1804,12 @@ def get_homebrew_app_info(json_url, needs_packaging=False, is_pkg_in_dmg=False, 
 
     bundle_id = find_bundle_id(json_string) or get_bundle_id_override(cask_token)
     installable_artifacts = get_installable_artifacts(data)
+    if has_installer_artifact(data) and not any(installable_artifacts.values()):
+        raise CaskUnavailableError(
+            "installer-only bootstrap has no directly deployable app or package artifact",
+            display_name=data["name"][0],
+            cask_token=cask_token,
+        )
 
     # Clean up version string by removing anything after the comma or underscore
     version = data["version"]
@@ -1794,6 +1827,10 @@ def get_homebrew_app_info(json_url, needs_packaging=False, is_pkg_in_dmg=False, 
         url = f"https://releases.warp.dev/stable/v{version}/Warp.dmg"
 
     vendor_url = url
+    artifact_kind = get_artifact_kind(url)
+    archive_format = get_archive_format(url)
+    if cask_token in ARTIFACT_KIND_OVERRIDES:
+        artifact_kind, archive_format = ARTIFACT_KIND_OVERRIDES[cask_token]
 
     app_info = {
         "name": data["name"][0],
@@ -1809,6 +1846,9 @@ def get_homebrew_app_info(json_url, needs_packaging=False, is_pkg_in_dmg=False, 
         # extensionless URL would be deployed as a DMG and fail to mount (Issue #107)
         "fileName": get_filename_from_url(url, app_name=data["name"][0], version=version, default_ext=".pkg" if is_pkg else ".dmg")
     }
+    app_info["artifact_kind"] = artifact_kind
+    if archive_format:
+        app_info["archive_format"] = archive_format
     if data.get("sha256"):
         app_info["sha"] = data["sha256"]
     if installable_artifacts["app"]:
@@ -1825,11 +1865,11 @@ def get_homebrew_app_info(json_url, needs_packaging=False, is_pkg_in_dmg=False, 
     elif is_pkg:
         app_info["type"] = (
             "app"
-            if get_artifact_kind(url) == "archive"
+            if artifact_kind == "archive"
             and any(installable_artifacts.values())
             else "pkg"
         )
-    elif get_artifact_kind(url) == "archive" and any(installable_artifacts.values()):
+    elif artifact_kind == "archive" and any(installable_artifacts.values()):
         app_info["type"] = "app"
 
     return app_info

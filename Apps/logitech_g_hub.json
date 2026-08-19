@@ -12,5 +12,7 @@
   "previous_version": "2026.5.939708",
   "category": "Utilities",
   "publisher": "Logitech International S.A.",
-  "homebrew_cask": "logitech-g-hub"
+  "homebrew_cask": "logitech-g-hub",
+  "deprecated": true,
+  "deprecation_reason": "Bootstrap installer only; no directly deployable app or package artifact"
 }

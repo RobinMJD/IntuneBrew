@@ -17,16 +17,16 @@ SPEC.loader.exec_module(generator)
 
 
 class CatalogPublicationContractTests(unittest.TestCase):
-    def test_supported_catalog_contains_only_production_ready_manifests(self):
+    def test_prepackaging_catalog_keeps_every_non_deprecated_manifest(self):
         supported = json.loads(
             (ROOT / "supported_apps.json").read_text(encoding="utf-8")
         )
-        for name in supported:
-            with self.subTest(app=name):
-                manifest = json.loads(
-                    (ROOT / "Apps" / f"{name}.json").read_text(encoding="utf-8")
-                )
-                self.assertEqual(generator.publication_errors(manifest), [])
+        expected = {
+            path.stem
+            for path in (ROOT / "Apps").glob("*.json")
+            if not json.loads(path.read_text(encoding="utf-8")).get("deprecated")
+        }
+        self.assertEqual(set(supported), expected)
 
     def test_percent_encoded_deployable_filename_is_accepted(self):
         app = {
@@ -63,7 +63,7 @@ class CatalogPublicationContractTests(unittest.TestCase):
         }
         self.assertIn("legacy package URL", generator.publication_errors(app))
 
-    def test_generator_excludes_invalid_manifest(self):
+    def test_strict_generator_fails_without_rewriting_index(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             apps = root / "Apps"
@@ -88,17 +88,44 @@ class CatalogPublicationContractTests(unittest.TestCase):
             (root / "README.md").write_text(
                 "Apps_Available-0-2ea44f?style=flat", encoding="utf-8"
             )
+            (root / "supported_apps.json").write_text(
+                '{"existing": "unchanged"}\n', encoding="utf-8"
+            )
             with patch.object(generator, "ROOT", root), patch.object(
                 generator, "APPS_DIR", apps
             ), patch.object(
                 generator, "SUPPORTED_PATH", root / "supported_apps.json"
             ), patch.object(generator, "README_PATH", root / "README.md"):
-                generator.generate_supported_apps()
+                with self.assertRaises(SystemExit) as context:
+                    generator.generate_supported_apps()
+
+            self.assertIn("bad.json", str(context.exception))
+            self.assertEqual(
+                (root / "supported_apps.json").read_text(encoding="utf-8"),
+                '{"existing": "unchanged"}\n',
+            )
+
+    def test_prepackaging_generator_keeps_invalid_candidate(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            apps = root / "Apps"
+            apps.mkdir()
+            (apps / "candidate.json").write_text(
+                json.dumps({"name": "Candidate", "fileName": "candidate.zip"}),
+                encoding="utf-8",
+            )
+            (root / "README.md").write_text(
+                "Apps_Available-0-2ea44f?style=flat", encoding="utf-8"
+            )
+            with patch.object(generator, "APPS_DIR", apps), patch.object(
+                generator, "SUPPORTED_PATH", root / "supported_apps.json"
+            ), patch.object(generator, "README_PATH", root / "README.md"):
+                generator.generate_supported_apps(allow_incomplete=True)
 
             supported = json.loads(
                 (root / "supported_apps.json").read_text(encoding="utf-8")
             )
-            self.assertEqual(set(supported), {"good"})
+            self.assertEqual(set(supported), {"candidate"})
 
 
 class WorkflowPackagingRegressionTests(unittest.TestCase):
@@ -130,6 +157,12 @@ class WorkflowPackagingRegressionTests(unittest.TestCase):
         self.assertIn('nested_dmg=$(find "$extract_dir"', archive_route)
         self.assertIn("hdiutil attach \"$nested_dmg\"", archive_route)
 
+    def test_tgz_and_persisted_extensionless_archive_formats_are_supported(self):
+        self.assertIn("*.tar.gz|*.tgz", self.process)
+        self.assertIn(".artifact_kind // empty", self.process)
+        self.assertIn(".archive_format // empty", self.process)
+        self.assertIn('case "$archive_format" in', self.process)
+
     def test_archive_without_app_or_pkg_is_a_packaging_failure(self):
         self.assertIn("No .app or .pkg found inside archive", self.process)
         self.assertIn('FAILED_APPS+=("$app_name")', self.process)
@@ -150,6 +183,19 @@ class WorkflowPackagingRegressionTests(unittest.TestCase):
             self.process,
         )
         self.assertIn('failed_count=${#FAILED_APPS[@]}', self.process)
+
+    def test_strict_index_generation_runs_after_packaging(self):
+        pre = self.workflow.index(
+            "python .github/scripts/generate_supported_apps.py --allow-incomplete"
+        )
+        process = self.workflow.index("- name: Process apps")
+        final = self.workflow.index(
+            "run: python .github/scripts/generate_supported_apps.py", process
+        )
+        marker = self.workflow.index("- name: Publish catalog state")
+        self.assertLess(pre, process)
+        self.assertLess(process, final)
+        self.assertLess(final, marker)
 
 
 if __name__ == "__main__":

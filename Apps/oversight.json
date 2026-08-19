@@ -12,5 +12,7 @@
   "previous_version": "2.4.0",
   "category": "Security",
   "publisher": "Objective-See",
-  "homebrew_cask": "oversight"
+  "homebrew_cask": "oversight",
+  "deprecated": true,
+  "deprecation_reason": "Bootstrap installer only; no directly deployable app or package artifact"
 }

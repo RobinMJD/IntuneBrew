@@ -1,3 +1,4 @@
+import argparse
 import json
 import re
 from pathlib import Path
@@ -22,8 +23,6 @@ LEGACY_PACKAGE_HOSTS = {"intunebrew.blob.core.windows.net"}
 
 def publication_errors(app):
     errors = []
-    if app.get("deprecated"):
-        errors.append("deprecated")
     if app.get("homebrew_cask") in UNSUPPORTED_CASKS:
         errors.append("unsupported cask")
     for field in REQUIRED_FIELDS:
@@ -45,24 +44,34 @@ def publication_errors(app):
 
 
 def is_publishable(app):
-    return not publication_errors(app)
+    return not app.get("deprecated") and not publication_errors(app)
 
 
-def generate_supported_apps():
+def generate_supported_apps(allow_incomplete=False):
     supported = {}
+    invalid = []
     for path in APPS_DIR.glob("*.json"):
         try:
             app = json.loads(path.read_text(encoding="utf-8"))
-        except ValueError:
+        except ValueError as error:
+            invalid.append(f"{path.name}: invalid JSON ({error})")
+            continue
+        if app.get("deprecated"):
+            print(f"Excluding deprecated app: {path.name}")
             continue
         errors = publication_errors(app)
-        if not errors:
+        if not errors or allow_incomplete:
             supported[path.stem] = (
                 "https://raw.githubusercontent.com/ugurkocde/IntuneBrew/main/"
                 f"Apps/{path.name}"
             )
-        else:
-            print(f"Excluding {path.name}: {', '.join(errors)}")
+        if errors:
+            invalid.append(f"{path.name}: {', '.join(errors)}")
+
+    if invalid and not allow_incomplete:
+        raise SystemExit(
+            "Catalog publication contract failed:\n- " + "\n- ".join(invalid)
+        )
 
     supported = dict(sorted(supported.items()))
     SUPPORTED_PATH.write_text(
@@ -81,4 +90,10 @@ def generate_supported_apps():
 
 
 if __name__ == "__main__":
-    generate_supported_apps()
+    parser = argparse.ArgumentParser()
+    parser.add_argument(
+        "--allow-incomplete",
+        action="store_true",
+        help="Keep non-deprecated packaging candidates before Process apps",
+    )
+    generate_supported_apps(parser.parse_args().allow_incomplete)

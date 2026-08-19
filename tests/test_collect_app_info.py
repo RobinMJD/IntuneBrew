@@ -156,6 +156,14 @@ class CollectAppInfoTests(unittest.TestCase):
             ),
             "dmg",
         )
+        self.assertEqual(
+            collect_app_info.get_artifact_kind("https://example.test/app.tgz"),
+            "archive",
+        )
+        self.assertEqual(
+            collect_app_info.get_archive_format("https://example.test/app.tgz"),
+            "tar.gz",
+        )
 
     def test_declared_app_wins_over_nested_helper_apps(self):
         artifacts = collect_app_info.get_installable_artifacts(
@@ -212,6 +220,42 @@ class CollectAppInfoTests(unittest.TestCase):
             app_info = collect_app_info.get_homebrew_app_info(url)
 
         self.assertEqual(app_info["bundleId"], "com.cmtrace.open")
+
+    def test_extensionless_archive_override_is_persisted(self):
+        url = "https://formulae.brew.sh/api/cask/postman.json"
+        payload = {
+            "name": ["Postman"],
+            "desc": "API client",
+            "version": "1.0",
+            "url": "https://example.test/download/arm64",
+            "sha256": "c" * 64,
+            "homepage": "https://example.test/",
+            "artifacts": [{"app": ["Postman.app"]}],
+        }
+
+        with patch.dict(collect_app_info.cask_cache, {url: payload}, clear=True):
+            app_info = collect_app_info.get_homebrew_app_info(url)
+
+        self.assertEqual(app_info["artifact_kind"], "archive")
+        self.assertEqual(app_info["archive_format"], "zip")
+        self.assertEqual(app_info["type"], "app")
+
+    def test_installer_only_cask_is_rejected(self):
+        url = "https://formulae.brew.sh/api/cask/battle-net.json"
+        payload = {
+            "name": ["Battle.net"],
+            "desc": "Game launcher",
+            "version": "1.0",
+            "url": "https://example.test/installer",
+            "homepage": "https://example.test/",
+            "artifacts": [{"installer": [{"manual": "Battle.net-Setup.app"}]}],
+        }
+
+        with patch.dict(collect_app_info.cask_cache, {url: payload}, clear=True):
+            with self.assertRaises(collect_app_info.CaskUnavailableError) as context:
+                collect_app_info.get_homebrew_app_info(url, needs_packaging=True)
+
+        self.assertIn("installer-only bootstrap", context.exception.reason)
 
 
 CASK_INFO = {
@@ -725,6 +769,30 @@ class CatalogConsistencyTests(unittest.TestCase):
                     configured_urls,
                 )
 
+    def test_installer_only_incident_casks_are_deprecated(self):
+        expected_files = {
+            "battle-net": "blizzard_battlenet.json",
+            "blockblock": "blockblock.json",
+            "boinc": "berkeley_open_infrastructure_for_network_computing.json",
+            "logi-options+": "logitech_options.json",
+            "logitech-g-hub": "logitech_g_hub.json",
+            "oversight": "oversight.json",
+            "private-internet-access": "private_internet_access.json",
+        }
+        supported = json.loads(
+            (ROOT / "supported_apps.json").read_text(encoding="utf-8")
+        )
+
+        for token, filename in expected_files.items():
+            with self.subTest(token=token):
+                app = json.loads(
+                    (ROOT / "Apps" / filename).read_text(encoding="utf-8")
+                )
+                self.assertEqual(app["homebrew_cask"], token)
+                self.assertTrue(app["deprecated"])
+                self.assertIn("Bootstrap installer only", app["deprecation_reason"])
+                self.assertNotIn(Path(filename).stem, supported)
+
     def test_supported_catalog_matches_non_deprecated_apps(self):
         apps = {
             path.stem: json.loads(path.read_text(encoding="utf-8"))
@@ -740,7 +808,7 @@ class CatalogConsistencyTests(unittest.TestCase):
         generator = importlib.util.module_from_spec(generator_spec)
         generator_spec.loader.exec_module(generator)
         expected = {
-            name for name, app_data in apps.items() if generator.is_publishable(app_data)
+            name for name, app_data in apps.items() if not app_data.get("deprecated")
         }
 
         self.assertEqual(set(supported), expected)
