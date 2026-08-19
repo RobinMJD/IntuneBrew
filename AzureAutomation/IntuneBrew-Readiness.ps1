@@ -122,6 +122,32 @@ function Get-PublishedCatalogState {
     }
 }
 
+function ConvertTo-CommitManifestUri {
+    param(
+        [Parameter(Mandatory)][string]$Uri,
+        [Parameter(Mandatory)][string]$Commit
+    )
+
+    $sourceUri = [Uri]$Uri
+    $decodedPath = [Uri]::UnescapeDataString($sourceUri.AbsolutePath)
+    $fileName = [IO.Path]::GetFileName($decodedPath)
+    if ($sourceUri.Scheme -ne 'https' -or
+        -not $sourceUri.IsDefaultPort -or
+        -not [string]::IsNullOrEmpty($sourceUri.UserInfo) -or
+        $sourceUri.Host -ne 'raw.githubusercontent.com' -or
+        -not [string]::IsNullOrEmpty($sourceUri.Query) -or
+        -not [string]::IsNullOrEmpty($sourceUri.Fragment) -or
+        [string]::IsNullOrWhiteSpace($fileName) -or
+        $fileName -ne [IO.Path]::GetFileName($fileName) -or
+        $fileName -notmatch '^[A-Za-z0-9][A-Za-z0-9._-]*\.json$' -or
+        $decodedPath -notmatch "^/(?:RobinMJD|ugurkocde)/IntuneBrew/main/Apps/$([regex]::Escape($fileName))$" -or
+        $Commit -notmatch '^[0-9a-f]{40}$') {
+        throw "Unexpected manifest URL in supported_apps.json: $Uri"
+    }
+
+    "https://raw.githubusercontent.com/RobinMJD/IntuneBrew/$Commit/Apps/$([Uri]::EscapeDataString($fileName))"
+}
+
 $maximumAgeHours = [double](Get-AutomationVariable -Name 'IntuneBrewCatalogMaxAgeHours')
 $packageStorageBaseUrl = [string](Get-AutomationVariable -Name 'IntuneBrewPackageStorageBaseUrl')
 $packageStorageBaseUri = [Uri]$packageStorageBaseUrl
@@ -157,19 +183,15 @@ try {
     if ($manifestUris.Count -eq 0) {
         throw 'The IntuneBrew supported-app catalog is empty.'
     }
-    $invalidManifestUris = @($manifestUris | Where-Object {
-        [string]$_ -notmatch '^https://raw\.githubusercontent\.com/RobinMJD/IntuneBrew/main/Apps/.+\.json$'
+    $commitAddressedManifestUris = @($manifestUris | ForEach-Object {
+        ConvertTo-CommitManifestUri -Uri ([string]$_) -Commit $catalogCommit
     })
-    if ($invalidManifestUris.Count -gt 0) {
-        throw "The catalog contains $($invalidManifestUris.Count) unexpected manifest URL(s)."
-    }
     $duplicateManifestUris = @($manifestUris | Group-Object | Where-Object Count -gt 1)
     if ($duplicateManifestUris.Count -gt 0) {
         throw "The catalog contains $($duplicateManifestUris.Count) duplicate manifest URL(s)."
     }
 
-    $sampleManifestUri = [string]$manifestUris[0]
-    $commitAddressedManifestUri = $sampleManifestUri.Replace('/main/', "/$catalogCommit/")
+    $commitAddressedManifestUri = [string]$commitAddressedManifestUris[0]
     $sampleManifest = Invoke-RestMethod -Uri $commitAddressedManifestUri -Method Get
     foreach ($requiredProperty in 'name', 'version', 'url', 'fileName', 'sha') {
         if ($sampleManifest.PSObject.Properties.Name -notcontains $requiredProperty) {
@@ -177,14 +199,13 @@ try {
         }
     }
 
-    $packageProbeCatalogUri = [string]($manifestUris | Where-Object {
+    $packageProbeCatalogUri = [string]($commitAddressedManifestUris | Where-Object {
         [string]$_ -match '/Apps/1password\.json$'
     } | Select-Object -First 1)
     if ([string]::IsNullOrWhiteSpace($packageProbeCatalogUri)) {
         throw 'The catalog does not contain the required private-package probe manifest.'
     }
-    $packageProbeManifestUri = $packageProbeCatalogUri.Replace('/main/', "/$catalogCommit/")
-    $packageProbeManifest = Invoke-RestMethod -Uri $packageProbeManifestUri -Method Get
+    $packageProbeManifest = Invoke-RestMethod -Uri $packageProbeCatalogUri -Method Get
     $packageProbeUrl = [string]$packageProbeManifest.url
     $packageProbeUri = [Uri]$packageProbeUrl
     if ($packageProbeUri.Scheme -ne 'https' -or

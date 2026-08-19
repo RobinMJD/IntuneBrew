@@ -81,7 +81,8 @@ class AzureAutomationRunbookTests(unittest.TestCase):
             self.production,
         )
         self.assertIn(
-            '$decodedPath -notmatch "^/RobinMJD/IntuneBrew/main/Apps/',
+            '$decodedPath -notmatch "^/(?:RobinMJD|ugurkocde)/'
+            'IntuneBrew/main/Apps/',
             self.production,
         )
         self.assertIn(
@@ -100,6 +101,15 @@ class AzureAutomationRunbookTests(unittest.TestCase):
             "https://raw.githubusercontent.com/RobinMJD/IntuneBrew/"
             "main/supported_apps.json",
             self.all_scripts,
+        )
+        self.assertIn(
+            "ConvertTo-CommitManifestUri -Uri ([string]$_) -Commit $catalogCommit",
+            self.controls["readiness"],
+        )
+        self.assertIn(
+            '"https://raw.githubusercontent.com/RobinMJD/IntuneBrew/'
+            '$Commit/Apps/$([Uri]::EscapeDataString($fileName))"',
+            self.controls["readiness"],
         )
 
     def test_canary_approval_is_bound_and_target_is_revalidated(self):
@@ -252,6 +262,7 @@ Invoke-Expression (Get-RunbookFunction $path 'Compare-VersionSegments')
 Invoke-Expression (Get-RunbookFunction $path 'Is-NewerVersion')
 Invoke-Expression (Get-RunbookFunction $path 'Test-SafeLeafFileName')
 Invoke-Expression (Get-RunbookFunction $path 'Test-CompatibleIntuneDisplayName')
+Invoke-Expression (Get-RunbookFunction $path 'ConvertTo-CommitManifestUri')
 if (Is-NewerVersion '01.002.3' '1.2.3') {{ throw 'Normalized equal versions compared newer' }}
 if (-not (Is-NewerVersion '1.0,5000000000' '1.0,4000000000')) {{ throw '64-bit build comparison failed' }}
 if (Is-NewerVersion '1.0,4000000000' '1.0,5000000000') {{ throw 'Older 64-bit build compared newer' }}
@@ -261,6 +272,11 @@ if (-not (Test-SafeLeafFileName 'safe-package.pkg')) {{ throw 'Safe PKG rejected
 foreach ($unsafe in '../escape.pkg', 'folder/app.dmg', 'CON.pkg', 'trailing.pkg.') {{
     if (Test-SafeLeafFileName $unsafe) {{ throw "Unsafe filename accepted: $unsafe" }}
 }}
+$commit = '0123456789abcdef0123456789abcdef01234567'
+$legacyUri = 'https://raw.githubusercontent.com/ugurkocde/IntuneBrew/main/Apps/1password.json'
+$resolvedUri = ConvertTo-CommitManifestUri -Uri $legacyUri -Commit $commit
+$expectedUri = "https://raw.githubusercontent.com/RobinMJD/IntuneBrew/$commit/Apps/1password.json"
+if ($resolvedUri -ne $expectedUri) {{ throw "Legacy catalog URI was not pinned to the trusted fork: $resolvedUri" }}
 """
         with tempfile.NamedTemporaryFile(
             mode="w", suffix=".ps1", encoding="utf-8", delete=False

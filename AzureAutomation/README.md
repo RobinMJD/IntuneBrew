@@ -20,6 +20,9 @@ marker parent to equal `catalogCommit`, and verifies the referenced Actions run
 is completed, successful, on `main`, from the expected workflow, and from an
 eligible event. It then uses that commit for the complete catalog and all
 manifests. Mutable `main` content is never used during an update.
+Legacy catalog entries that name the upstream repository are treated only as
+validated manifest filenames and are reconstructed against the trusted
+`RobinMJD/IntuneBrew` catalog commit before any network fetch.
 
 ## Runtime and modules
 

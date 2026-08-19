@@ -279,7 +279,7 @@ try {
 
     foreach ($manifestUriValue in $manifestUris) {
         $manifestUri = [string]$manifestUriValue
-        if ($manifestUri -notmatch '^https://raw\.githubusercontent\.com/RobinMJD/IntuneBrew/main/Apps/.+\.json$') {
+        if ($manifestUri -notmatch '^https://raw\.githubusercontent\.com/(?:RobinMJD|ugurkocde)/IntuneBrew/main/Apps/.+\.json$') {
             $manifestFailures.Add("$manifestUri (unexpected URL)")
             continue
         }
@@ -290,7 +290,7 @@ try {
             $manifestFileName = [IO.Path]::GetFileName($decodedManifestPath)
             if (-not (Test-SafeLeafFileName -Name $manifestFileName) -or
                 $manifestFileName -notmatch '\.json$' -or
-                $decodedManifestPath -notmatch "^/RobinMJD/IntuneBrew/main/Apps/$([regex]::Escape($manifestFileName))$") {
+                $decodedManifestPath -notmatch "^/(?:RobinMJD|ugurkocde)/IntuneBrew/main/Apps/$([regex]::Escape($manifestFileName))$") {
                 throw 'The manifest URI does not resolve to one safe Apps filename.'
             }
             $appsRoot = [IO.Path]::GetFullPath($appsPath).TrimEnd([IO.Path]::DirectorySeparatorChar) + [IO.Path]::DirectorySeparatorChar

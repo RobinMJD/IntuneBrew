@@ -212,7 +212,7 @@ function ConvertTo-CommitManifestUri {
         -not [string]::IsNullOrEmpty($sourceUri.Fragment) -or
         -not (Test-SafeLeafFileName -Name $fileName) -or
         $fileName -notmatch '\.json$' -or
-        $decodedPath -notmatch "^/RobinMJD/IntuneBrew/main/Apps/$([regex]::Escape($fileName))$" -or
+        $decodedPath -notmatch "^/(?:RobinMJD|ugurkocde)/IntuneBrew/main/Apps/$([regex]::Escape($fileName))$" -or
         $Commit -notmatch '^[0-9a-f]{40}$') {
         throw "Unexpected manifest URL in supported_apps.json: $Uri"
     }
