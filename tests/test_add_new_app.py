@@ -169,6 +169,7 @@ class ApprovalWorkflowTests(unittest.TestCase):
         self.assertNotIn("secrets.PAT", workflow)
         self.assertIn("contents: write", workflow)
         self.assertIn("issues: write", workflow)
+        self.assertIn("id-token: write", workflow)
 
     def test_catalog_collection_runs_on_isolated_linux_runner(self):
         workflow = (
@@ -193,6 +194,106 @@ class ApprovalWorkflowTests(unittest.TestCase):
         self.assertIn("runs-on: macos-latest", workflow[build:])
         self.assertIn("actions/download-artifact@v4", workflow[build:])
         self.assertIn("needs.collect.outputs.scope", workflow[build:])
+
+
+class CatalogStorageWorkflowTests(unittest.TestCase):
+    def setUp(self):
+        self.workflow = (
+            ROOT / ".github" / "workflows" / "build-app-packages.yml"
+        ).read_text(encoding="utf-8")
+
+    def test_storage_uses_oidc_repository_variables(self):
+        self.assertNotIn("AZURE_STORAGE_CONNECTION_STRING", self.workflow)
+        self.assertNotIn("secrets.", self.workflow)
+
+        build = self.workflow.index("  build:")
+        permissions = self.workflow.index("    permissions:", build)
+        steps = self.workflow.index("    steps:", permissions)
+        build_permissions = self.workflow[permissions:steps]
+        self.assertIn("contents: write", build_permissions)
+        self.assertIn("issues: write", build_permissions)
+        self.assertIn("id-token: write", build_permissions)
+        self.assertNotIn("actions: write", build_permissions)
+
+        login = self.workflow.index("uses: azure/login@v3", build)
+        first_storage_operation = self.workflow.index("az storage blob", build)
+        self.assertLess(login, first_storage_operation)
+        self.assertIn("AZURE_LOGIN_POST_CLEANUP: true", self.workflow)
+
+        for variable, login_input in (
+            ("AZURE_CLIENT_ID", "client-id"),
+            ("AZURE_TENANT_ID", "tenant-id"),
+            ("AZURE_SUBSCRIPTION_ID", "subscription-id"),
+        ):
+            self.assertIn(
+                f"{login_input}: ${{{{ vars.{variable} }}}}",
+                self.workflow,
+            )
+
+        for variable in (
+            "AZURE_STORAGE_ACCOUNT",
+            "AZURE_STORAGE_CONTAINER",
+            "AZURE_STORAGE_BASE_URL",
+        ):
+            self.assertIn(
+                f"{variable}: ${{{{ vars.{variable} }}}}",
+                self.workflow,
+            )
+
+    def test_storage_configuration_is_validated_before_login(self):
+        validation = self.workflow.index(
+            "- name: Validate Azure storage configuration"
+        )
+        login = self.workflow.index("- name: Log in to Azure with GitHub OIDC")
+        self.assertLess(validation, login)
+
+        validation_step = self.workflow[validation:login]
+        for variable in (
+            "AZURE_CLIENT_ID",
+            "AZURE_TENANT_ID",
+            "AZURE_SUBSCRIPTION_ID",
+            "AZURE_STORAGE_ACCOUNT",
+            "AZURE_STORAGE_CONTAINER",
+            "AZURE_STORAGE_BASE_URL",
+        ):
+            self.assertIn(variable, validation_step)
+        self.assertIn("::error::Missing required GitHub Actions", validation_step)
+
+    def test_blob_commands_use_configured_login_authentication(self):
+        logical_workflow = self.workflow.replace("\\\n", " ")
+        commands = [
+            line.strip()
+            for line in logical_workflow.splitlines()
+            if "az storage blob " in line
+        ]
+        self.assertGreater(len(commands), 0)
+
+        for command in commands:
+            with self.subTest(command=command):
+                self.assertIn(
+                    '--account-name "$AZURE_STORAGE_ACCOUNT"',
+                    command,
+                )
+                self.assertIn(
+                    '--container-name "$AZURE_STORAGE_CONTAINER"',
+                    command,
+                )
+                self.assertIn("--auth-mode login", command)
+
+    def test_catalog_package_urls_use_configured_base_url(self):
+        self.assertNotIn(
+            "intunebrew.blob.core.windows.net/pkg",
+            self.workflow,
+        )
+        self.assertIn(
+            'STORAGE_BASE_URL="${AZURE_STORAGE_BASE_URL%/}"',
+            self.workflow,
+        )
+        self.assertIn('"$STORAGE_BASE_URL"/*)', self.workflow)
+        self.assertIn(
+            'azure_url="${STORAGE_BASE_URL}/${app_name}_${version}.pkg"',
+            self.workflow,
+        )
 
 
 if __name__ == "__main__":
