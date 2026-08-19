@@ -138,6 +138,29 @@ class ApprovalWorkflowTests(unittest.TestCase):
         self.assertIn("contents: write", workflow)
         self.assertIn("issues: write", workflow)
 
+    def test_catalog_collection_runs_on_isolated_linux_runner(self):
+        workflow = (
+            ROOT / ".github" / "workflows" / "build-app-packages.yml"
+        ).read_text(encoding="utf-8")
+
+        collect = workflow.index("  collect:")
+        build = workflow.index("  build:")
+        collect_app_info = workflow.index(
+            "python .github/scripts/collect_app_info.py"
+        )
+
+        self.assertLess(collect, collect_app_info)
+        self.assertLess(collect_app_info, build)
+        self.assertIn(
+            "runs-on: [self-hosted, Linux, X64, intunebrew-linux]",
+            workflow[collect:build],
+        )
+        self.assertIn("actions/upload-artifact@v4", workflow[collect:build])
+        self.assertIn("needs: collect", workflow[build:])
+        self.assertIn("runs-on: macos-latest", workflow[build:])
+        self.assertIn("actions/download-artifact@v4", workflow[build:])
+        self.assertIn("needs.collect.outputs.scope", workflow[build:])
+
 
 if __name__ == "__main__":
     unittest.main()

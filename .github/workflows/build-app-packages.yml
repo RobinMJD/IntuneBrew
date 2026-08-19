@@ -15,20 +15,21 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  build:
-    runs-on: macos-latest
-
-    # The job-scoped token is sufficient for catalog commits and issue comments.
+  collect:
+    runs-on: [self-hosted, Linux, X64, intunebrew-linux]
+    timeout-minutes: 120
+    outputs:
+      scope: ${{ steps.scope.outputs.scope }}
+      tokens: ${{ steps.scope.outputs.tokens }}
     permissions:
-      contents: write
-      issues: write
+      contents: read
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
 
       - name: Set up Python
-        uses: actions/setup-python@v2
+        uses: actions/setup-python@v5
         with:
           python-version: "3.x"
 
@@ -95,11 +96,61 @@ jobs:
       - name: Collect app information
         run: python .github/scripts/collect_app_info.py
 
+      - name: Create collection patch
+        run: |
+          git add -A -- Apps README.md supported_apps.json
+          git diff --cached --binary --full-index > catalog-collection.patch
+          git reset
+
+      - name: Upload collection patch
+        uses: actions/upload-artifact@v4
+        with:
+          name: catalog-collection-${{ github.run_id }}
+          path: catalog-collection.patch
+          if-no-files-found: error
+          retention-days: 1
+
+  build:
+    needs: collect
+    runs-on: macos-latest
+
+    # The job-scoped token is sufficient for catalog commits and issue comments.
+    permissions:
+      contents: write
+      issues: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Download collection patch
+        uses: actions/download-artifact@v4
+        with:
+          name: catalog-collection-${{ github.run_id }}
+
+      - name: Apply collection patch
+        run: |
+          if [ -s catalog-collection.patch ]; then
+            git apply --whitespace=nowarn catalog-collection.patch
+          else
+            echo "Collector produced no repository changes"
+          fi
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.x"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install requests
+
       - name: Find apps needing packaging
         id: find-apps
         env:
-          BUILD_SCOPE: ${{ steps.scope.outputs.scope }}
-          SCOPE_TOKENS: ${{ steps.scope.outputs.tokens }}
+          BUILD_SCOPE: ${{ needs.collect.outputs.scope }}
+          SCOPE_TOKENS: ${{ needs.collect.outputs.tokens }}
         run: |
           echo "Finding apps that need special packaging..."
           all_apps=()
@@ -1191,9 +1242,9 @@ jobs:
       # everything the scoped build did not process; the nightly full run
       # refreshes those apps correctly.
       - name: Revert out-of-scope changes
-        if: steps.scope.outputs.scope == 'partial'
+        if: needs.collect.outputs.scope == 'partial'
         env:
-          SCOPE_TOKENS: ${{ steps.scope.outputs.tokens }}
+          SCOPE_TOKENS: ${{ needs.collect.outputs.tokens }}
         run: |
           reverted=0
           while IFS= read -r f; do
@@ -1277,7 +1328,7 @@ jobs:
       # must not close the issue.
       - name: Report packaging failures
         if: |
-          steps.scope.outputs.scope != 'partial' &&
+          needs.collect.outputs.scope != 'partial' &&
           steps.process-apps.outputs.failed_count != ''
         env:
           GH_TOKEN: ${{ github.token }}
