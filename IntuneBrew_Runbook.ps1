@@ -22,12 +22,12 @@
     Author:         Ugur Koc
     Creation Date:  2025-02-24
     Updated:        2026-01-14
-    Repository:     https://github.com/ugurkocde/IntuneBrew
+    Repository:     https://github.com/RobinMJD/IntuneBrew
     License:        MIT
 
 .LINK
-    Project Homepage: https://github.com/ugurkocde/IntuneBrew
-    Issue Tracker:    https://github.com/ugurkocde/IntuneBrew/issues
+    Project Homepage: https://github.com/RobinMJD/IntuneBrew
+    Issue Tracker:    https://github.com/RobinMJD/IntuneBrew/issues
     Sponsor:          https://github.com/sponsors/ugurkocde
 
 .REQUIREMENTS
@@ -37,6 +37,14 @@
     - PowerShell 7.0 or later
     - Microsoft.Graph.Authentication module
 #>
+param(
+    [ValidateSet('Canary', 'Scheduled')]
+    [string]$ExecutionMode = 'Canary',
+    [string]$ApprovedCatalogCommit,
+    [string]$ApprovedMarkerCommit,
+    [string]$ApprovedIntuneAppId
+)
+
 # Disable verbose output to avoid cluttering the Azure Automation Runbook logs
 $VerbosePreference = "SilentlyContinue"
 
@@ -62,6 +70,214 @@ function Write-Log {
     }
 }
 
+function Invoke-GitHubRequestWithRetry {
+    param([Parameter(Mandatory = $true)][string]$Uri)
+
+    $headers = @{
+        Accept                 = 'application/vnd.github+json'
+        'X-GitHub-Api-Version' = '2022-11-28'
+        'User-Agent'           = 'Sonepar-IntuneAutomation'
+    }
+
+    for ($attempt = 1; $attempt -le 4; $attempt++) {
+        try {
+            return Invoke-RestMethod -Uri $Uri -Method Get -Headers $headers
+        }
+        catch {
+            $statusCode = if ($_.Exception.Response) { [int]$_.Exception.Response.StatusCode } else { 0 }
+            $transient = $statusCode -in 408, 429, 500, 502, 503, 504
+            if (-not $transient -or $attempt -eq 4) {
+                throw
+            }
+
+            $delaySeconds = [Math]::Min(30, 5 * [Math]::Pow(2, $attempt - 1))
+            Write-Log "GitHub returned HTTP $statusCode; retrying in $delaySeconds seconds (attempt $attempt of 4)." -Type "Warning"
+            Start-Sleep -Seconds $delaySeconds
+        }
+    }
+}
+
+function Get-PublishedCatalogState {
+    param([Parameter(Mandatory = $true)][double]$MaximumAgeHours)
+
+    $stateCommits = @((Invoke-GitHubRequestWithRetry -Uri 'https://api.github.com/repos/RobinMJD/IntuneBrew/commits?path=.github/catalog-state.json&per_page=1'))
+    if ($stateCommits.Count -ne 1 -or [string]$stateCommits[0].sha -notmatch '^[0-9a-f]{40}$') {
+        throw 'GitHub returned no valid catalog-state marker commit.'
+    }
+    $markerCommit = [string]$stateCommits[0].sha
+    $markerCommitDetails = Invoke-GitHubRequestWithRetry -Uri "https://api.github.com/repos/RobinMJD/IntuneBrew/commits/$markerCommit"
+    if (@($markerCommitDetails.parents).Count -ne 1 -or
+        [string]$markerCommitDetails.parents[0].sha -notmatch '^[0-9a-f]{40}$') {
+        throw 'The catalog-state marker commit does not have one valid parent.'
+    }
+    $state = Invoke-GitHubRequestWithRetry -Uri "https://raw.githubusercontent.com/RobinMJD/IntuneBrew/$markerCommit/.github/catalog-state.json"
+    if ([int]$state.schemaVersion -ne 1 -or
+        [string]$state.repository -ne 'RobinMJD/IntuneBrew' -or
+        [string]$state.workflowName -ne 'Build App Packages and Collect App Information' -or
+        [string]$state.workflowPath -ne '.github/workflows/build-app-packages.yml' -or
+        [string]$state.packageStorageBaseUrl -ne 'https://intcybintunebrewprd01st.blob.core.windows.net/pkg' -or
+        [string]$state.catalogCommit -notmatch '^[0-9a-f]{40}$' -or
+        [long]$state.runId -le 0 -or
+        [string]$state.publishedAt -notmatch '^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$') {
+        throw 'The catalog-state marker schema or values are invalid.'
+    }
+    if ([string]$markerCommitDetails.parents[0].sha -ne [string]$state.catalogCommit) {
+        throw 'The catalog-state marker does not identify its exact parent commit.'
+    }
+    $run = Invoke-GitHubRequestWithRetry -Uri "https://api.github.com/repos/RobinMJD/IntuneBrew/actions/runs/$([long]$state.runId)"
+    if ([long]$run.id -ne [long]$state.runId -or
+        [string]$run.status -ne 'completed' -or
+        [string]$run.conclusion -ne 'success' -or
+        [string]$run.name -ne [string]$state.workflowName -or
+        [string]$run.path -ne [string]$state.workflowPath -or
+        [string]$run.head_branch -ne 'main' -or
+        [string]$run.event -notin 'schedule', 'workflow_dispatch', 'push' -or
+        [string]$run.repository.full_name -ne [string]$state.repository) {
+        throw 'The catalog-state marker does not reference a successful eligible workflow run.'
+    }
+    $publishedAt = [DateTimeOffset]::ParseExact(
+        [string]$state.publishedAt,
+        'yyyy-MM-ddTHH:mm:ssZ',
+        [Globalization.CultureInfo]::InvariantCulture,
+        [Globalization.DateTimeStyles]::AssumeUniversal
+    )
+    $totalAgeHours = ([DateTimeOffset]::UtcNow - $publishedAt).TotalHours
+    if ($totalAgeHours -lt 0) {
+        throw 'The catalog-state publication timestamp is in the future.'
+    }
+    $ageHours = [Math]::Round($totalAgeHours, 1)
+
+    [pscustomobject]@{
+        Fresh         = $totalAgeHours -le $MaximumAgeHours
+        AgeHours      = $ageHours
+        CatalogCommit = [string]$state.catalogCommit
+        MarkerCommit  = $markerCommit
+        RunId         = [long]$state.runId
+        RunUrl        = [string]$run.html_url
+    }
+}
+
+function Test-PrivatePackageUrl {
+    param([Parameter(Mandatory = $true)][string]$Uri)
+
+    try {
+        $targetUri = [Uri]$Uri
+        $baseUri = $script:PackageStorageBaseUri
+        $basePath = $baseUri.AbsolutePath.TrimEnd('/') + '/'
+        return $targetUri.Scheme -eq 'https' -and
+            $targetUri.IsDefaultPort -and
+            [string]::IsNullOrEmpty($targetUri.UserInfo) -and
+            $targetUri.Host -eq $baseUri.Host -and
+            $targetUri.AbsolutePath.StartsWith($basePath, [StringComparison]::Ordinal) -and
+            [string]::IsNullOrEmpty($targetUri.Query) -and
+            [string]::IsNullOrEmpty($targetUri.Fragment)
+    }
+    catch {
+        return $false
+    }
+}
+
+function Test-SafeLeafFileName {
+    param([AllowEmptyString()][string]$Name)
+
+    if ([string]::IsNullOrWhiteSpace($Name) -or
+        [IO.Path]::IsPathRooted($Name) -or
+        $Name -ne [IO.Path]::GetFileName($Name) -or
+        $Name -match '[<>:"/\\|?*\x00-\x1F]' -or
+        $Name.TrimEnd(' ', '.') -ne $Name) {
+        return $false
+    }
+
+    $stem = [IO.Path]::GetFileNameWithoutExtension($Name)
+    $reservedNames = @('CON', 'PRN', 'AUX', 'NUL') +
+        @(1..9 | ForEach-Object { "COM$_" }) +
+        @(1..9 | ForEach-Object { "LPT$_" })
+    return $stem.ToUpperInvariant() -notin $reservedNames
+}
+
+function ConvertTo-CommitManifestUri {
+    param(
+        [Parameter(Mandatory = $true)][string]$Uri,
+        [Parameter(Mandatory = $true)][string]$Commit
+    )
+
+    $sourceUri = [Uri]$Uri
+    $decodedPath = [Uri]::UnescapeDataString($sourceUri.AbsolutePath)
+    $fileName = [IO.Path]::GetFileName($decodedPath)
+    if ($sourceUri.Scheme -ne 'https' -or
+        -not $sourceUri.IsDefaultPort -or
+        -not [string]::IsNullOrEmpty($sourceUri.UserInfo) -or
+        $sourceUri.Host -ne 'raw.githubusercontent.com' -or
+        -not [string]::IsNullOrEmpty($sourceUri.Query) -or
+        -not [string]::IsNullOrEmpty($sourceUri.Fragment) -or
+        -not (Test-SafeLeafFileName -Name $fileName) -or
+        $fileName -notmatch '\.json$' -or
+        $decodedPath -notmatch "^/(?:RobinMJD|ugurkocde)/IntuneBrew/main/Apps/$([regex]::Escape($fileName))$" -or
+        $Commit -notmatch '^[0-9a-f]{40}$') {
+        throw "Unexpected manifest URL in supported_apps.json: $Uri"
+    }
+
+    "https://raw.githubusercontent.com/RobinMJD/IntuneBrew/$Commit/Apps/$([Uri]::EscapeDataString($fileName))"
+}
+
+function Get-StorageAuthorizationHeaders {
+    if (-not $script:AzIdentityConnected) {
+        Import-Module Az.Accounts -ErrorAction Stop
+        Disable-AzContextAutosave -Scope Process | Out-Null
+        Connect-AzAccount -Identity -ErrorAction Stop | Out-Null
+        $script:AzIdentityConnected = $true
+    }
+
+    if ($null -eq $script:StorageAccessToken -or
+        [DateTimeOffset]::UtcNow.AddMinutes(5) -ge $script:StorageAccessTokenExpiresOn) {
+        $tokenResponse = Get-AzAccessToken -ResourceUrl 'https://storage.azure.com/' -ErrorAction Stop
+        $token = $tokenResponse.Token
+        if ($token -is [securestring]) {
+            $pointer = [Runtime.InteropServices.Marshal]::SecureStringToBSTR($token)
+            try {
+                $token = [Runtime.InteropServices.Marshal]::PtrToStringBSTR($pointer)
+            }
+            finally {
+                [Runtime.InteropServices.Marshal]::ZeroFreeBSTR($pointer)
+            }
+        }
+
+        if ([string]::IsNullOrWhiteSpace([string]$token)) {
+            throw 'Managed identity returned an empty Azure Storage access token.'
+        }
+
+        $script:StorageAccessToken = [string]$token
+        $script:StorageAccessTokenExpiresOn = [DateTimeOffset]$tokenResponse.ExpiresOn
+    }
+
+    @{
+        Authorization  = "Bearer $($script:StorageAccessToken)"
+        'x-ms-version' = '2023-11-03'
+    }
+}
+
+function Invoke-PackageWebRequest {
+    param(
+        [Parameter(Mandatory = $true)][string]$Uri,
+        [Parameter(Mandatory = $true)][ValidateSet('Head', 'Get')][string]$Method,
+        [string]$OutFile
+    )
+
+    $parameters = @{
+        Uri         = $Uri
+        Method      = $Method
+        ErrorAction = 'Stop'
+    }
+    if (-not [string]::IsNullOrWhiteSpace($OutFile)) {
+        $parameters.OutFile = $OutFile
+    }
+    if (Test-PrivatePackageUrl -Uri $Uri) {
+        $parameters.Headers = Get-StorageAuthorizationHeaders
+    }
+
+    Invoke-WebRequest @parameters
+}
+
 Write-Log "Starting IntuneBrew Automation Runbook - Version 0.2"
 
 # Authentication START
@@ -74,6 +290,11 @@ $requiredPermissions = @(
 # Get the authentication method from Automation Account variable
 $AuthenticationMethod = Get-AutomationVariable -Name 'AuthenticationMethod'
 $CopyAssignments = Get-AutomationVariable -Name 'CopyAssignments' -ErrorAction SilentlyContinue
+if ($AuthenticationMethod -ne 'SystemManagedIdentity') {
+    throw "AuthenticationMethod must be 'SystemManagedIdentity' for this deployment."
+}
+Import-Module Microsoft.Graph.Authentication -MinimumVersion 2.38.1 -ErrorAction Stop
+Disconnect-MgGraph -ErrorAction SilentlyContinue | Out-Null
 
 # Get UseExistingIntuneApp setting - when true, updates existing apps instead of creating new ones (Issue #141)
 $UseExistingIntuneApp = Get-AutomationVariable -Name 'UseExistingIntuneApp' -ErrorAction SilentlyContinue
@@ -81,7 +302,41 @@ if ($null -eq $UseExistingIntuneApp) { $UseExistingIntuneApp = $false }
 
 # Get MaxAppsPerRun setting - limits apps processed per run to prevent memory exhaustion (Issue #45)
 $MaxAppsPerRun = Get-AutomationVariable -Name 'MaxAppsPerRun' -ErrorAction SilentlyContinue
-if ($null -eq $MaxAppsPerRun -or $MaxAppsPerRun -le 0) { $MaxAppsPerRun = 10 }
+if ($null -eq $MaxAppsPerRun -or $MaxAppsPerRun -lt 1 -or $MaxAppsPerRun -gt 3) {
+    throw 'MaxAppsPerRun must be explicitly configured between 1 and 3.'
+}
+$CatalogMaxAgeHours = Get-AutomationVariable -Name 'IntuneBrewCatalogMaxAgeHours' -ErrorAction SilentlyContinue
+if ($null -eq $CatalogMaxAgeHours -or $CatalogMaxAgeHours -le 0) {
+    throw "IntuneBrewCatalogMaxAgeHours must be configured with a positive value."
+}
+$ApprovedSourceCommit = Get-AutomationVariable -Name 'IntuneBrewSourceCommit' -ErrorAction SilentlyContinue
+$PackageStorageBaseUrl = [string](Get-AutomationVariable -Name 'IntuneBrewPackageStorageBaseUrl' -ErrorAction SilentlyContinue)
+try {
+    $script:PackageStorageBaseUri = [Uri]$PackageStorageBaseUrl
+}
+catch {
+    throw 'IntuneBrewPackageStorageBaseUrl must be a valid absolute URI.'
+}
+if ($script:PackageStorageBaseUri.Scheme -ne 'https' -or
+    -not $script:PackageStorageBaseUri.IsDefaultPort -or
+    -not [string]::IsNullOrEmpty($script:PackageStorageBaseUri.UserInfo) -or
+    $script:PackageStorageBaseUri.Host -ne 'intcybintunebrewprd01st.blob.core.windows.net' -or
+    $script:PackageStorageBaseUri.AbsolutePath.TrimEnd('/') -ne '/pkg' -or
+    -not [string]::IsNullOrEmpty($script:PackageStorageBaseUri.Query) -or
+    -not [string]::IsNullOrEmpty($script:PackageStorageBaseUri.Fragment)) {
+    throw 'IntuneBrewPackageStorageBaseUrl must identify the approved private pkg container over HTTPS.'
+}
+$script:AzIdentityConnected = $false
+$script:StorageAccessToken = $null
+$script:StorageAccessTokenExpiresOn = [DateTimeOffset]::MinValue
+$script:WorkingDirectory = $null
+
+if ($UseExistingIntuneApp -ne $true) {
+    throw 'UseExistingIntuneApp must be explicitly set to true. This deployment never creates new Intune apps.'
+}
+if ($CopyAssignments -eq $true) {
+    throw 'CopyAssignments must remain false when updating existing Intune apps in place.'
+}
 
 if ($CopyAssignments -eq $true) {
     Write-Log "Copy Assignments is set to true"
@@ -100,9 +355,13 @@ if ($UseExistingIntuneApp -eq $true) {
 # Log configuration summary
 Write-Log "Configuration Summary:"
 Write-Log "  - Authentication Method: $AuthenticationMethod"
+Write-Log "  - Execution Mode: $ExecutionMode"
 Write-Log "  - Copy Assignments: $CopyAssignments"
 Write-Log "  - Use Existing Intune App: $UseExistingIntuneApp"
 Write-Log "  - Max Apps Per Run: $MaxAppsPerRun"
+Write-Log "  - Catalog Maximum Age: $CatalogMaxAgeHours hours"
+Write-Log "  - Approved Upstream Source: $ApprovedSourceCommit"
+Write-Log "  - Private Package Storage: $($script:PackageStorageBaseUri.AbsoluteUri.TrimEnd('/'))"
 
 # Check if the AuthenticationMethod variable is empty
 if ([string]::IsNullOrWhiteSpace($AuthenticationMethod)) {
@@ -780,7 +1039,7 @@ function Add-IntuneAppLogo {
         else {
             # Try to download from repository
             $logoFileName = $appName.ToLower().Replace(" ", "_") + ".png"
-            $logoUrl = "https://raw.githubusercontent.com/ugurkocde/IntuneBrew/main/Logos/$logoFileName"
+            $logoUrl = "https://raw.githubusercontent.com/RobinMJD/IntuneBrew/$script:IntuneBrewCatalogCommit/Logos/$logoFileName"
             Write-Log "Downloading logo from: $logoUrl" -Type "Info"
             
             # Download the logo
@@ -829,26 +1088,48 @@ function Add-IntuneAppLogo {
     }
 }
 
-# Fetch supported apps from GitHub repository
-$supportedAppsUrl = "https://raw.githubusercontent.com/ugurkocde/IntuneBrew/refs/heads/main/supported_apps.json"
+# Enforce catalog freshness and use one immutable repository snapshot for the full run.
 $githubJsonUrls = @()
+$script:CatalogManifestFailureCount = 0
 
 try {
-    # Fetch the supported apps JSON
-    $supportedApps = Invoke-RestMethod -Uri $supportedAppsUrl -Method Get
+    $catalogState = Get-PublishedCatalogState -MaximumAgeHours ([double]$CatalogMaxAgeHours)
+    if (-not $catalogState.Fresh) {
+        throw "CATALOG_STALE: Published catalog state is $($catalogState.AgeHours) hours old; maximum allowed age is $CatalogMaxAgeHours hours."
+    }
+    if ($ExecutionMode -eq 'Canary') {
+        $approvedAppGuid = [guid]::Empty
+        if ($ApprovedCatalogCommit -notmatch '^[0-9a-f]{40}$' -or
+            $ApprovedMarkerCommit -notmatch '^[0-9a-f]{40}$' -or
+            -not [guid]::TryParse($ApprovedIntuneAppId, [ref]$approvedAppGuid)) {
+            throw 'Canary mode requires valid ApprovedCatalogCommit, ApprovedMarkerCommit, and ApprovedIntuneAppId parameters.'
+        }
+        if ($ApprovedCatalogCommit -ne $catalogState.CatalogCommit -or
+            $ApprovedMarkerCommit -ne $catalogState.MarkerCommit) {
+            throw 'The published catalog state changed after canary approval. Run the read-only audit again.'
+        }
+    }
+
+    $catalogCommit = $catalogState.CatalogCommit
+
+    $script:IntuneBrewCatalogCommit = $catalogCommit
+    $supportedAppsUrl = "https://raw.githubusercontent.com/RobinMJD/IntuneBrew/$catalogCommit/supported_apps.json"
+    $supportedApps = Invoke-GitHubRequestWithRetry -Uri $supportedAppsUrl
     
-    # Get all apps for checking updates
+    # Pin every manifest URL to the same commit to prevent a mixed catalog during a run.
     Write-Log "Checking existing Intune applications for available updates..." -Type "Info"
-    $githubJsonUrls = $supportedApps.PSObject.Properties.Value
+    Write-Log "Catalog snapshot commit: $catalogCommit (age: $($catalogState.AgeHours) hours, run: $($catalogState.RunId))" -Type "Info"
+    $githubJsonUrls = @($supportedApps.PSObject.Properties.Value | ForEach-Object {
+        ConvertTo-CommitManifestUri -Uri ([string]$_) -Commit $catalogCommit
+    })
     
     if ($githubJsonUrls.Count -eq 0) {
-        Write-Log "No applications found to check. Exiting..." -Type "Error"
-        exit
+        throw "No applications were found in the supported-app catalog."
     }
 }
 catch {
-    Write-Log "Error fetching supported apps list: $_" -Type "Error"
-    exit
+    Write-Log "Catalog readiness check failed: $_" -Type "Error"
+    throw
 }
 
 # Core Functions
@@ -865,7 +1146,38 @@ function Get-GitHubAppInfo {
     }
 
     try {
-        $response = Invoke-RestMethod -Uri $jsonUrl -Method Get
+        $response = Invoke-GitHubRequestWithRetry -Uri $jsonUrl
+        foreach ($requiredProperty in 'name', 'version', 'url', 'bundleId', 'fileName', 'sha') {
+            if ([string]::IsNullOrWhiteSpace([string]$response.$requiredProperty)) {
+                throw "The manifest is missing required '$requiredProperty' data."
+            }
+        }
+
+        $packageUri = [Uri][string]$response.url
+        if ($packageUri.Scheme -ne 'https' -or
+            -not $packageUri.IsDefaultPort -or
+            -not [string]::IsNullOrEmpty($packageUri.UserInfo) -or
+            -not [string]::IsNullOrEmpty($packageUri.Query) -or
+            -not [string]::IsNullOrEmpty($packageUri.Fragment)) {
+            throw "The package URL is not an approved HTTPS URL: $($response.url)"
+        }
+        if ($packageUri.Host -eq 'intunebrew.blob.core.windows.net') {
+            throw 'The manifest still references the upstream IntuneBrew package cache.'
+        }
+        if ($packageUri.Host -eq $script:PackageStorageBaseUri.Host -and
+            -not (Test-PrivatePackageUrl -Uri ([string]$response.url))) {
+            throw 'The manifest references an unexpected path in the private package storage account.'
+        }
+        if ([string]$response.sha -notmatch '^[0-9a-fA-F]{64}$') {
+            throw 'The manifest SHA256 value is invalid.'
+        }
+        if ([string]$response.fileName -notmatch '\.(?:dmg|pkg)$') {
+            throw "The manifest package filename is unsupported: $($response.fileName)"
+        }
+        if (-not (Test-SafeLeafFileName -Name ([string]$response.fileName))) {
+            throw "The manifest package filename is unsafe: $($response.fileName)"
+        }
+
         return @{
             name        = $response.name
             description = $response.description
@@ -875,23 +1187,29 @@ function Get-GitHubAppInfo {
             homepage    = $response.homepage
             fileName    = $response.fileName
             sha         = $response.sha
+            manifestUri = $jsonUrl
         }
     }
     catch {
-        Write-Log "Error fetching app info from GitHub URL: $jsonUrl" -Type "Verbose"
-        Write-Log "Error details: $_" -Type "Verbose"
+        $script:CatalogManifestFailureCount++
+        Write-Log "Catalog manifest validation failed for $jsonUrl`: $_" -Type "Warning"
         return $null
     }
 }
 
 # Downloads app installer file with progress indication
-function Download-AppFile($url, $fileName, $expectedHash) {
-    $outputPath = Join-Path $PWD $fileName
+function Download-AppFile($url, $fileName, $expectedHash, [long]$expectedSize) {
+    if (-not (Test-SafeLeafFileName -Name $fileName)) {
+        throw "Unsafe package filename: $fileName"
+    }
+    if ($expectedSize -le 0) {
+        throw "Invalid expected package size for $fileName`: $expectedSize"
+    }
+    $outputPath = Join-Path $script:WorkingDirectory $fileName
     
     # Get file size before downloading
     try {
-        $response = Invoke-WebRequest -Uri $url -Method Head
-        $fileSize = [math]::Round(($response.Headers.'Content-Length' / 1MB), 2)
+        $fileSize = [math]::Round(($expectedSize / 1MB), 2)
         Write-Log "Downloading the app file ($fileSize MB) to $outputPath..." -Type "Verbose"
     }
     catch {
@@ -899,7 +1217,12 @@ function Download-AppFile($url, $fileName, $expectedHash) {
     }
     
     $ProgressPreference = 'SilentlyContinue'
-    Invoke-WebRequest -Uri $url -OutFile $outputPath
+    Invoke-PackageWebRequest -Uri $url -Method Get -OutFile $outputPath | Out-Null
+    $actualSize = (Get-Item -LiteralPath $outputPath -ErrorAction Stop).Length
+    if ($actualSize -ne $expectedSize) {
+        Remove-Item -LiteralPath $outputPath -Force -ErrorAction SilentlyContinue
+        throw "Downloaded package size mismatch for $fileName. Expected $expectedSize bytes, received $actualSize bytes."
+    }
 
     Write-Log "✅ Download complete" -Type "Verbose"
     
@@ -911,6 +1234,10 @@ function Download-AppFile($url, $fileName, $expectedHash) {
         Write-Log "❌ Error: No SHA256 hash provided in the app manifest" -Type "Verbose"
         Remove-Item $outputPath -Force
         throw "SHA256 hash validation failed - No hash provided in app manifest"
+    }
+    if ($expectedHash -notmatch '^[0-9a-fA-F]{64}$') {
+        Remove-Item $outputPath -Force
+        throw "SHA256 hash validation failed - Invalid hash format in app manifest"
     }
     
     Write-Log "   • Verifying the downloaded file matches the expected SHA256 hash" -Type "Verbose"
@@ -945,10 +1272,21 @@ function Is-ValidUrl {
         [string]$url
     )
 
-    if ($url -match "^https://raw.githubusercontent.com/ugurkocde/IntuneBrew/main/Apps/.*\.json$") {
-        return $true
+    try {
+        $manifestUri = [Uri]$url
+        $decodedPath = [Uri]::UnescapeDataString($manifestUri.AbsolutePath)
+        $fileName = [IO.Path]::GetFileName($decodedPath)
+        return $manifestUri.Scheme -eq 'https' -and
+            $manifestUri.IsDefaultPort -and
+            [string]::IsNullOrEmpty($manifestUri.UserInfo) -and
+            $manifestUri.Host -eq 'raw.githubusercontent.com' -and
+            [string]::IsNullOrEmpty($manifestUri.Query) -and
+            [string]::IsNullOrEmpty($manifestUri.Fragment) -and
+            (Test-SafeLeafFileName -Name $fileName) -and
+            $fileName -match '\.json$' -and
+            $decodedPath -match "^/RobinMJD/IntuneBrew/[0-9a-f]{40}/Apps/$([regex]::Escape($fileName))$"
     }
-    else {
+    catch {
         Write-Log "Invalid URL format: $url" -Type "Verbose"
         return $false
     }
@@ -982,8 +1320,9 @@ function Compare-VersionSegments {
             if ($numA -lt $numB) { return -1 }
         }
         else {
-            $stringComparison = [string]::Compare($segmentA, $segmentB, $true)
-            if ($stringComparison -ne 0) { return $stringComparison }
+            if (-not [string]::Equals($segmentA, $segmentB, [StringComparison]::OrdinalIgnoreCase)) {
+                throw "Version comparison is indeterminate for nonnumeric segments '$segmentA' and '$segmentB'."
+            }
         }
     }
     return 0
@@ -1013,127 +1352,178 @@ function Get-AllMacOsApps {
     $allApps = @()
     $uri = "https://graph.microsoft.com/beta/deviceAppManagement/mobileApps?`$filter=(isof('microsoft.graph.macOSDmgApp') or isof('microsoft.graph.macOSPkgApp'))"
     while ($uri) {
-        $page = Invoke-MgGraphRequest -Uri $uri -Method Get
-        if ($page.value) { $allApps += $page.value }
-        $uri = $page.'@odata.nextLink'
+        $page = Invoke-MgGraphRequest -Uri $uri -Method Get -ErrorAction Stop
+        if ($null -eq $page -or $page.PSObject.Properties.Name -notcontains 'value') {
+            throw "Microsoft Graph returned an invalid mobile-app page for $uri"
+        }
+        foreach ($app in @($page.value)) {
+            if ([string]::IsNullOrWhiteSpace([string]$app.id) -or
+                [string]::IsNullOrWhiteSpace([string]$app.displayName) -or
+                [string]::IsNullOrWhiteSpace([string]$app.primaryBundleId) -or
+                [string]::IsNullOrWhiteSpace([string]$app.'@odata.type')) {
+                throw 'Microsoft Graph returned an incomplete macOS app record.'
+            }
+            $allApps += $app
+        }
+        $uri = [string]$page.'@odata.nextLink'
     }
     $script:allMacOsAppsCache = $allApps
     return $allApps
 }
 
+function Test-CompatibleIntuneDisplayName {
+    param(
+        [string]$CatalogName,
+        [string]$IntuneDisplayName
+    )
+
+    if ([string]::IsNullOrWhiteSpace($CatalogName) -or [string]::IsNullOrWhiteSpace($IntuneDisplayName)) {
+        return $false
+    }
+
+    # Allow organizational prefixes such as "[CA-SON] " but reject unrelated renamed apps.
+    $normalizedDisplayName = $IntuneDisplayName.Trim() -replace "^(?:\[[^\]]+\]\s*)+", ""
+    return [string]::Equals($normalizedDisplayName, $CatalogName.Trim(), [StringComparison]::OrdinalIgnoreCase)
+}
+
+function Get-ValidatedIntuneTarget {
+    param([Parameter(Mandatory = $true)][object]$App)
+
+    $appInfo = $App.CatalogInfo
+    $expectedODataType = if ([string]$appInfo.fileName -match '\.dmg$') {
+        '#microsoft.graph.macOSDmgApp'
+    }
+    else {
+        '#microsoft.graph.macOSPkgApp'
+    }
+    $uri = "https://graph.microsoft.com/beta/deviceAppManagement/mobileApps/$($App.IntuneAppId)"
+    $responseHeaders = $null
+    $target = Invoke-MgGraphRequest -Uri $uri -Method Get -ErrorAction Stop `
+        -ResponseHeadersVariable responseHeaders
+    if ($null -eq $target -or
+        -not [string]::Equals([string]$target.id, [string]$App.IntuneAppId, [StringComparison]::OrdinalIgnoreCase) -or
+        -not [string]::Equals([string]$target.primaryBundleId, [string]$appInfo.bundleId, [StringComparison]::OrdinalIgnoreCase) -or
+        -not (Test-CompatibleIntuneDisplayName -CatalogName ([string]$appInfo.name) -IntuneDisplayName ([string]$target.displayName)) -or
+        -not [string]::Equals([string]$target.'@odata.type', $expectedODataType, [StringComparison]::OrdinalIgnoreCase) -or
+        -not [string]::Equals([string]$target.primaryBundleVersion, [string]$App.IntuneVersion, [StringComparison]::OrdinalIgnoreCase)) {
+        throw "The Intune target changed after preflight for $($App.Name)."
+    }
+    $invalidIncludedApps = @(@($target.includedApps) | Where-Object {
+        [string]::IsNullOrWhiteSpace([string]$_.bundleId) -or
+        [string]::IsNullOrWhiteSpace([string]$_.bundleVersion)
+    })
+    if ($invalidIncludedApps.Count -gt 0) {
+        throw "The Intune target has incomplete included-app data for $($App.Name)."
+    }
+    $targetEtag = [string]$target.'@odata.etag'
+    if ([string]::IsNullOrWhiteSpace($targetEtag)) {
+        $targetEtag = [string]$responseHeaders.ETag
+    }
+    if (-not [string]::IsNullOrWhiteSpace($targetEtag)) {
+        $target | Add-Member -NotePropertyName '@odata.etag' -NotePropertyValue $targetEtag -Force
+    }
+
+    $target
+}
+
 function Get-IntuneApps {
     $intuneApps = @()
-    $totalApps = $githubJsonUrls.Count
+    $allMacOsApps = @(Get-AllMacOsApps)
+    $totalApps = $script:CatalogEntries.Count
     $currentApp = 0
+    $matchedIntuneAppIds = @{}
 
     Write-Log "Checking app versions in Intune..."
 
-    foreach ($jsonUrl in $githubJsonUrls) {
+    foreach ($catalogEntry in $script:CatalogEntries) {
         $currentApp++
-        
-        # Check if the URL is valid
-        if (-not (Is-ValidUrl $jsonUrl)) {
-            Write-Log "Invalid URL format: $jsonUrl" -Type "Error"
-            continue
-        }
-
-        # Fetch GitHub app info
-        $appInfo = Get-GitHubAppInfo $jsonUrl
-        if ($appInfo -eq $null) {
-            Write-Log "[$currentApp/$totalApps] Failed to fetch app info for $jsonUrl. Skipping." -Type "Warning"
-            continue
-        }
-
+        $appInfo = $catalogEntry.Info
         $appName = $appInfo.name
+        $expectedODataType = if ([string]$appInfo.fileName -match '\.dmg$') {
+            '#microsoft.graph.macOSDmgApp'
+        }
+        else {
+            '#microsoft.graph.macOSPkgApp'
+        }
         Write-Log "[$currentApp/$totalApps] Checking: $appName"
 
-        # Fetch Intune app info
-        $intuneQueryUri = "https://graph.microsoft.com/beta/deviceAppManagement/mobileApps?`$filter=(isof('microsoft.graph.macOSDmgApp') or isof('microsoft.graph.macOSPkgApp')) and displayName eq '$appName'&`$orderby=createdDateTime desc"
+        $matches = @($allMacOsApps | Where-Object {
+            [string]::Equals(([string]$_.primaryBundleId).Trim(), ([string]$appInfo.bundleId).Trim(), [StringComparison]::OrdinalIgnoreCase) -and
+            (Test-CompatibleIntuneDisplayName -CatalogName $appName -IntuneDisplayName ([string]$_.displayName)) -and
+            [string]::Equals([string]$_.'@odata.type', $expectedODataType, [StringComparison]::OrdinalIgnoreCase)
+        })
 
-        try {
-            $response = Invoke-MgGraphRequest -Uri $intuneQueryUri -Method Get
-            if ($response.value.Count -gt 0) {
-                # Find the latest version among potentially multiple entries
-                $latestAppEntry = $response.value | Sort-Object -Property @{Expression = { Convert-VersionToSortable $_.primaryBundleVersion } } -Descending | Select-Object -First 1
-
-                $intuneVersion = $latestAppEntry.primaryBundleVersion
-                $intuneAppId = $latestAppEntry.id # Get the ID of the latest version
-                $githubVersion = $appInfo.version
-
-                # Check if GitHub version is newer
-                $needsUpdate = Is-NewerVersion $githubVersion $intuneVersion
-
-                if ($needsUpdate) {
-                    Write-Log "Update available for $appName ($intuneVersion → $githubVersion)"
-                }
-                else {
-                    Write-Log "$appName is up to date (Version: $intuneVersion)"
-                }
-
-                $intuneApps += [PSCustomObject]@{
-                    Name          = $appName
-                    IntuneVersion = $intuneVersion
-                    IntuneAppId   = $intuneAppId # Add the ID here
-                    GitHubVersion = $githubVersion
-                }
-            }
-            else {
-                # Fall back to matching by bundle id so apps that were renamed in Intune
-                # or uploaded with a name prefix are still detected (Issue #217)
-                $bundleMatches = @()
-                if ($appInfo.bundleId) {
-                    $bundleMatches = @(Get-AllMacOsApps | Where-Object { $_.primaryBundleId -eq $appInfo.bundleId })
-                }
-
-                if ($bundleMatches.Count -gt 0) {
-                    $latestAppEntry = $bundleMatches | Sort-Object -Property @{Expression = { Convert-VersionToSortable $_.primaryBundleVersion } } -Descending | Select-Object -First 1
-                    $intuneVersion = $latestAppEntry.primaryBundleVersion
-                    $githubVersion = $appInfo.version
-                    Write-Log "$appName matched by bundle id '$($appInfo.bundleId)' under display name '$($latestAppEntry.displayName)'"
-
-                    if (Is-NewerVersion $githubVersion $intuneVersion) {
-                        Write-Log "Update available for $appName ($intuneVersion → $githubVersion)"
-                    }
-                    else {
-                        Write-Log "$appName is up to date (Version: $intuneVersion)"
-                    }
-
-                    $intuneApps += [PSCustomObject]@{
-                        Name          = $appName
-                        IntuneVersion = $intuneVersion
-                        IntuneAppId   = $latestAppEntry.id
-                        GitHubVersion = $githubVersion
-                    }
-                }
-                else {
-                    # Before treating the app as missing, check whether it is managed through
-                    # Apple VPP, so a duplicate PKG/DMG entry is not created (Issue #204)
-                    $vppQueryUri = "https://graph.microsoft.com/beta/deviceAppManagement/mobileApps?`$filter=(isof('microsoft.graph.macOsVppApp')) and displayName eq '$appName'"
-                    $vppResponse = Invoke-MgGraphRequest -Uri $vppQueryUri -Method Get
-
-                    if ($vppResponse.value.Count -gt 0) {
-                        Write-Log "$appName is managed via Apple VPP - skipping"
-                        $intuneApps += [PSCustomObject]@{
-                            Name          = $appName
-                            IntuneVersion = 'Managed via VPP'
-                            IntuneAppId   = $null
-                            GitHubVersion = $appInfo.version
-                        }
-                    }
-                    else {
-                        Write-Log "$appName not found in Intune"
-                        $intuneApps += [PSCustomObject]@{
-                            Name          = $appName
-                            IntuneVersion = 'Not in Intune'
-                            IntuneAppId   = $null
-                            GitHubVersion = $appInfo.version
-                        }
-                    }
-                }
-            }
+        if ($matches.Count -gt 1) {
+            $script:IntunePreflightFailureCount++
+            Write-Log "AMBIGUOUS_INTUNE_MATCH: '$appName' matched $($matches.Count) Intune apps by normalized name and bundle ID '$($appInfo.bundleId)'." -Type "Error"
+            continue
         }
-        catch {
-            Write-Log "Error fetching Intune app info for '$appName': $_" -Type "Error"
+
+        if ($matches.Count -eq 0) {
+            $partialMatches = @($allMacOsApps | Where-Object {
+                [string]::Equals(([string]$_.primaryBundleId).Trim(), ([string]$appInfo.bundleId).Trim(), [StringComparison]::OrdinalIgnoreCase) -or
+                (Test-CompatibleIntuneDisplayName -CatalogName $appName -IntuneDisplayName ([string]$_.displayName))
+            })
+            if ($partialMatches.Count -gt 0) {
+                Write-Log "UNSAFE_MATCH_SKIPPED: '$appName' has only partial name or bundle-ID matches in Intune." -Type "Warning"
+            }
+            $intuneApps += [PSCustomObject]@{
+                Name          = $appName
+                IntuneVersion = 'Not in Intune'
+                IntuneAppId   = $null
+                GitHubVersion = $appInfo.version
+                CatalogInfo   = $appInfo
+                ManifestUri   = $catalogEntry.ManifestUri
+            }
+            continue
+        }
+
+        $matchedApp = $matches[0]
+        $intuneAppId = [string]$matchedApp.id
+        if ([string]::IsNullOrWhiteSpace($intuneAppId)) {
+            $script:IntunePreflightFailureCount++
+            Write-Log "INVALID_INTUNE_APP_ID: '$appName' matched an Intune record without an ID." -Type "Error"
+            continue
+        }
+        if ($matchedIntuneAppIds.ContainsKey($intuneAppId)) {
+            $script:IntunePreflightFailureCount++
+            Write-Log "AMBIGUOUS_CATALOG_MATCH: '$appName' and '$($matchedIntuneAppIds[$intuneAppId])' map to Intune app ID $intuneAppId." -Type "Error"
+            continue
+        }
+        $matchedIntuneAppIds[$intuneAppId] = $appName
+
+        $intuneVersion = [string]$matchedApp.primaryBundleVersion
+        if ([string]::IsNullOrWhiteSpace($intuneVersion)) {
+            $script:IntunePreflightFailureCount++
+            Write-Log "INVALID_INTUNE_VERSION: '$appName' has an empty primaryBundleVersion." -Type "Error"
+            continue
+        }
+        $existingIncludedApps = @($matchedApp.includedApps)
+        $invalidIncludedApps = @($existingIncludedApps | Where-Object {
+            [string]::IsNullOrWhiteSpace([string]$_.bundleId) -or
+            [string]::IsNullOrWhiteSpace([string]$_.bundleVersion)
+        })
+        if ($invalidIncludedApps.Count -gt 0) {
+            $script:IntunePreflightFailureCount++
+            Write-Log "INVALID_INCLUDED_APPS: '$appName' has $($invalidIncludedApps.Count) incomplete included-app record(s)." -Type "Error"
+            continue
+        }
+
+        if (Is-NewerVersion $appInfo.version $intuneVersion) {
+            Write-Log "Update available for $appName ($intuneVersion → $($appInfo.version))"
+        }
+        else {
+            Write-Log "$appName is up to date (Version: $intuneVersion)"
+        }
+
+        $intuneApps += [PSCustomObject]@{
+            Name          = $appName
+            IntuneVersion = $intuneVersion
+            IntuneAppId   = $intuneAppId
+            GitHubVersion = $appInfo.version
+            CatalogInfo   = $appInfo
+            ManifestUri   = $catalogEntry.ManifestUri
+            ExistingIncludedApps = $existingIncludedApps
         }
     }
 
@@ -1170,13 +1560,18 @@ function Is-NewerVersion($githubVersion, $intuneVersion) {
 
         # If main versions are equal and there are build numbers
         if ($ghVersionParts.Length -gt 1 -and $itVersionParts.Length -gt 1) {
-            $ghBuild = [int]$ghVersionParts[1]
-            $itBuild = [int]$itVersionParts[1]
-            return $ghBuild -gt $itBuild
+            $ghBuild = [int64]0
+            $itBuild = [int64]0
+            if ([int64]::TryParse($ghVersionParts[1].Trim(), [ref]$ghBuild) -and
+                [int64]::TryParse($itVersionParts[1].Trim(), [ref]$itBuild)) {
+                return $ghBuild -gt $itBuild
+            }
+            return $false
         }
 
-        # If versions are exactly equal
-        return $githubVersion -ne $intuneVersion
+        # Normalized versions are equal. Text-only formatting differences are
+        # not evidence that the catalog version is newer.
+        return $false
     }
     catch {
         # silence spammy log message for not installed apps
@@ -1187,17 +1582,69 @@ function Is-NewerVersion($githubVersion, $intuneVersion) {
     }
 }
 
-# Retrieve Intune app versions
+# Fetch and validate the complete catalog once before any Intune mutation.
+$script:CatalogEntries = [System.Collections.Generic.List[object]]::new()
+$catalogIdentityKeys = @{}
+foreach ($jsonUrl in $githubJsonUrls) {
+    if (-not (Is-ValidUrl -url $jsonUrl)) {
+        $script:CatalogManifestFailureCount++
+        Write-Log "Catalog manifest URL is invalid: $jsonUrl" -Type "Error"
+        continue
+    }
+
+    $appInfo = Get-GitHubAppInfo -jsonUrl $jsonUrl
+    if ($null -eq $appInfo) {
+        continue
+    }
+
+    $identityKey = "$(([string]$appInfo.name).Trim().ToLowerInvariant())`0$(([string]$appInfo.bundleId).Trim().ToLowerInvariant())"
+    if ($catalogIdentityKeys.ContainsKey($identityKey)) {
+        $script:CatalogManifestFailureCount++
+        Write-Log "Duplicate catalog identity for '$($appInfo.name)' and bundle ID '$($appInfo.bundleId)'." -Type "Error"
+        continue
+    }
+    $catalogIdentityKeys[$identityKey] = $jsonUrl
+    $script:CatalogEntries.Add([pscustomobject]@{
+        ManifestUri = $jsonUrl
+        Info        = $appInfo
+    })
+}
+
+if ($script:CatalogManifestFailureCount -gt 0 -or
+    $script:CatalogEntries.Count -eq 0 -or
+    $script:CatalogEntries.Count -ne $githubJsonUrls.Count) {
+    Disconnect-MgGraph > $null 2>&1
+    throw "Catalog preflight failed: $($script:CatalogManifestFailureCount) invalid manifest(s), $($script:CatalogEntries.Count) of $($githubJsonUrls.Count) loaded."
+}
+
+# Retrieve Intune app versions from one complete Graph snapshot.
+$script:IntunePreflightFailureCount = 0
 Write-Log "Fetching current Intune app versions..."
 $intuneAppVersions = Get-IntuneApps
+if ($script:IntunePreflightFailureCount -gt 0) {
+    Disconnect-MgGraph > $null 2>&1
+    throw "Intune matching preflight failed for $($script:IntunePreflightFailureCount) catalog item(s). No Intune updates were started."
+}
 
 # Show the overview table using Write-Log
 Write-Log "----------------------------------------"
 Write-Log "Available Updates Overview:"
 Write-Log "----------------------------------------"
 
-$updatesAvailable = $intuneAppVersions | Where-Object {
+$updatesAvailable = @($intuneAppVersions | Where-Object {
     $_.IntuneVersion -ne 'Not in Intune' -and (Is-NewerVersion $_.GitHubVersion $_.IntuneVersion)
+})
+$appsToUpload = $updatesAvailable
+if ($ExecutionMode -eq 'Canary') {
+    $appsToUpload = @($appsToUpload | Where-Object {
+        [string]::Equals([string]$_.IntuneAppId, $ApprovedIntuneAppId, [StringComparison]::OrdinalIgnoreCase)
+    })
+    if ($appsToUpload.Count -ne 1) {
+        throw "Canary approval did not resolve to exactly one current update candidate for Intune app ID $ApprovedIntuneAppId."
+    }
+}
+else {
+    $appsToUpload = @($appsToUpload | Sort-Object Name)
 }
 
 if ($updatesAvailable.Count -eq 0) {
@@ -1226,11 +1673,6 @@ else {
     Start-Sleep -Seconds 10
 }
 
-# Filter apps that need to be uploaded (only updates, no new apps)
-$appsToUpload = $intuneAppVersions | Where-Object {
-    $_.IntuneVersion -ne 'Not in Intune' -and (Is-NewerVersion $_.GitHubVersion $_.IntuneVersion)
-}
-
 if ($appsToUpload.Count -eq 0) {
     Write-Log "`nAll apps are up-to-date. No uploads necessary." -Type "Info"
     Disconnect-MgGraph > $null 2>&1
@@ -1239,7 +1681,7 @@ if ($appsToUpload.Count -eq 0) {
 }
 
 # Limit apps per run to prevent memory exhaustion in Azure Automation sandbox (Issue #45)
-if ($appsToUpload.Count -gt $MaxAppsPerRun) {
+if ($ExecutionMode -eq 'Scheduled' -and $appsToUpload.Count -gt $MaxAppsPerRun) {
     Write-Log "Limiting to $MaxAppsPerRun apps per run (out of $($appsToUpload.Count) available) to prevent memory issues." -Type "Warning"
     Write-Log "Remaining apps will be processed in next scheduled run." -Type "Warning"
     $appsToUpload = $appsToUpload | Select-Object -First $MaxAppsPerRun
@@ -1314,6 +1756,9 @@ if ($copyAssignments -and $updatableApps.Length -gt 0) {
 $existingAssignments = $null # Initialize variable to store assignments for updates
 
 # Main script for uploading only newer apps
+$script:WorkingDirectory = Join-Path $env:TEMP "IntuneBrew-$([guid]::NewGuid().ToString('N'))"
+New-Item -ItemType Directory -Path $script:WorkingDirectory -ErrorAction Stop | Out-Null
+$processingFailureCount = 0
 foreach ($app in $appsToUpload) {
     try {
         # Clear memory before processing each app to prevent Azure sandbox suspension (Issue #45)
@@ -1323,21 +1768,9 @@ foreach ($app in $appsToUpload) {
         Write-Log "Current version in Intune: $($app.IntuneVersion)"
         Write-Log "Available version: $($app.GitHubVersion)"
         
-        # Find the corresponding JSON URL for this app
-        $jsonUrl = $githubJsonUrls | Where-Object {
-            $appInfo = Get-GitHubAppInfo -jsonUrl $_
-            $appInfo -and $appInfo.name -eq $app.Name
-        } | Select-Object -First 1
-
-        if (-not $jsonUrl) {
-            Write-Log "Could not find JSON URL for $($app.Name). Skipping." -Type "Error"
-            continue
-        }
-
-        $appInfo = Get-GitHubAppInfo -jsonUrl $jsonUrl
-        if ($appInfo -eq $null) {
-            Write-Log "Failed to fetch app info for $jsonUrl. Skipping." -Type "Error"
-            continue
+        $appInfo = $app.CatalogInfo
+        if ($null -eq $appInfo) {
+            throw "Immutable catalog data is missing for $($app.Name)."
         }
 
         # Check if this is an update and fetch existing assignments
@@ -1349,7 +1782,7 @@ foreach ($app in $appsToUpload) {
         }
 
         # Clean up any existing temporary files before starting new download
-        Get-ChildItem -Path $PWD -File | Where-Object { $_.Name -match '\.dmg$|\.pkg$|\.bin$' } | ForEach-Object {
+        Get-ChildItem -LiteralPath $script:WorkingDirectory -File | ForEach-Object {
             try {
                 Remove-Item $_.FullName -Force -ErrorAction Stop
                 Write-Log "Cleaned up temporary file: $($_.Name)"
@@ -1367,27 +1800,28 @@ foreach ($app in $appsToUpload) {
         Write-Log "Downloading application from: $($appInfo.url)"
         
         # Check available space before downloading
-        $drive = Get-PSDrive -Name $PWD.Drive.Name
+        $drive = Get-PSDrive -Name (Get-Item -LiteralPath $script:WorkingDirectory).PSDrive.Name
         $availableSpace = $drive.Free
         $requiredSpace = 0
         
         try {
-            $response = Invoke-WebRequest -Uri $appInfo.url -Method Head
+            $response = Invoke-PackageWebRequest -Uri $appInfo.url -Method Head
             $fileSize = [long]$response.Headers.'Content-Length'
+            if ($fileSize -le 0) {
+                throw 'The package server did not return a positive Content-Length.'
+            }
             # We need space for both the original and encrypted file, plus some buffer
             $requiredSpace = $fileSize * 2.5
         }
         catch {
-            Write-Log "Warning: Could not determine file size before download" -Type "Warning"
-            $requiredSpace = 1GB  # Assume 1GB as safety measure
+            throw "Could not determine package size for $($appInfo.name): $_"
         }
 
         if ($availableSpace -lt $requiredSpace) {
-            Write-Log "Error: Not enough space to process $($appInfo.name). Required: $([math]::Round($requiredSpace/1GB, 2))GB, Available: $([math]::Round($availableSpace/1GB, 2))GB" -Type "Error"
-            continue
+            throw "Not enough space to process $($appInfo.name). Required: $([math]::Round($requiredSpace/1GB, 2))GB, Available: $([math]::Round($availableSpace/1GB, 2))GB"
         }
 
-        $appFilePath = Download-AppFile $appInfo.url $appInfo.fileName $appInfo.sha
+        $appFilePath = Download-AppFile $appInfo.url $appInfo.fileName $appInfo.sha $fileSize
 
         Write-Log "Application Details:"
         Write-Log "• Display Name: $($appInfo.name)"
@@ -1410,57 +1844,16 @@ foreach ($app in $appsToUpload) {
             "macOSPkgApp"
         }
         else {
-            Write-Log "Unsupported file type. Only .dmg and .pkg files are supported." -Type "Error"
-            continue
+            throw "Unsupported file type for $($appInfo.name). Only .dmg and .pkg files are supported."
         }
 
-        # Initialize the Intune app ID variable (Issue #141 - UseExistingIntuneApp support)
-        $intuneAppId = $null
-
-        # Check if we should update existing app or create new one
-        if ($UseExistingIntuneApp -and $app.IntuneAppId) {
-            # Use existing app ID - preserves assignments and other settings
-            $intuneAppId = $app.IntuneAppId
-            Write-Log "🔄 Updating Existing Intune App (ID: $intuneAppId)"
-            Write-Log "Note: Existing app settings (assignments, logo, etc.) will be preserved"
+        if ([string]::IsNullOrWhiteSpace([string]$app.IntuneAppId)) {
+            throw "Update-only safety check failed: $($app.Name) has no unique existing Intune app ID."
         }
-        else {
-            # Create new app in Intune
-            Write-Log "🔄 Creating new app in Intune..."
-
-            $newAppPayload = @{
-                "@odata.type"                   = "#microsoft.graph.$appType"
-                displayName                     = $appDisplayName
-                description                     = $appDescription
-                publisher                       = $appPublisher
-                fileName                        = (Split-Path $appFilePath -Leaf)
-                informationUrl                  = $appHomepage
-                packageIdentifier               = $appBundleId
-                bundleId                        = $appBundleId
-                versionNumber                   = $appBundleVersion
-                minimumSupportedOperatingSystem = @{
-                    "@odata.type" = "#microsoft.graph.macOSMinimumOperatingSystem"
-                    v11_0         = $true
-                }
-            }
-
-            if ($appType -eq "macOSDmgApp" -or $appType -eq "macOSPkgApp") {
-                $newAppPayload["primaryBundleId"] = $appBundleId
-                $newAppPayload["primaryBundleVersion"] = $appBundleVersion
-                $newAppPayload["includedApps"] = @(
-                    @{
-                        "@odata.type" = "#microsoft.graph.macOSIncludedApp"
-                        bundleId      = $appBundleId
-                        bundleVersion = $appBundleVersion
-                    }
-                )
-            }
-
-            $createAppUri = "https://graph.microsoft.com/beta/deviceAppManagement/mobileApps"
-            $newApp = Invoke-MgGraphRequest -Method POST -Uri $createAppUri -Body ($newAppPayload | ConvertTo-Json -Depth 10)
-            $intuneAppId = $newApp.id
-            Write-Log "App created successfully (ID: $intuneAppId)"
-        }
+        $intuneAppId = [string]$app.IntuneAppId
+        Get-ValidatedIntuneTarget -App $app | Out-Null
+        Write-Log "🔄 Updating Existing Intune App (ID: $intuneAppId)"
+        Write-Log "Note: Existing app settings (assignments, logo, etc.) will be preserved"
 
         Write-Log "🔒 Processing content version..."
         $contentVersionUri = "https://graph.microsoft.com/beta/deviceAppManagement/mobileApps/$($intuneAppId)/microsoft.graph.$appType/contentVersions"
@@ -1543,27 +1936,34 @@ foreach ($app in $appsToUpload) {
         $commitUri = "https://graph.microsoft.com/beta/deviceAppManagement/mobileApps/$($intuneAppId)/microsoft.graph.$appType/contentVersions/$($contentVersion.id)/files/$($contentFile.id)/commit"
         Invoke-MgGraphRequest -Method POST -Uri $commitUri -Body ($commitData | ConvertTo-Json)
 
-        $retryCount = 0
-        $maxRetries = 10
+        $commitRetryCount = 0
+        $maxCommitRetries = 10
+        $pollAttempt = 0
+        $maxPollAttempts = 60
         do {
             Start-Sleep -Seconds 10
+            $pollAttempt++
             $fileStatusUri = "https://graph.microsoft.com/beta/deviceAppManagement/mobileApps/$($intuneAppId)/microsoft.graph.$appType/contentVersions/$($contentVersion.id)/files/$($contentFile.id)"
             $fileStatus = Invoke-MgGraphRequest -Method GET -Uri $fileStatusUri
             if ($fileStatus.uploadState -eq "commitFileFailed") {
-                $commitResponse = Invoke-MgGraphRequest -Method POST -Uri $commitUri -Body ($commitData | ConvertTo-Json)
-                $retryCount++
+                if ($commitRetryCount -ge $maxCommitRetries) {
+                    break
+                }
+                Invoke-MgGraphRequest -Method POST -Uri $commitUri -Body ($commitData | ConvertTo-Json) | Out-Null
+                $commitRetryCount++
             }
-        } while ($fileStatus.uploadState -ne "commitFileSuccess" -and $retryCount -lt $maxRetries)
+        } while ($fileStatus.uploadState -ne "commitFileSuccess" -and $pollAttempt -lt $maxPollAttempts)
 
         if ($fileStatus.uploadState -eq "commitFileSuccess") {
             Write-Log "✅ File committed successfully" -Type "Info"
         }
         else {
-            Write-Log "Failed to commit file after $maxRetries attempts." -Type "Error"
-            throw "Failed to commit file after $maxRetries attempts for $($app.Name)"
+            Write-Log "Failed to commit file after $pollAttempt status checks and $commitRetryCount retries." -Type "Error"
+            throw "Failed to commit file within $($maxPollAttempts * 10) seconds for $($app.Name). Last state: $($fileStatus.uploadState)"
         }
 
         $updateAppUri = "https://graph.microsoft.com/beta/deviceAppManagement/mobileApps/$($intuneAppId)"
+        $targetBeforePatch = Get-ValidatedIntuneTarget -App $app
         $updateData = @{
             "@odata.type"           = "#microsoft.graph.$appType"
             committedContentVersion = $contentVersion.id
@@ -1576,16 +1976,38 @@ foreach ($app in $appsToUpload) {
             $updateData["versionNumber"] = $appBundleVersion
             $updateData["primaryBundleId"] = $appBundleId
             $updateData["primaryBundleVersion"] = $appBundleVersion
-            $updateData["includedApps"] = @(
-                @{
+            $existingIncludedApps = @($targetBeforePatch.includedApps)
+            if ($existingIncludedApps.Count -gt 0) {
+                $updateData["includedApps"] = @($existingIncludedApps | ForEach-Object {
+                    $includedBundleVersion = if ([string]::Equals(
+                        [string]$_.bundleId,
+                        $appBundleId,
+                        [StringComparison]::OrdinalIgnoreCase
+                    )) {
+                        $appBundleVersion
+                    }
+                    else {
+                        [string]$_.bundleVersion
+                    }
+                    @{
                     "@odata.type" = "#microsoft.graph.macOSIncludedApp"
-                    bundleId      = $appBundleId
-                    bundleVersion = $appBundleVersion
-                }
-            )
+                    bundleId      = [string]$_.bundleId
+                    bundleVersion = $includedBundleVersion
+                    }
+                })
+            }
         }
 
-        Invoke-MgGraphRequest -Method PATCH -Uri $updateAppUri -Body ($updateData | ConvertTo-Json -Depth 10)
+        $patchParameters = @{
+            Method = 'PATCH'
+            Uri    = $updateAppUri
+            Body   = ($updateData | ConvertTo-Json -Depth 10)
+        }
+        $targetEtag = [string]$targetBeforePatch.'@odata.etag'
+        if (-not [string]::IsNullOrWhiteSpace($targetEtag)) {
+            $patchParameters.Headers = @{ 'If-Match' = $targetEtag }
+        }
+        Invoke-MgGraphRequest @patchParameters
 
             # Apply assignments if the flag is set and assignments were successfully fetched
         if ($copyAssignments -and $existingAssignments -ne $null) {
@@ -1594,7 +2016,7 @@ foreach ($app in $appsToUpload) {
             Remove-IntuneAppAssignments -OldAppId $app.IntuneAppId -AssignmentsToRemove $existingAssignments
         }
 
-        Add-IntuneAppLogo -appId $intuneAppId -appName $appDisplayName -appType $appType
+        Write-Log "Existing app logo and assignments were left unchanged." -Type "Info"
 
         Write-Log "🧹 Cleaning up temporary files..."
         if (Test-Path $appFilePath) {
@@ -1639,14 +2061,22 @@ foreach ($app in $appsToUpload) {
         Write-Log " " -Type "Info"
     }
     catch {
+        $processingFailureCount++
         Write-Log "Critical error processing $($app.Name): $_" -Type "Error"
         Write-Log "Moving to next application..." -Type "Info"
         continue
     }
 }
 
-Write-Log "All operations completed successfully!"
 Write-Log "Disconnecting from Microsoft Graph"
 Disconnect-MgGraph > $null 2>&1
-
-
+if ($script:AzIdentityConnected) {
+    Disconnect-AzAccount -Scope Process -ErrorAction SilentlyContinue | Out-Null
+}
+if (Test-Path -LiteralPath $script:WorkingDirectory) {
+    Remove-Item -LiteralPath $script:WorkingDirectory -Recurse -Force -ErrorAction SilentlyContinue
+}
+if ($processingFailureCount -gt 0) {
+    throw "$processingFailureCount application update(s) failed. Review the job stream before the next run."
+}
+Write-Log "All operations completed successfully!"

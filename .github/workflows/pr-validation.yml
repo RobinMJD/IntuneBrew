@@ -90,6 +90,33 @@ jobs:
 
           print(f"Validated {len(paths)} tracked Python files.")
 
+      - name: Parse Azure Automation runbooks
+        shell: pwsh
+        run: |
+          $files = @(
+            'IntuneBrew_Runbook.ps1'
+            'AzureAutomation/IntuneBrew-Readiness.ps1'
+            'AzureAutomation/IntuneBrew-UpdateAudit.ps1'
+            'AzureAutomation/IntuneBrew-UpstreamMonitor.ps1'
+          )
+
+          foreach ($file in $files) {
+            $tokens = $null
+            $errors = $null
+            [System.Management.Automation.Language.Parser]::ParseFile(
+              (Resolve-Path $file),
+              [ref]$tokens,
+              [ref]$errors
+            ) | Out-Null
+            if ($errors.Count -gt 0) {
+              $errors | ForEach-Object {
+                Write-Error "$file`: $($_.Message)"
+              }
+              exit 1
+            }
+            Write-Output "Parsed $file"
+          }
+
       - name: Install test dependencies
         env:
           PIP_DISABLE_PIP_VERSION_CHECK: "1"
