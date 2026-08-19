@@ -143,6 +143,76 @@ class CollectAppInfoTests(unittest.TestCase):
 
             self.assertEqual(resolved, str(app_path))
 
+    def test_artifact_kind_uses_url_extension_not_file_description(self):
+        self.assertEqual(
+            collect_app_info.get_artifact_kind(
+                "https://example.test/download.pkg?signature=xar"
+            ),
+            "pkg",
+        )
+        self.assertEqual(
+            collect_app_info.get_artifact_kind(
+                "https://example.test/compressed.dmg?encoding=lzfse"
+            ),
+            "dmg",
+        )
+
+    def test_declared_app_wins_over_nested_helper_apps(self):
+        artifacts = collect_app_info.get_installable_artifacts(
+            {
+                "artifacts": [
+                    {"app": ["Product.app", {"target": "Renamed.app"}]},
+                    {"zap": [{"trash": "~/Library/Caches/Product"}]},
+                ]
+            }
+        )
+
+        self.assertEqual(artifacts["app"], "Product.app")
+        self.assertIsNone(artifacts["pkg"])
+
+    def test_archive_pkg_artifact_is_discoverable(self):
+        artifacts = collect_app_info.get_installable_artifacts(
+            {"artifacts": [{"pkg": ["Installer.pkg"]}]}
+        )
+
+        self.assertEqual(artifacts["pkg"], "Installer.pkg")
+
+    def test_declared_archive_app_is_automatically_queued_for_packaging(self):
+        url = "https://formulae.brew.sh/api/cask/example.json"
+        payload = {
+            "name": ["Example"],
+            "desc": "Example app",
+            "version": "1.0",
+            "url": "https://example.test/Example.zip",
+            "sha256": "a" * 64,
+            "homepage": "https://example.test/",
+            "artifacts": [{"app": ["Example.app"]}],
+        }
+
+        with patch.dict(collect_app_info.cask_cache, {url: payload}, clear=True):
+            app_info = collect_app_info.get_homebrew_app_info(url)
+
+        self.assertEqual(app_info["type"], "app")
+        self.assertEqual(app_info["artifact_app"], "Example.app")
+        self.assertEqual(app_info["sha"], "a" * 64)
+
+    def test_bundle_id_override_fills_cask_without_detectable_id(self):
+        url = "https://formulae.brew.sh/api/cask/cmtrace-open.json"
+        payload = {
+            "name": ["CMTrace Open"],
+            "desc": "Log viewer",
+            "version": "1.5.2",
+            "url": "https://example.test/CMTrace.dmg",
+            "sha256": "b" * 64,
+            "homepage": "https://example.test/",
+            "artifacts": [{"app": ["CMTrace Open.app"]}],
+        }
+
+        with patch.dict(collect_app_info.cask_cache, {url: payload}, clear=True):
+            app_info = collect_app_info.get_homebrew_app_info(url)
+
+        self.assertEqual(app_info["bundleId"], "com.cmtrace.open")
+
 
 CASK_INFO = {
     "https://formulae.brew.sh/api/cask/tailscale.json": {
@@ -641,6 +711,19 @@ class CatalogConsistencyTests(unittest.TestCase):
             "https://formulae.brew.sh/api/cask/copilot-cli.json",
             configured_urls,
         )
+        for token in (
+            "1password-cli",
+            "android-commandlinetools",
+            "android-platform-tools",
+            "autodesk-fusion",
+            "expressvpn",
+            "sentinel",
+        ):
+            with self.subTest(token=token):
+                self.assertNotIn(
+                    f"https://formulae.brew.sh/api/cask/{token}.json",
+                    configured_urls,
+                )
 
     def test_supported_catalog_matches_non_deprecated_apps(self):
         apps = {
@@ -650,10 +733,14 @@ class CatalogConsistencyTests(unittest.TestCase):
         supported = json.loads(
             (ROOT / "supported_apps.json").read_text(encoding="utf-8")
         )
+        generator_spec = importlib.util.spec_from_file_location(
+            "generate_supported_apps",
+            ROOT / ".github/scripts/generate_supported_apps.py",
+        )
+        generator = importlib.util.module_from_spec(generator_spec)
+        generator_spec.loader.exec_module(generator)
         expected = {
-            name
-            for name, app_data in apps.items()
-            if not app_data.get("deprecated")
+            name for name, app_data in apps.items() if generator.is_publishable(app_data)
         }
 
         self.assertEqual(set(supported), expected)

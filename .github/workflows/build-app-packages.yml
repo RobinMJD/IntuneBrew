@@ -270,57 +270,7 @@ jobs:
           subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
 
       - name: Create supported_apps.json
-        run: |
-          python - <<EOF
-          import json
-          import os
-          import re
-
-          apps_folder = "Apps"
-          supported_apps = {}
-
-          for filename in os.listdir(apps_folder):
-              if filename.endswith(".json"):
-                  # Deprecated apps stay in Apps/ for history but must not be
-                  # offered for upload, their download URLs no longer work
-                  try:
-                      with open(os.path.join(apps_folder, filename)) as f:
-                          app_data = json.load(f)
-                  except ValueError:
-                      app_data = {}
-                  if app_data.get("deprecated"):
-                      print(f"Excluding deprecated app: {filename}")
-                      continue
-                  app_name = os.path.splitext(filename)[0]
-                  supported_apps[app_name] = f"https://raw.githubusercontent.com/ugurkocde/IntuneBrew/main/Apps/{filename}"
-
-          # Sort the dictionary alphabetically by keys
-          supported_apps = dict(sorted(supported_apps.items()))
-
-          with open("supported_apps.json", "w") as f:
-              json.dump(supported_apps, f, indent=4)
-
-          # Update README with total number of apps
-          total_apps = len(supported_apps)
-          with open("README.md", "r") as f:
-              readme_content = f.read()
-
-          # Create a badge-style apps count
-          apps_count_pattern = r'<p>\s*<a href="#-supported-applications">\s*<img src="https://img\.shields\.io/badge/Apps_Available-\d+-2ea44f\?style=flat"[^>]*>\s*</a>\s*</p>'
-          new_apps_badge = f'  <p>\n    <a href="#-supported-applications">\n      <img src="https://img.shields.io/badge/Apps_Available-{total_apps}-2ea44f?style=flat" alt="TotalApps"/>\n    </a>\n  </p>'
-
-          # Replace the existing badge with the new one, or add if not found
-          if re.search(apps_count_pattern, readme_content):
-              readme_content = re.sub(apps_count_pattern, new_apps_badge, readme_content)
-          else:
-              # If no badge exists, add after the first paragraph in the centered div
-              readme_content = re.sub(r'(  </p>)\n</div>', f'\\1\n{new_apps_badge}\n</div>', readme_content)
-
-          with open("README.md", "w") as f:
-              f.write(readme_content)
-
-          print(f"Updated README.md with {total_apps} apps badge")
-          EOF
+        run: python .github/scripts/generate_supported_apps.py
 
       - name: Process apps
         id: process-apps
@@ -392,6 +342,51 @@ jobs:
             return 0
           }
 
+          is_storage_package_url() {
+            case "$1" in
+              "$STORAGE_BASE_URL"/*) return 0 ;;
+              https://intunebrew.blob.core.windows.net/*) return 0 ;;
+              *) return 1 ;;
+            esac
+          }
+
+          artifact_kind() {
+            local path="${1%%\?*}"
+            path="${path%%\#*}"
+            path=$(printf '%s' "$path" | tr '[:upper:]' '[:lower:]')
+            case "$path" in
+              *.pkg) echo "pkg" ;;
+              *.dmg) echo "dmg" ;;
+              *.zip|*.tar.gz|*.tar.xz|*.tar.bz2|*.tbz) echo "archive" ;;
+              *) echo "unknown" ;;
+            esac
+          }
+
+          find_app_payload() {
+            local root="$1"
+            local expected="$2"
+            local result=""
+            if [ -n "$expected" ]; then
+              result=$(find "$root" -type d -name "$expected" -prune -print -quit 2>/dev/null)
+            else
+              result=$(find "$root" -type d -name "*.app" ! -path "*/__MACOSX/*" \
+                -prune -print 2>/dev/null | awk '{ print length, $0 }' | sort -n | head -1 | cut -d" " -f2-)
+            fi
+            if [ -n "$result" ] && [ -f "$result/Contents/Info.plist" ]; then
+              printf '%s\n' "$result"
+            fi
+          }
+
+          find_pkg_payload() {
+            local root="$1"
+            local expected="$2"
+            if [ -n "$expected" ]; then
+              find "$root" -type f -name "$expected" ! -path "*/__MACOSX/*" -print -quit 2>/dev/null
+            else
+              find "$root" -type f -name "*.pkg" ! -path "*/__MACOSX/*" -print -quit 2>/dev/null
+            fi
+          }
+
           # Superseded packages of one app are removed from the pkg container so
           # old versions do not accumulate there forever. Constraints:
           #   - callers must invoke this only after the new blob upload was
@@ -432,7 +427,7 @@ jobs:
           SUCCESSFUL_APPS=()  # Track successful apps
           
           for app_info in $APPS_TO_BUILD; do
-            IFS=':' read -r app_name url <<< "$app_info"
+            IFS=':' read -r app_name ignored_url <<< "$app_info"
             
             echo "🔄 Processing $app_name..."
             
@@ -451,10 +446,18 @@ jobs:
               }
           EOF
               sed -i '' "s/APP_NAME/$app_name/g" "$WORKSPACE_DIR/Apps/${app_name}.json"
-              sed -i '' "s|URL|$url|g" "$WORKSPACE_DIR/Apps/${app_name}.json"
+              sed -i '' "s|URL|$ignored_url|g" "$WORKSPACE_DIR/Apps/${app_name}.json"
               echo "✅ Created new JSON file for $app_name"
             else
               echo "📄 Using existing JSON file for $app_name"
+            fi
+
+            catalog_url=$(jq -r '.url // empty' "$WORKSPACE_DIR/Apps/${app_name}.json")
+            vendor_url=$(jq -r '.vendor_url // empty' "$WORKSPACE_DIR/Apps/${app_name}.json")
+            if [ -n "$vendor_url" ] && ! is_storage_package_url "$vendor_url"; then
+              url="$vendor_url"
+            else
+              url="$catalog_url"
             fi
             
             # Get version and type from JSON file
@@ -512,9 +515,9 @@ jobs:
               # Both sides must be vendor URLs. An app the collector skipped this
               # run still carries the Azure URL in .url, and comparing that
               # against a vendor URL would repackage every night for nothing.
-              case "$url" in
-                "$STORAGE_BASE_URL"/*) built_from_url="" ;;
-              esac
+              if is_storage_package_url "$url"; then
+                built_from_url=""
+              fi
 
               if [ -n "$built_from_url" ] && [ -n "$url" ] && [ "$built_from_url" != "$url" ]; then
                 echo "Rebuilding ${app_name}_${version}.pkg: vendor artifact changed from $built_from_url to $url"
@@ -533,7 +536,7 @@ jobs:
                 # Update only URL and version without downloading
                 azure_url="${STORAGE_BASE_URL}/${app_name}_${version}.pkg"
                 current_version=$(jq -r '.version' "$WORKSPACE_DIR/Apps/${app_name}.json")
-                if jq --arg url "$azure_url" --arg version "$version" --arg prev_version "$current_version" --arg filename "${app_name}_${version}.pkg" '(if has("vendor_url") then .vendor_url else .url end) as $vurl | .url = $url | .vendor_url = $vurl | .version = $version | .previous_version = $prev_version | .fileName = $filename' "$WORKSPACE_DIR/Apps/${app_name}.json" > temp.json && mv temp.json "$WORKSPACE_DIR/Apps/${app_name}.json"; then
+                if jq --arg url "$azure_url" --arg version "$version" --arg prev_version "$current_version" --arg filename "${app_name}_${version}.pkg" '(if has("vendor_url") then .vendor_url else .url end) as $vurl | .url = $url | .vendor_url = $vurl | .version = $version | .previous_version = $prev_version | .fileName = $filename | del(.packaging_pending)' "$WORKSPACE_DIR/Apps/${app_name}.json" > temp.json && mv temp.json "$WORKSPACE_DIR/Apps/${app_name}.json"; then
                   echo "✅ JSON file updated (SHA preserved)"
                 else
                   echo "Failed to update JSON file for $app_name, it keeps its previous contents"
@@ -564,7 +567,7 @@ jobs:
                   # Update JSON with SHA
                   azure_url="${STORAGE_BASE_URL}/${app_name}_${version}.pkg"
                   current_version=$(jq -r '.version' "$WORKSPACE_DIR/Apps/${app_name}.json")
-                  if jq --arg url "$azure_url" --arg version "$version" --arg prev_version "$current_version" --arg sha "$file_hash" --arg filename "${app_name}_${version}.pkg" '(if has("vendor_url") then .vendor_url else .url end) as $vurl | .url = $url | .vendor_url = $vurl | .version = $version | .previous_version = $prev_version | .sha = $sha | .fileName = $filename' "$WORKSPACE_DIR/Apps/${app_name}.json" > temp.json && mv temp.json "$WORKSPACE_DIR/Apps/${app_name}.json"; then
+                  if jq --arg url "$azure_url" --arg version "$version" --arg prev_version "$current_version" --arg sha "$file_hash" --arg filename "${app_name}_${version}.pkg" '(if has("vendor_url") then .vendor_url else .url end) as $vurl | .url = $url | .vendor_url = $vurl | .version = $version | .previous_version = $prev_version | .sha = $sha | .fileName = $filename | del(.packaging_pending)' "$WORKSPACE_DIR/Apps/${app_name}.json" > temp.json && mv temp.json "$WORKSPACE_DIR/Apps/${app_name}.json"; then
                     echo "✅ JSON file updated with SHA256"
                   else
                     echo "Failed to update JSON file for $app_name, it keeps its previous contents"
@@ -724,7 +727,7 @@ jobs:
                     # Update JSON with Azure URL and SHA256
                     echo "📝 Updating JSON file with new Azure URL and SHA256..."
                     azure_url="${STORAGE_BASE_URL}/${app_name}_${version}.pkg"
-                    if jq --arg url "$azure_url" --arg filename "${app_name}_${version}.pkg" --arg sha "$file_hash" --arg bundleid "$extracted_bundle_id" '(if has("vendor_url") then .vendor_url else .url end) as $vurl | .url = $url | .vendor_url = $vurl | .fileName = $filename | .sha = $sha | (if $bundleid == "" then . else .bundleId = $bundleid end)' "$WORKSPACE_DIR/Apps/${app_name}.json" > temp.json && mv temp.json "$WORKSPACE_DIR/Apps/${app_name}.json"; then
+                    if jq --arg url "$azure_url" --arg filename "${app_name}_${version}.pkg" --arg sha "$file_hash" --arg bundleid "$extracted_bundle_id" '(if has("vendor_url") then .vendor_url else .url end) as $vurl | .url = $url | .vendor_url = $vurl | .fileName = $filename | .sha = $sha | (if $bundleid == "" then . else .bundleId = $bundleid end) | del(.packaging_pending)' "$WORKSPACE_DIR/Apps/${app_name}.json" > temp.json && mv temp.json "$WORKSPACE_DIR/Apps/${app_name}.json"; then
                       echo "✅ JSON file updated successfully"
                       echo "🔗 New URL: $azure_url"
                     else
@@ -853,7 +856,7 @@ jobs:
                   # Update JSON with Azure URL and SHA256
                   echo "📝 Updating JSON file with new Azure URL and SHA256..."
                   azure_url="${STORAGE_BASE_URL}/${app_name}_${version}.pkg"
-                  if jq --arg url "$azure_url" --arg filename "${app_name}_${version}.pkg" --arg sha "$file_hash" --arg bundleid "$extracted_bundle_id" '(if has("vendor_url") then .vendor_url else .url end) as $vurl | .url = $url | .vendor_url = $vurl | .fileName = $filename | .sha = $sha | (if $bundleid == "" then . else .bundleId = $bundleid end)' "$WORKSPACE_DIR/Apps/${app_name}.json" > temp.json && mv temp.json "$WORKSPACE_DIR/Apps/${app_name}.json"; then
+                  if jq --arg url "$azure_url" --arg filename "${app_name}_${version}.pkg" --arg sha "$file_hash" --arg bundleid "$extracted_bundle_id" '(if has("vendor_url") then .vendor_url else .url end) as $vurl | .url = $url | .vendor_url = $vurl | .fileName = $filename | .sha = $sha | (if $bundleid == "" then . else .bundleId = $bundleid end) | del(.packaging_pending)' "$WORKSPACE_DIR/Apps/${app_name}.json" > temp.json && mv temp.json "$WORKSPACE_DIR/Apps/${app_name}.json"; then
                     echo "✅ JSON file updated successfully"
                     echo "🔗 New URL: $azure_url"
                   else
@@ -890,244 +893,120 @@ jobs:
               # Download app
               echo "Downloading $app_name..."
               download_path="$HOME/Desktop/${app_name}"
-              if [[ "$url" == *".zip" ]]; then
-                # Download file first
-                if ! curl -f -L -o "${download_path}.download" "$url"; then
-                  echo "❌ Failed to download $app_name from $url"
+              extract_dir="$HOME/Desktop/${app_name}_extracted"
+              mount_dir="$HOME/Desktop/${app_name}_mount"
+              rm -rf "$extract_dir" "$mount_dir"
+              mkdir -p "$extract_dir"
+              declared_app=$(jq -r '.artifact_app // empty' "$WORKSPACE_DIR/Apps/${app_name}.json")
+              declared_pkg=$(jq -r '.artifact_pkg // empty' "$WORKSPACE_DIR/Apps/${app_name}.json")
+              kind=$(artifact_kind "$url")
+
+              case "$kind" in
+                pkg)
+                  if ! curl -f -L -o "$extract_dir/${declared_pkg:-payload.pkg}" "$url"; then
+                    FAILED_APPS+=("$app_name")
+                    ERROR_LOG+=("$app_name: Failed to download direct PKG from $url")
+                    rm -rf "$extract_dir"
+                    continue
+                  fi
+                  ;;
+                dmg)
+                  if ! curl -f -L -o "${download_path}.dmg" "$url"; then
+                    FAILED_APPS+=("$app_name")
+                    ERROR_LOG+=("$app_name: Failed to download DMG from $url")
+                    rm -rf "$extract_dir"
+                    continue
+                  fi
+                  mkdir -p "$mount_dir"
+                  if ! hdiutil attach "${download_path}.dmg" -mountpoint "$mount_dir" -nobrowse >/dev/null; then
+                    FAILED_APPS+=("$app_name")
+                    ERROR_LOG+=("$app_name: Could not mount DMG from $url")
+                    rm -rf "$extract_dir" "$mount_dir"
+                    rm -f "${download_path}.dmg"
+                    continue
+                  fi
+                  mounted_app=$(find_app_payload "$mount_dir" "$declared_app")
+                  mounted_pkg=$(find_pkg_payload "$mount_dir" "$declared_pkg")
+                  if [ -n "$mounted_app" ]; then
+                    ditto "$mounted_app" "$extract_dir/$(basename "$mounted_app")"
+                  elif [ -n "$mounted_pkg" ]; then
+                    cp "$mounted_pkg" "$extract_dir/$(basename "$mounted_pkg")"
+                  fi
+                  hdiutil detach "$mount_dir" >/dev/null 2>&1 || true
+                  rm -rf "$mount_dir"
+                  rm -f "${download_path}.dmg"
+                  ;;
+                archive)
+                  archive_path="${download_path}.archive"
+                  if ! curl -f -L -o "$archive_path" "$url"; then
+                    FAILED_APPS+=("$app_name")
+                    ERROR_LOG+=("$app_name: Failed to download archive from $url")
+                    rm -rf "$extract_dir"
+                    continue
+                  fi
+                  url_path="${url%%\?*}"
+                  url_path=$(printf '%s' "$url_path" | tr '[:upper:]' '[:lower:]')
+                  case "$url_path" in
+                    *.zip)
+                      extraction_ok=false
+                      ditto -x -k "$archive_path" "$extract_dir" && extraction_ok=true
+                      ;;
+                    *.tar.gz)
+                      extraction_ok=false
+                      tar -xzf "$archive_path" -C "$extract_dir" && extraction_ok=true
+                      ;;
+                    *.tar.xz)
+                      extraction_ok=false
+                      tar -xJf "$archive_path" -C "$extract_dir" && extraction_ok=true
+                      ;;
+                    *.tar.bz2|*.tbz)
+                      extraction_ok=false
+                      tar -xjf "$archive_path" -C "$extract_dir" && extraction_ok=true
+                      ;;
+                  esac
+                  rm -f "$archive_path"
+                  if [ "${extraction_ok:-false}" != "true" ]; then
+                    FAILED_APPS+=("$app_name")
+                    ERROR_LOG+=("$app_name: Failed to extract archive from $url")
+                    rm -rf "$extract_dir"
+                    continue
+                  fi
+
+                  app_file=$(find_app_payload "$extract_dir" "$declared_app")
+                  pkg_file=$(find_pkg_payload "$extract_dir" "$declared_pkg")
+                  if [ -z "$app_file" ] && [ -z "$pkg_file" ]; then
+                    nested_dmg=$(find "$extract_dir" -type f -name "*.dmg" -print -quit)
+                    if [ -n "$nested_dmg" ]; then
+                      mkdir -p "$mount_dir"
+                      if hdiutil attach "$nested_dmg" -mountpoint "$mount_dir" -nobrowse >/dev/null; then
+                        mounted_app=$(find_app_payload "$mount_dir" "$declared_app")
+                        mounted_pkg=$(find_pkg_payload "$mount_dir" "$declared_pkg")
+                        if [ -n "$mounted_app" ]; then
+                          ditto "$mounted_app" "$extract_dir/$(basename "$mounted_app")"
+                        elif [ -n "$mounted_pkg" ]; then
+                          cp "$mounted_pkg" "$extract_dir/$(basename "$mounted_pkg")"
+                        fi
+                        hdiutil detach "$mount_dir" >/dev/null 2>&1 || true
+                      fi
+                      rm -rf "$mount_dir"
+                    fi
+                  fi
+                  ;;
+                *)
                   FAILED_APPS+=("$app_name")
-                  ERROR_LOG+=("$app_name: Failed to download from $url")
+                  ERROR_LOG+=("$app_name: Unsupported artifact URL: $url")
+                  rm -rf "$extract_dir"
                   continue
-                fi
-                cd "$HOME/Desktop"
-                
-                # Detect actual file type
-                FILE_TYPE=$(file -b "${download_path}.download" | cut -d' ' -f1-2)
-                echo "🔍 Detected file type: $FILE_TYPE"
-                
-                # Remove extraction directory if it exists
-                if [ -d "${app_name}_extracted" ]; then
-                  echo "🧹 Removing existing directory: ${app_name}_extracted"
-                  rm -rf "${app_name}_extracted"
-                fi
-                
-                # Handle based on actual file type
-                if [[ "$FILE_TYPE" == "gzip compressed" ]]; then
-                  echo "📦 File is actually gzip compressed, not a zip file"
-                  mv "${download_path}.download" "${download_path}.tar.gz"
-                  mkdir -p "${app_name}_extracted"
-                  echo "🔓 Extracting gzip archive..."
-                  if tar -xzf "${download_path}.tar.gz" -C "${app_name}_extracted" 2>/dev/null; then
-                    echo "✅ Gzip extraction successful"
-                  else
-                    echo "⚠️ Failed to extract as tar.gz, trying gunzip..."
-                    gunzip -c "${download_path}.tar.gz" > "${download_path}.tar" 2>/dev/null && \
-                    tar -xf "${download_path}.tar" -C "${app_name}_extracted" 2>/dev/null || {
-                      echo "❌ Failed to extract gzip file"
-                      rm -f "${download_path}.tar.gz" "${download_path}.tar"
-                      rm -rf "${app_name}_extracted"
-                      FAILED_APPS+=("$app_name")
-                      ERROR_LOG+=("$app_name: Failed to extract gzip file from $url")
-                      continue
-                    }
-                    rm -f "${download_path}.tar"
-                  fi
-                  rm -f "${download_path}.tar.gz"
-                elif [[ "$FILE_TYPE" == "Zip archive" ]] || [[ "$FILE_TYPE" == "ZIP archive" ]]; then
-                  echo "📦 File is a valid zip archive"
-                  mv "${download_path}.download" "${download_path}.zip"
-                  # Extract zip while excluding __MACOSX directory
-                  if unzip -q -d "${app_name}_extracted" "${download_path}.zip" 2>/dev/null; then
-                    echo "✅ Zip extraction successful"
-                  else
-                    echo "❌ Failed to extract zip file"
-                    rm -f "${download_path}.zip"
-                    rm -rf "${app_name}_extracted"
-                    FAILED_APPS+=("$app_name")
-                    ERROR_LOG+=("$app_name: Failed to extract zip file from $url")
-                    continue
-                  fi
-                  rm "${download_path}.zip"
-                else
-                  echo "⚠️ Unknown file type, attempting zip extraction anyway..."
-                  mv "${download_path}.download" "${download_path}.zip"
-                  if unzip -q -d "${app_name}_extracted" "${download_path}.zip" 2>/dev/null; then
-                    echo "✅ Zip extraction successful"
-                  else
-                    echo "❌ Failed to extract file"
-                    rm -f "${download_path}.zip"
-                    rm -rf "${app_name}_extracted"
-                    FAILED_APPS+=("$app_name")
-                    ERROR_LOG+=("$app_name: Failed to extract file (detected as: $FILE_TYPE) from $url")
-                    continue
-                  fi
-                  rm "${download_path}.zip"
-                fi
-              elif [[ "$url" == *".tar.xz" ]]; then
-                echo "📦 Processing tar.xz archive for $app_name..."
-                if ! curl -f -L -o "${download_path}.tar.xz" "$url"; then
-                  echo "❌ Failed to download $app_name from $url"
-                  FAILED_APPS+=("$app_name")
-                  ERROR_LOG+=("$app_name: Failed to download tar.xz from $url")
-                  continue
-                fi
-                cd "$HOME/Desktop"
-                # Extract tar.xz
-                echo "📂 Creating extraction directory..."
-                mkdir -p "${app_name}_extracted"
-                echo "🔓 Extracting tar.xz archive..."
-                # A corrupt archive must not abort the step: the .app/.pkg
-                # search below owns that failure and reports it per app.
-                tar -xf "${download_path}.tar.xz" -C "${app_name}_extracted" || true
-                echo "🗑️ Cleaning up downloaded archive..."
-                rm "${download_path}.tar.xz"
-                echo "📁 Extracted contents:"
-                ls -R "${app_name}_extracted"
-              elif [[ "$url" == *".tar.bz2" ]] || [[ "$url" == *".tbz" ]]; then
-                echo "📦 Processing tar.bz2/tbz archive for $app_name..."
-                if [[ "$url" == *".tar.bz2" ]]; then
-                  if ! curl -f -L -o "${download_path}.tar.bz2" "$url"; then
-                    echo "❌ Failed to download $app_name from $url"
-                    FAILED_APPS+=("$app_name")
-                    ERROR_LOG+=("$app_name: Failed to download tar.bz2 from $url")
-                    continue
-                  fi
-                  archive_path="${download_path}.tar.bz2"
-                else
-                  if ! curl -f -L -o "${download_path}.tbz" "$url"; then
-                    echo "❌ Failed to download $app_name from $url"
-                    FAILED_APPS+=("$app_name")
-                    ERROR_LOG+=("$app_name: Failed to download tbz from $url")
-                    continue
-                  fi
-                  archive_path="${download_path}.tbz"
-                fi
-                cd "$HOME/Desktop"
-                # Extract tar.bz2/tbz
-                echo "📂 Creating extraction directory..."
-                # Remove directory if it exists
-                if [ -d "${app_name}_extracted" ]; then
-                  echo "🧹 Removing existing directory: ${app_name}_extracted"
-                  rm -rf "${app_name}_extracted"
-                fi
-                mkdir -p "${app_name}_extracted"
-                echo "🔓 Extracting bzip2 compressed archive..."
-                # A corrupt archive must not abort the step: the .app/.pkg
-                # search below owns that failure and reports it per app.
-                tar -xjf "$archive_path" -C "${app_name}_extracted" || true
-                echo "🗑️ Cleaning up downloaded archive..."
-                rm "$archive_path"
-                
-                # Check if we need to handle nested tar archives
-                tar_file=$(find "${app_name}_extracted" -name "*.tar" -print -quit)
-                if [ -n "$tar_file" ]; then
-                  echo "🔍 Found nested tar archive: $tar_file"
-                  echo "📂 Creating nested extraction directory..."
-                  # Remove directory if it exists
-                  if [ -d "${app_name}_nested_extracted" ]; then
-                    echo "🧹 Removing existing directory: ${app_name}_nested_extracted"
-                    rm -rf "${app_name}_nested_extracted"
-                  fi
-                  mkdir -p "${app_name}_nested_extracted"
-                  echo "🔓 Extracting nested tar archive..."
-                  # Neither the nested extraction nor the copy back may abort the
-                  # step: an empty nested directory makes the glob unmatched and
-                  # cp fail, and the .app/.pkg search below owns that failure.
-                  tar -xf "$tar_file" -C "${app_name}_nested_extracted" || true
-                  # Move contents from nested extraction to main extraction directory
-                  echo "📦 Moving nested contents to main extraction directory..."
-                  cp -R "${app_name}_nested_extracted/"* "${app_name}_extracted/" || true
-                  rm -rf "${app_name}_nested_extracted"
-                fi
-                
-                echo "📁 Extracted contents:"
-                ls -R "${app_name}_extracted"
-              elif [[ "$url" == *".tar.gz" ]]; then
-                echo "📦 Processing tar.gz archive for $app_name..."
-                if ! curl -f -L -o "${download_path}.tar.gz" "$url"; then
-                  echo "❌ Failed to download $app_name from $url"
-                  FAILED_APPS+=("$app_name")
-                  ERROR_LOG+=("$app_name: Failed to download tar.gz from $url")
-                  continue
-                fi
-                cd "$HOME/Desktop"
-                # Extract tar.gz
-                echo "📂 Creating extraction directory..."
-                # Remove directory if it exists
-                if [ -d "${app_name}_extracted" ]; then
-                  echo "🧹 Removing existing directory: ${app_name}_extracted"
-                  rm -rf "${app_name}_extracted"
-                fi
-                mkdir -p "${app_name}_extracted"
-                echo "🔓 Extracting tar.gz archive..."
-                # A corrupt archive must not abort the step: the .app/.pkg
-                # search below owns that failure and reports it per app.
-                tar -xzf "${download_path}.tar.gz" -C "${app_name}_extracted" || true
-                echo "🗑️ Cleaning up downloaded archive..."
-                rm "${download_path}.tar.gz"
-                echo "📁 Extracted contents:"
-                ls -R "${app_name}_extracted"
-              else
-                # Download file first and detect type
-                if ! curl -f -L -o "${download_path}.download" "$url"; then
-                  echo "❌ Failed to download $app_name from $url"
-                  FAILED_APPS+=("$app_name")
-                  ERROR_LOG+=("$app_name: Failed to download from $url")
-                  continue
-                fi
-                cd "$HOME/Desktop"
-                
-                # Detect actual file type
-                FILE_TYPE=$(file -b "${download_path}.download" | cut -d' ' -f1-2)
-                echo "🔍 Detected file type: $FILE_TYPE"
-                
-                # Remove extraction directory if it exists
-                if [ -d "${app_name}_extracted" ]; then
-                  echo "🧹 Removing existing directory: ${app_name}_extracted"
-                  rm -rf "${app_name}_extracted"
-                fi
-                
-                # Handle based on actual file type
-                if [[ "$FILE_TYPE" == "gzip compressed" ]]; then
-                  echo "📦 File is gzip compressed"
-                  mv "${download_path}.download" "${download_path}.tar.gz"
-                  mkdir -p "${app_name}_extracted"
-                  echo "🔓 Extracting gzip archive..."
-                  if tar -xzf "${download_path}.tar.gz" -C "${app_name}_extracted" 2>/dev/null; then
-                    echo "✅ Gzip extraction successful"
-                  else
-                    echo "❌ Failed to extract gzip file"
-                    rm -f "${download_path}.tar.gz"
-                    rm -rf "${app_name}_extracted"
-                    FAILED_APPS+=("$app_name")
-                    ERROR_LOG+=("$app_name: Failed to extract gzip file from $url")
-                    continue
-                  fi
-                  rm -f "${download_path}.tar.gz"
-                else
-                  # Default to zip extraction
-                  echo "📦 Attempting zip extraction for file type: $FILE_TYPE"
-                  mv "${download_path}.download" "${download_path}.zip"
-                  if unzip -q -d "${app_name}_extracted" "${download_path}.zip" 2>/dev/null; then
-                    echo "✅ Zip extraction successful"
-                  else
-                    echo "❌ Failed to extract file"
-                    rm -f "${download_path}.zip"
-                    rm -rf "${app_name}_extracted"
-                    FAILED_APPS+=("$app_name")
-                    ERROR_LOG+=("$app_name: Failed to extract file (type: $FILE_TYPE) from $url")
-                    continue
-                  fi
-                  rm "${download_path}.zip"
-                fi
-              fi
-              
-              # First try to find .app file recursively, excluding __MACOSX directory
-              echo "🔍 Searching for .app file recursively..."
-              app_file=$(find "${app_name}_extracted" -type d -name "*.app" ! -path "*/__MACOSX/*" -print -quit)
+                  ;;
+              esac
+
+              cd "$HOME/Desktop"
+              echo "🔍 Searching for declared app payload..."
+              app_file=$(find_app_payload "$extract_dir" "$declared_app")
               
               if [ -z "$app_file" ]; then
                 echo "❌ No .app file found, searching for .pkg file..."
-                pkg_file=$(find "${app_name}_extracted" -type f -name "*.pkg" ! -path "*/__MACOSX/*" -print -quit)
+                pkg_file=$(find_pkg_payload "$extract_dir" "$declared_pkg")
                 
                 if [ -n "$pkg_file" ]; then
                   echo "✅ Found .pkg file: $pkg_file"
@@ -1166,7 +1045,7 @@ jobs:
                     # Update JSON with Azure URL and SHA256
                     echo "📝 Updating JSON file with new Azure URL and SHA256..."
                     azure_url="${STORAGE_BASE_URL}/${app_name}_${version}.pkg"
-                    if jq --arg url "$azure_url" --arg filename "${app_name}_${version}.pkg" --arg sha "$file_hash" --arg bundleid "$extracted_bundle_id" '(if has("vendor_url") then .vendor_url else .url end) as $vurl | .url = $url | .vendor_url = $vurl | .fileName = $filename | .sha = $sha | (if $bundleid == "" then . else .bundleId = $bundleid end)' "$WORKSPACE_DIR/Apps/${app_name}.json" > temp.json && mv temp.json "$WORKSPACE_DIR/Apps/${app_name}.json"; then
+                    if jq --arg url "$azure_url" --arg filename "${app_name}_${version}.pkg" --arg sha "$file_hash" --arg bundleid "$extracted_bundle_id" '(if has("vendor_url") then .vendor_url else .url end) as $vurl | .url = $url | .vendor_url = $vurl | .fileName = $filename | .sha = $sha | (if $bundleid == "" then . else .bundleId = $bundleid end) | del(.packaging_pending)' "$WORKSPACE_DIR/Apps/${app_name}.json" > temp.json && mv temp.json "$WORKSPACE_DIR/Apps/${app_name}.json"; then
                       echo "✅ JSON file updated successfully"
                       echo "🔗 New URL: $azure_url"
                     else
@@ -1255,7 +1134,7 @@ jobs:
               # rather than take the remaining apps down with it.
               # Braces keep the negation on the whole list: "!" alone would bind
               # to jq and turn mv into the failure branch.
-              if ! { jq --arg url "$azure_url" --arg filename "${app_name}_${version}.pkg" --arg sha "$file_hash" --arg bundleid "$extracted_bundle_id" '(if has("vendor_url") then .vendor_url else .url end) as $vurl | .url = $url | .vendor_url = $vurl | .fileName = $filename | .sha = $sha | (if $bundleid == "" then . else .bundleId = $bundleid end)' "$WORKSPACE_DIR/Apps/${app_name}.json" > temp.json && mv temp.json "$WORKSPACE_DIR/Apps/${app_name}.json"; }; then
+              if ! { jq --arg url "$azure_url" --arg filename "${app_name}_${version}.pkg" --arg sha "$file_hash" --arg bundleid "$extracted_bundle_id" '(if has("vendor_url") then .vendor_url else .url end) as $vurl | .url = $url | .vendor_url = $vurl | .fileName = $filename | .sha = $sha | (if $bundleid == "" then . else .bundleId = $bundleid end) | del(.packaging_pending)' "$WORKSPACE_DIR/Apps/${app_name}.json" > temp.json && mv temp.json "$WORKSPACE_DIR/Apps/${app_name}.json"; }; then
                 echo "❌ Failed to update JSON file"
                 sudo rm -rf "${app_name}_extracted"
                 FAILED_APPS+=("$app_name")
@@ -1270,6 +1149,17 @@ jobs:
             SUCCESSFUL_APPS+=("$app_name")
             echo "✅ Completed processing $app_name"
             echo "------------------------------------------------"
+          done
+
+          # Never publish the collector's vendor URL or source-archive SHA for a
+          # package that failed. Keep the last committed manifest until a build
+          # produces and verifies a replacement.
+          for failed_app in "${FAILED_APPS[@]}"; do
+            if git -C "$WORKSPACE_DIR" cat-file -e "HEAD:Apps/${failed_app}.json" 2>/dev/null; then
+              git -C "$WORKSPACE_DIR" checkout HEAD -- "Apps/${failed_app}.json"
+            else
+              rm -f "$WORKSPACE_DIR/Apps/${failed_app}.json"
+            fi
           done
           
           # Display summary
@@ -1386,6 +1276,9 @@ jobs:
           git checkout -- README.md 2>/dev/null || true
 
           echo "Reverted $reverted out-of-scope app files"
+
+      - name: Refresh supported app index
+        run: python .github/scripts/generate_supported_apps.py
 
       - name: Commit and push changes
         id: catalog-snapshot

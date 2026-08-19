@@ -2,6 +2,8 @@
   "description": "Manual bundle ID overrides for apps that cannot be auto-detected. Add apps here with their correct bundle IDs.",
   "overrides": {
     "abstract": "com.elasticprojects.Abstract",
+    "cmtrace-open": "com.cmtrace.open",
+    "hopper-disassembler": "com.cryptic-apps.hopper-web-4",
     "linear": "com.linear"
   }
 }

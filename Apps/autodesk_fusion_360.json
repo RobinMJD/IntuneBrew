@@ -22,5 +22,7 @@
   },
   "category": "Design",
   "publisher": "Autodesk, Inc.",
-  "previous_version": "latest"
+  "previous_version": "latest",
+  "deprecated": true,
+  "deprecation_reason": "Bootstrap downloader requires an interactive online install and contains no deployable package"
 }

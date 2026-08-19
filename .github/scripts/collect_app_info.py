@@ -13,6 +13,47 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from urllib.parse import urlparse, unquote
 
 
+ARCHIVE_EXTENSIONS = (".zip", ".tar.gz", ".tar.xz", ".tar.bz2", ".tbz")
+
+
+def get_artifact_kind(url):
+    """Classify an artifact from its authoritative URL path."""
+    path = unquote(urlparse(url).path).lower()
+    if path.endswith(".pkg"):
+        return "pkg"
+    if path.endswith(".dmg"):
+        return "dmg"
+    if path.endswith(ARCHIVE_EXTENSIONS):
+        return "archive"
+    return "unknown"
+
+
+def get_installable_artifacts(data):
+    """Return the Homebrew-declared top-level app and package payload names."""
+    result = {"app": None, "pkg": None}
+    for artifact in data.get("artifacts", []):
+        if not isinstance(artifact, dict):
+            continue
+        for kind in result:
+            value = artifact.get(kind)
+            if not value:
+                continue
+            if isinstance(value, str):
+                result[kind] = value
+            elif isinstance(value, list) and value and isinstance(value[0], str):
+                result[kind] = value[0]
+    return result
+
+
+def get_bundle_id_override(cask_token):
+    override_path = Path(__file__).resolve().parents[1] / "data" / "bundle-id-overrides.json"
+    try:
+        with override_path.open(encoding="utf-8") as handle:
+            return json.load(handle).get("overrides", {}).get(cask_token)
+    except (OSError, ValueError):
+        return None
+
+
 def get_filename_from_url(url, app_name=None, version=None, default_ext=".dmg"):
     """
     Extract a proper filename from a URL, handling query parameters and edge cases.
@@ -41,7 +82,7 @@ def get_filename_from_url(url, app_name=None, version=None, default_ext=".dmg"):
     if not has_valid_ext or not filename or filename in ['download', 'latest']:
         if app_name:
             # Construct filename from app name and version
-            safe_name = app_name.replace(' ', '-')
+            safe_name = re.sub(r'[\\/:*?"<>|]+', '-', app_name.replace(' ', '-'))
             if version:
                 filename = f"{safe_name}-{version}{default_ext}"
             else:
@@ -295,8 +336,6 @@ app_urls = [
     "https://formulae.brew.sh/api/cask/altserver.json",
     "https://formulae.brew.sh/api/cask/amadeus-pro.json",
     "https://formulae.brew.sh/api/cask/amie.json",
-    "https://formulae.brew.sh/api/cask/android-commandlinetools.json",
-    "https://formulae.brew.sh/api/cask/android-platform-tools.json",
     "https://formulae.brew.sh/api/cask/appgrid.json",
     "https://formulae.brew.sh/api/cask/apptivate.json",
     "https://formulae.brew.sh/api/cask/aurora-hdr.json",
@@ -321,7 +360,6 @@ app_urls = [
     "https://formulae.brew.sh/api/cask/envkey.json",
     "https://formulae.brew.sh/api/cask/evkey.json",
     "https://formulae.brew.sh/api/cask/filebot.json",
-    "https://formulae.brew.sh/api/cask/1password-cli.json",
     "https://formulae.brew.sh/api/cask/activedock.json",
     "https://formulae.brew.sh/api/cask/amethyst.json",
     "https://formulae.brew.sh/api/cask/antigravity.json",
@@ -417,7 +455,6 @@ app_urls = [
     "https://formulae.brew.sh/api/cask/screenflick.json",
     "https://formulae.brew.sh/api/cask/secretive.json",
     "https://formulae.brew.sh/api/cask/selfcontrol.json",
-    "https://formulae.brew.sh/api/cask/sentinel.json",
     "https://formulae.brew.sh/api/cask/setapp.json",
     "https://formulae.brew.sh/api/cask/shifty.json",
     "https://formulae.brew.sh/api/cask/sidenotes.json",
@@ -1225,7 +1262,6 @@ homebrew_cask_urls = [
 pkg_in_dmg_urls = [
     "https://formulae.brew.sh/api/cask/jabra-direct.json",
     "https://formulae.brew.sh/api/cask/tableau.json",
-    "https://formulae.brew.sh/api/cask/autodesk-fusion.json",
     "https://formulae.brew.sh/api/cask/nomachine.json",
     "https://formulae.brew.sh/api/cask/adobe-acrobat-reader.json",
     "https://formulae.brew.sh/api/cask/adobe-acrobat-pro.json",
@@ -1311,7 +1347,6 @@ pkg_urls = [
     "https://formulae.brew.sh/api/cask/bricklink-studio.json",
     "https://formulae.brew.sh/api/cask/digikam.json",
     "https://formulae.brew.sh/api/cask/dymo-connect.json",
-    "https://formulae.brew.sh/api/cask/expressvpn.json",
     "https://formulae.brew.sh/api/cask/fuse-t.json",
     "https://formulae.brew.sh/api/cask/gog-galaxy.json",
     "https://formulae.brew.sh/api/cask/ibm-aspera-connect.json",
@@ -1740,7 +1775,8 @@ def get_homebrew_app_info(json_url, needs_packaging=False, is_pkg_in_dmg=False, 
 
     json_string = json.dumps(data)
 
-    bundle_id = find_bundle_id(json_string)
+    bundle_id = find_bundle_id(json_string) or get_bundle_id_override(cask_token)
+    installable_artifacts = get_installable_artifacts(data)
 
     # Clean up version string by removing anything after the comma or underscore
     version = data["version"]
@@ -1773,6 +1809,12 @@ def get_homebrew_app_info(json_url, needs_packaging=False, is_pkg_in_dmg=False, 
         # extensionless URL would be deployed as a DMG and fail to mount (Issue #107)
         "fileName": get_filename_from_url(url, app_name=data["name"][0], version=version, default_ext=".pkg" if is_pkg else ".dmg")
     }
+    if data.get("sha256"):
+        app_info["sha"] = data["sha256"]
+    if installable_artifacts["app"]:
+        app_info["artifact_app"] = installable_artifacts["app"]
+    if installable_artifacts["pkg"]:
+        app_info["artifact_pkg"] = installable_artifacts["pkg"]
 
     if needs_packaging:
         app_info["type"] = "app"
@@ -1781,7 +1823,14 @@ def get_homebrew_app_info(json_url, needs_packaging=False, is_pkg_in_dmg=False, 
     elif is_pkg_in_pkg:
         app_info["type"] = "pkg_in_pkg"
     elif is_pkg:
-        app_info["type"] = "pkg"
+        app_info["type"] = (
+            "app"
+            if get_artifact_kind(url) == "archive"
+            and any(installable_artifacts.values())
+            else "pkg"
+        )
+    elif get_artifact_kind(url) == "archive" and any(installable_artifacts.values()):
+        app_info["type"] = "app"
 
     return app_info
 
@@ -2032,6 +2081,11 @@ def main():
                     # if it saw the refreshed value.
                     existing_data["type"] = "app"
                     existing_data["vendor_url"] = app_info["vendor_url"]
+                    for artifact_key in ("artifact_app", "artifact_pkg"):
+                        if app_info.get(artifact_key):
+                            existing_data[artifact_key] = app_info[artifact_key]
+                        else:
+                            existing_data.pop(artifact_key, None)
 
                     # Calculate new hash if version changed
                     if version_changed:
