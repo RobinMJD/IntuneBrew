@@ -2,7 +2,7 @@
   "name": "ProPresenter",
   "description": "Presentation and production application for live events",
   "version": "21.4",
-  "url": "https://intunebrew.blob.core.windows.net/pkg/propresenter_21.4.pkg",
+  "url": "https://intcybintunebrewprd01st.blob.core.windows.net/pkg/propresenter_21.4.pkg",
   "vendor_url": "https://renewedvision.com/downloads/propresenter/mac/ProPresenter_21.4_352583705.zip",
   "bundleId": "com.renewedvision.propresenter",
   "homepage": "https://renewedvision.com/propresenter/",

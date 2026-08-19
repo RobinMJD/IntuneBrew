@@ -2,7 +2,7 @@
   "name": "GPG Suite",
   "description": "Tools to protect your emails and files",
   "version": "2023.3",
-  "url": "https://intunebrew.blob.core.windows.net/pkg/gpg_suite_2023.3.pkg",
+  "url": "https://intcybintunebrewprd01st.blob.core.windows.net/pkg/gpg_suite_2023.3.pkg",
   "vendor_url": "https://releases.gpgtools.org/GPG_Suite-2023.3.dmg",
   "bundleId": "org.gpgtools.gpgmail",
   "homepage": "https://gpgtools.org/",

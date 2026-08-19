@@ -2,7 +2,7 @@
   "name": "Tailscale",
   "description": "Mesh VPN based on WireGuard",
   "version": "1.102.2",
-  "url": "https://intunebrew.blob.core.windows.net/pkg/tailscale_1.102.2.pkg",
+  "url": "https://intcybintunebrewprd01st.blob.core.windows.net/pkg/tailscale_1.102.2.pkg",
   "vendor_url": "https://pkgs.tailscale.com/stable/Tailscale-1.102.2-macos.pkg",
   "bundleId": "org.sparkle-project.Sparkle.Updater",
   "homepage": "https://tailscale.com/",

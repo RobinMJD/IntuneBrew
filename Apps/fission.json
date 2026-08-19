@@ -1,14 +1,14 @@
 {
   "name": "Fission",
   "description": "Audio editor",
-  "version": "2.9.4",
-  "url": "https://intunebrew.blob.core.windows.net/pkg/fission_2.9.4.pkg",
+  "version": "2.9.5",
+  "url": "https://intcybintunebrewprd01st.blob.core.windows.net/pkg/fission_2.9.5.pkg",
   "vendor_url": "https://cdn.rogueamoeba.com/fission/download/Fission.zip",
   "bundleId": "com.rogueamoeba.Fission",
   "homepage": "https://rogueamoeba.com/fission/",
-  "fileName": "fission_2.9.4.pkg",
+  "fileName": "fission_2.9.5.pkg",
   "type": "app",
-  "sha": "0453647bdfaf175fb979ebd7bf207f148679bc7b1d2e2d7705cd349a0210ca21",
+  "sha": "4b7ac600016846951202d3b737d3ec869c5af98b16c3aa6bbb0f89409359917b",
   "changelog": "https://rogueamoeba.com/fission/releasenotes.php",
   "previous_version": "2.9.4",
   "qa_info": {

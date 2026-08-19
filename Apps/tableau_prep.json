@@ -2,7 +2,7 @@
   "name": "Tableau Prep",
   "description": "Combine, shape, and clean your data for analysis",
   "version": "2026.2.1",
-  "url": "https://intunebrew.blob.core.windows.net/pkg/tableau_prep_2026.2.1.pkg",
+  "url": "https://intcybintunebrewprd01st.blob.core.windows.net/pkg/tableau_prep_2026.2.1.pkg",
   "vendor_url": "https://downloads.tableau.com/esdalt/tableau_prep/2026.2.1/TableauPrep-2026-2-1-arm64.dmg",
   "bundleId": "com.tableausoftware.tableauprep",
   "homepage": "https://www.tableau.com/products/prep",

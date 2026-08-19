@@ -2,7 +2,7 @@
   "name": "CleanMyMac",
   "description": "Tool to remove unnecessary files and folders from disk",
   "version": "5.5.7",
-  "url": "https://intunebrew.blob.core.windows.net/pkg/cleanmymac_5.5.7.pkg",
+  "url": "https://intcybintunebrewprd01st.blob.core.windows.net/pkg/cleanmymac_5.5.7.pkg",
   "vendor_url": "https://updates.cleanmymac.com/com.macpaw.cleanmymac5/releases/CleanMyMac5_50507.0.2607220856.zip",
   "bundleId": "com.macpaw.CleanMyMac5",
   "homepage": "https://macpaw.com/cleanmymac",

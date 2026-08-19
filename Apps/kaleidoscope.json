@@ -2,7 +2,7 @@
   "name": "Kaleidoscope",
   "description": "Spot and merge differences in text and image files or folders",
   "version": "7.0.1",
-  "url": "https://intunebrew.blob.core.windows.net/pkg/kaleidoscope_7.0.1.pkg",
+  "url": "https://intcybintunebrewprd01st.blob.core.windows.net/pkg/kaleidoscope_7.0.1.pkg",
   "vendor_url": "https://updates.kaleidoscope.app/v7/prod/Kaleidoscope-7.0.1-10509.app.zip",
   "bundleId": "app.kaleidoscope.v4",
   "homepage": "https://kaleidoscope.app/",

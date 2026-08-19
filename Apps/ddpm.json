@@ -1,0 +1,12 @@
+{
+  "name": "DDPM",
+  "description": "Monitors and peripherals manager",
+  "version": "2.3.0.0023",
+  "url": "https://clientperipherals.dell.com/DDPM/Mac/Application/DDPMv2.3.0.0023.zip",
+  "vendor_url": "https://clientperipherals.dell.com/DDPM/Mac/Application/DDPMv2.3.0.0023.zip",
+  "bundleId": "Qisda.pkg.DDPM",
+  "homepage": "https://dell.com/",
+  "homebrew_cask": "ddpm",
+  "fileName": "DDPMv2.3.0.0023.zip",
+  "type": "app"
+}

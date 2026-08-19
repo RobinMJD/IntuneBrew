@@ -2,7 +2,7 @@
   "name": "BetterZip",
   "description": "Utility to create and modify archives",
   "version": "6.0.4",
-  "url": "https://intunebrew.blob.core.windows.net/pkg/betterzip_6.0.4.pkg",
+  "url": "https://intcybintunebrewprd01st.blob.core.windows.net/pkg/betterzip_6.0.4.pkg",
   "vendor_url": "https://macitbetter.com/dl/BetterZip-6.0.4.zip",
   "bundleId": "com.macitbetter.betterzip",
   "homepage": "https://macitbetter.com/",

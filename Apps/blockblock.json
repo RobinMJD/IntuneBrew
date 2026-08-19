@@ -2,7 +2,7 @@
   "name": "BlockBlock",
   "description": "Monitors common persistence locations",
   "version": "2.5.0",
-  "url": "https://intunebrew.blob.core.windows.net/pkg/blockblock_2.5.0.pkg",
+  "url": "https://intcybintunebrewprd01st.blob.core.windows.net/pkg/blockblock_2.5.0.pkg",
   "vendor_url": "https://github.com/objective-see/BlockBlock/releases/download/v2.5.0/BlockBlock_2.5.0.zip",
   "bundleId": "com.objective-see.blockblock.installer",
   "homepage": "https://objective-see.org/products/blockblock.html",

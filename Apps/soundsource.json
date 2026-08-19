@@ -2,7 +2,7 @@
   "name": "SoundSource",
   "description": "Sound and audio controller",
   "version": "6.1.1",
-  "url": "https://intunebrew.blob.core.windows.net/pkg/soundsource_6.1.1.pkg",
+  "url": "https://intcybintunebrewprd01st.blob.core.windows.net/pkg/soundsource_6.1.1.pkg",
   "vendor_url": "https://cdn.rogueamoeba.com/soundsource/download/SoundSource.zip",
   "bundleId": "com.rogueamoeba.soundsource",
   "homepage": "https://rogueamoeba.com/soundsource/",

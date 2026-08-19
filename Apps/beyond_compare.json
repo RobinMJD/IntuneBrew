@@ -2,7 +2,7 @@
   "name": "Beyond Compare",
   "description": "Compare files and folders",
   "version": "5.2.5.32528",
-  "url": "https://intunebrew.blob.core.windows.net/pkg/beyond_compare_5.2.5.32528.pkg",
+  "url": "https://intcybintunebrewprd01st.blob.core.windows.net/pkg/beyond_compare_5.2.5.32528.pkg",
   "vendor_url": "https://www.scootersoftware.com/files/BCompareOSX-5.2.5.32528.zip",
   "bundleId": "com.ScooterSoftware.BeyondCompare",
   "homepage": "https://www.scootersoftware.com/",

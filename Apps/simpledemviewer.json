@@ -2,7 +2,7 @@
   "name": "SimpleDEMViewer",
   "description": "Digital Elevation Model viewer",
   "version": "8.6.1",
-  "url": "https://intunebrew.blob.core.windows.net/pkg/simpledemviewer_8.6.1.pkg",
+  "url": "https://intcybintunebrewprd01st.blob.core.windows.net/pkg/simpledemviewer_8.6.1.pkg",
   "vendor_url": "https://jizoh.jp/program/SDVr_861.zip",
   "bundleId": "jp.jizoh.SDVr8",
   "homepage": "https://jizoh.jp/english.html",

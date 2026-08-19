@@ -2,7 +2,7 @@
   "name": "EtreCheck",
   "description": "Utility to finds and fix problems on computer systems",
   "version": "6.8.16",
-  "url": "https://intunebrew.blob.core.windows.net/pkg/etrecheck_6.8.16.pkg",
+  "url": "https://intcybintunebrewprd01st.blob.core.windows.net/pkg/etrecheck_6.8.16.pkg",
   "vendor_url": "https://cdn.etrecheck.com/EtreCheckPro.zip",
   "bundleId": "com.etresoft.EtreCheckMAS",
   "homepage": "https://etrecheck.com/",

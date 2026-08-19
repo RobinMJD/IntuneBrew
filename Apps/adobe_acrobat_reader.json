@@ -2,7 +2,7 @@
   "name": "Adobe Acrobat Reader",
   "description": "View, print, and comment on PDF documents",
   "version": "26.001.21662",
-  "url": "https://intunebrew.blob.core.windows.net/pkg/adobe_acrobat_reader_26.001.21662.pkg",
+  "url": "https://intcybintunebrewprd01st.blob.core.windows.net/pkg/adobe_acrobat_reader_26.001.21662.pkg",
   "vendor_url": "https://ardownload2.adobe.com/pub/adobe/reader/mac/AcrobatDC/2600121662/AcroRdrDC_2600121662_MUI.dmg",
   "bundleId": "com.adobe.ARMDCHelper",
   "homepage": "https://www.adobe.com/acrobat/pdf-reader.html",

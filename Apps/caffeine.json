@@ -2,7 +2,7 @@
   "name": "Caffeine",
   "description": "Utility that prevents the system from going to sleep",
   "version": "1.6.4",
-  "url": "https://intunebrew.blob.core.windows.net/pkg/caffeine_1.6.4.pkg",
+  "url": "https://intcybintunebrewprd01st.blob.core.windows.net/pkg/caffeine_1.6.4.pkg",
   "vendor_url": "https://dr-caffeine-mac.s3.amazonaws.com/Caffeine_1.6.4.zip",
   "bundleId": "net.domzilla.caffeine",
   "homepage": "https://www.caffeine-app.net/",

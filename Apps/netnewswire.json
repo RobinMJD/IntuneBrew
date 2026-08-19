@@ -2,7 +2,7 @@
   "name": "NetNewsWire",
   "description": "Free and open-source RSS reader",
   "version": "7.1.2",
-  "url": "https://intunebrew.blob.core.windows.net/pkg/netnewswire_7.1.2.pkg",
+  "url": "https://intcybintunebrewprd01st.blob.core.windows.net/pkg/netnewswire_7.1.2.pkg",
   "vendor_url": "https://github.com/Ranchero-Software/NetNewsWire/releases/download/mac-7.1.2/NetNewsWire7.1.2.zip",
   "bundleId": "com.ranchero.NetNewsWire-Evergreen",
   "homepage": "https://netnewswire.com/",

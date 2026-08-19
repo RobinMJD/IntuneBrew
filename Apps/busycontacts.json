@@ -2,7 +2,7 @@
   "name": "BusyContacts",
   "description": "Contact manager focusing on efficiency",
   "version": "2026.3.1",
-  "url": "https://intunebrew.blob.core.windows.net/pkg/busycontacts_2026.3.1.pkg",
+  "url": "https://intcybintunebrewprd01st.blob.core.windows.net/pkg/busycontacts_2026.3.1.pkg",
   "vendor_url": "https://www.busymac.com/download/bct-2026.3.1.zip",
   "bundleId": "com.busymac.busycontacts",
   "homepage": "https://www.busymac.com/busycontacts/index.html",

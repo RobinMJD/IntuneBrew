@@ -2,7 +2,7 @@
   "name": "Basecamp",
   "description": "All-In-One Toolkit for Working Remotely",
   "version": "5.1.5",
-  "url": "https://intunebrew.blob.core.windows.net/pkg/basecamp_5.1.5.pkg",
+  "url": "https://intcybintunebrewprd01st.blob.core.windows.net/pkg/basecamp_5.1.5.pkg",
   "vendor_url": "https://basecamp.com/desktop/Basecamp-5.1.5-mac.zip",
   "bundleId": "com.basecamp.basecamp3",
   "homepage": "https://basecamp.com/help/3,2.4.2/guides/apps/mac",

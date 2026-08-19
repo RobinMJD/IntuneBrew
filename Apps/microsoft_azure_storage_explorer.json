@@ -2,7 +2,7 @@
   "name": "Microsoft Azure Storage Explorer",
   "description": "Explorer for Azure Storage",
   "version": "1.45.0",
-  "url": "https://intunebrew.blob.core.windows.net/pkg/microsoft_azure_storage_explorer_1.45.0.pkg",
+  "url": "https://intcybintunebrewprd01st.blob.core.windows.net/pkg/microsoft_azure_storage_explorer_1.45.0.pkg",
   "vendor_url": "https://github.com/microsoft/AzureStorageExplorer/releases/download/v1.45.0/StorageExplorer-darwin-arm64.zip",
   "bundleId": "com.microsoft.StorageExplorer",
   "homepage": "https://azure.microsoft.com/en-us/features/storage-explorer/",

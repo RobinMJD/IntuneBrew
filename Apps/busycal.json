@@ -2,7 +2,7 @@
   "name": "BusyCal",
   "description": "Calendar software focusing on flexibility and reliability",
   "version": "2026.3.1",
-  "url": "https://intunebrew.blob.core.windows.net/pkg/busycal_2026.3.1.pkg",
+  "url": "https://intcybintunebrewprd01st.blob.core.windows.net/pkg/busycal_2026.3.1.pkg",
   "vendor_url": "https://downloads.busymac.com/bcl-2026.3.1-2026-08-05-22-20.zip",
   "bundleId": "com.busymac.busycal3",
   "homepage": "https://busymac.com/busycal/index.html",

@@ -2,7 +2,7 @@
   "name": "CrashPlan",
   "description": "Backup and recovery software",
   "version": "12.0.0",
-  "url": "https://intunebrew.blob.core.windows.net/pkg/crashplan_12.0.0.pkg",
+  "url": "https://intcybintunebrewprd01st.blob.core.windows.net/pkg/crashplan_12.0.0.pkg",
   "vendor_url": "https://download.crashplan.com/installs/agent/cloud/12.0.0/735/install/CrashPlan_12.0.0_735_Mac.dmg",
   "bundleId": "com.crashplan.desktop",
   "homepage": "https://www.crashplan.com/",

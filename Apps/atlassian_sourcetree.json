@@ -2,7 +2,7 @@
   "name": "Atlassian SourceTree",
   "description": "Graphical client for Git version control",
   "version": "4.2.19",
-  "url": "https://intunebrew.blob.core.windows.net/pkg/atlassian_sourcetree_4.2.19.pkg",
+  "url": "https://intcybintunebrewprd01st.blob.core.windows.net/pkg/atlassian_sourcetree_4.2.19.pkg",
   "vendor_url": "https://product-downloads.atlassian.com/software/sourcetree/ga/Sourcetree_4.2.19_317.zip",
   "bundleId": "com.torusknot.SourceTreeNotMAS",
   "homepage": "https://www.sourcetreeapp.com/",

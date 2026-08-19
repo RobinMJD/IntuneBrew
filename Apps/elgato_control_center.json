@@ -2,7 +2,7 @@
   "name": "Elgato Control Center",
   "description": "Control your Elgato key lights",
   "version": "1.9",
-  "url": "https://intunebrew.blob.core.windows.net/pkg/elgato_control_center_1.9.pkg",
+  "url": "https://intcybintunebrewprd01st.blob.core.windows.net/pkg/elgato_control_center_1.9.pkg",
   "vendor_url": "https://edge.elgato.com/egc/macos/eccm/1.9/ElgatoControlCenter-1.9.20829.app.zip",
   "bundleId": "com.corsair.ControlCenter",
   "homepage": "https://www.elgato.com/ww/en/s/downloads",
