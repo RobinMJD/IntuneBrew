@@ -186,6 +186,28 @@ class WorkflowPackagingRegressionTests(unittest.TestCase):
         self.assertLess(route.index("gunzip -c"), route.index("hdiutil attach"))
         self.assertNotIn("payload.pkg", route)
 
+    def test_declared_app_precedes_auxiliary_pkgs_in_dmg(self):
+        dmg_path = self.workflow.split(
+            'elif [ "$app_type" = "pkg_in_dmg" ]', 1
+        )[1].split("else\n              # Download app", 1)[0]
+        self.assertIn(
+            'app_file=$(find_app_payload "${download_path}_mount" "$declared_app")',
+            dmg_path,
+        )
+        self.assertIn(
+            '[ -n "$app_file" ] || pkg_file=$(find_pkg_payload',
+            dmg_path,
+        )
+        self.assertNotIn('find "${download_path}_mount" -name "*.pkg"', dmg_path)
+
+    def test_extracted_bundle_id_must_match_catalog(self):
+        self.assertIn("require_bundle_id_match()", self.process)
+        self.assertIn("Extracted app bundle ID mismatch", self.process)
+        self.assertIn("Declared package bundle ID mismatch", self.process)
+        self.assertIn("Inner package bundle ID mismatch", self.process)
+        self.assertIn("Extracted package bundle ID mismatch", self.process)
+        self.assertNotIn("log_bundle_id_change", self.process)
+
     def test_dmg_falls_back_to_declared_top_level_app(self):
         self.assertIn('find_app_payload "$mount_dir" "$declared_app"', self.process)
         self.assertIn('-name "*.app"', self.process)

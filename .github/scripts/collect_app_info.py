@@ -90,6 +90,18 @@ def sync_artifact_metadata(existing_data, app_info):
             existing_data.pop(key, None)
 
 
+def can_reuse_source_hash(existing_data, app_info):
+    source_sha = app_info.get("source_sha256", "")
+    return (
+        bool(app_info.get("source_version"))
+        and existing_data.get("source_version") == app_info["source_version"]
+        and bool(re.fullmatch(r"[0-9a-fA-F]{64}", source_sha))
+        and existing_data.get("source_sha256") == source_sha
+        and existing_data.get("url") == app_info.get("url")
+        and bool(existing_data.get("sha"))
+    )
+
+
 def get_bundle_id_override(cask_token):
     override_path = Path(__file__).resolve().parents[1] / "data" / "bundle-id-overrides.json"
     try:
@@ -1716,6 +1728,21 @@ def mark_app_deprecated(apps_folder, display_name, reason, cask_token=None):
     return True
 
 
+def require_deprecation_tombstone(
+    apps_folder, display_name, reason, cask_token=None
+):
+    if not mark_app_deprecated(
+        apps_folder,
+        display_name,
+        reason,
+        cask_token,
+    ):
+        identifier = cask_token or display_name or "unknown cask"
+        raise RuntimeError(
+            f"Configured cask {identifier} is unavailable but has no manifest tombstone"
+        )
+
+
 # Cask JSON is a few kilobytes: 10s to connect, 30s to read is generous, and a
 # stalled endpoint must not hold a worker for the whole run.
 CASK_TIMEOUT = (10, 30)
@@ -1880,7 +1907,9 @@ def get_homebrew_app_info(json_url, needs_packaging=False, is_pkg_in_dmg=False, 
     if needs_packaging:
         app_info["type"] = "app"
     elif is_pkg_in_dmg:
-        app_info["type"] = "pkg_in_dmg"
+        app_info["type"] = (
+            "app" if installable_artifacts["app"] else "pkg_in_dmg"
+        )
     elif is_pkg_in_pkg:
         app_info["type"] = "pkg_in_pkg"
     elif is_pkg:
@@ -2164,7 +2193,7 @@ def main():
             apps_info.append(app_info)
             print(f"Saved app information for {display_name} to {file_path}")
         except CaskUnavailableError as e:
-            mark_app_deprecated(apps_folder, e.display_name, e.reason, e.cask_token)
+            require_deprecation_tombstone(apps_folder, e.display_name, e.reason, e.cask_token)
         except Exception as e:
             print(f"Error processing special app {url}: {str(e)}")
             print(f"Full error details: ", e)
@@ -2191,9 +2220,7 @@ def main():
                     # syntax strip the build number above, so a build-only bump
                     # leaves the version equal while the URL (and the file
                     # behind it) changes.
-                    if ("sha" in existing_data and
-                        existing_data.get("version") == app_info["version"] and
-                        existing_data.get("url") == app_info["url"]):
+                    if can_reuse_source_hash(existing_data, app_info):
                         needs_hash = False
                         app_info["sha"] = existing_data["sha"]
                         print(f"ℹ️ Using existing hash for {display_name}")
@@ -2248,7 +2275,7 @@ def main():
             apps_info.append(app_info)
             print(f"Saved app information for {display_name} to {file_path}")
         except CaskUnavailableError as e:
-            mark_app_deprecated(apps_folder, e.display_name, e.reason, e.cask_token)
+            require_deprecation_tombstone(apps_folder, e.display_name, e.reason, e.cask_token)
         except Exception as e:
             print(f"Error processing {url}: {str(e)}")
 
@@ -2303,7 +2330,7 @@ def main():
             apps_info.append(app_info)
             print(f"Saved app information for {display_name} to {file_path}")
         except CaskUnavailableError as e:
-            mark_app_deprecated(apps_folder, e.display_name, e.reason, e.cask_token)
+            require_deprecation_tombstone(apps_folder, e.display_name, e.reason, e.cask_token)
         except Exception as e:
             print(f"Error processing PKG in PKG app {url}: {str(e)}")
 
@@ -2328,9 +2355,7 @@ def main():
                     # Reuse the stored hash only while both the version and the
                     # download URL are unchanged, so build-only bumps behind an
                     # equal version string still refresh the hash.
-                    if ("sha" in existing_data and
-                        existing_data.get("version") == app_info["version"] and
-                        existing_data.get("url") == app_info["url"]):
+                    if can_reuse_source_hash(existing_data, app_info):
                         needs_hash = False
                         app_info["sha"] = existing_data["sha"]
                         print(f"ℹ️ Using existing hash for {display_name}")
@@ -2386,7 +2411,7 @@ def main():
             apps_info.append(app_info)
             print(f"Saved app information for {display_name} to {file_path}")
         except CaskUnavailableError as e:
-            mark_app_deprecated(apps_folder, e.display_name, e.reason, e.cask_token)
+            require_deprecation_tombstone(apps_folder, e.display_name, e.reason, e.cask_token)
         except Exception as e:
             print(f"Error processing direct PKG app {url}: {str(e)}")
 
@@ -2440,7 +2465,7 @@ def main():
             apps_info.append(app_info)
             print(f"Saved app information for {display_name} to {file_path}")
         except CaskUnavailableError as e:
-            mark_app_deprecated(apps_folder, e.display_name, e.reason, e.cask_token)
+            require_deprecation_tombstone(apps_folder, e.display_name, e.reason, e.cask_token)
         except Exception as e:
             print(f"Error processing PKG in DMG app {url}: {str(e)}")
 

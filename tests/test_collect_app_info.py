@@ -235,6 +235,62 @@ class CollectAppInfoTests(unittest.TestCase):
         )
         self.assertEqual(app_info["source_sha256"], "no_check")
 
+    def test_direct_hash_reuse_requires_verified_source_identity(self):
+        existing = {
+            "source_version": "1.0,100",
+            "source_sha256": "a" * 64,
+            "url": "https://example.test/app.dmg",
+            "sha": "b" * 64,
+        }
+        current = dict(existing)
+        self.assertTrue(collect_app_info.can_reuse_source_hash(existing, current))
+
+        for changed in (
+            {"source_version": "1.0,101"},
+            {"source_sha256": "no_check"},
+            {"source_sha256": ""},
+            {"url": "https://example.test/app-v2.dmg"},
+        ):
+            with self.subTest(changed=changed):
+                candidate = dict(current, **changed)
+                self.assertFalse(
+                    collect_app_info.can_reuse_source_hash(existing, candidate)
+                )
+
+    def test_wireshark_declared_app_takes_precedence_over_auxiliary_pkgs(self):
+        url = "https://formulae.brew.sh/api/cask/wireshark-app.json"
+        payload = {
+            "name": ["Wireshark"],
+            "desc": "Packet analyzer",
+            "version": "4.0",
+            "url": "https://example.test/Wireshark.dmg",
+            "sha256": "f" * 64,
+            "homepage": "https://example.test/",
+            "artifacts": [
+                {"app": ["Wireshark.app"]},
+                {"pkg": ["Install ChmodBPF.pkg"]},
+            ],
+        }
+        with patch.dict(collect_app_info.cask_cache, {url: payload}, clear=True):
+            app_info = collect_app_info.get_homebrew_app_info(
+                url,
+                is_pkg_in_dmg=True,
+            )
+
+        self.assertEqual(app_info["type"], "app")
+        self.assertEqual(app_info["artifact_app"], "Wireshark.app")
+        self.assertEqual(app_info["artifact_pkg"], "Install ChmodBPF.pkg")
+
+    def test_missing_tombstone_for_unavailable_configured_cask_fails(self):
+        with tempfile.TemporaryDirectory() as directory:
+            with self.assertRaisesRegex(RuntimeError, "no manifest tombstone"):
+                collect_app_info.require_deprecation_tombstone(
+                    directory,
+                    "Bootstrap",
+                    "installer-only",
+                    "bootstrap",
+                )
+
     def test_gzip_dmg_pkg_is_queued_for_safe_packaging(self):
         url = "https://formulae.brew.sh/api/cask/toshiba-color-mfp.json"
         payload = {

@@ -137,6 +137,16 @@ class CaskArtifactValidationTests(unittest.TestCase):
 
         self.assertIsNone(add_new_app.binary_only_cask_reason(packaged_app))
 
+    def test_installer_only_cask_is_rejected_before_list_write(self):
+        bootstrap = cask_data(
+            "https://example.test/bootstrap.zip",
+            [{"installer": [{"manual": "Bootstrap.app"}]}],
+        )
+        self.assertIn(
+            "bootstrap installer",
+            add_new_app.unsupported_cask_reason(bootstrap),
+        )
+
 
 class ApprovalWorkflowTests(unittest.TestCase):
     def test_approval_workflows_test_catalog_before_committing(self):

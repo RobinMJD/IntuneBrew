@@ -330,16 +330,15 @@ jobs:
             return 0
           }
 
-          log_bundle_id_change() {
+          require_bundle_id_match() {
             local json_path="$1"
-            local new_id="$2"
-            local current_id=""
-            [ -n "$new_id" ] || return 0
-            current_id=$(jq -r '.bundleId // empty' "$json_path" 2>/dev/null) || current_id=""
-            if [ "$current_id" != "$new_id" ]; then
-              echo "bundleId changed in $json_path: ${current_id:-none} -> $new_id"
+            local actual_id="$2"
+            local expected_id=""
+            expected_id=$(jq -r '.bundleId // empty' "$json_path")
+            if [ -z "$actual_id" ] || [ -z "$expected_id" ] || [ "$actual_id" != "$expected_id" ]; then
+              echo "Bundle ID validation failed: expected ${expected_id:-missing}, got ${actual_id:-missing}" >&2
+              return 1
             fi
-            return 0
           }
 
           is_storage_package_url() {
@@ -785,7 +784,13 @@ jobs:
                   fi
                   
                   extracted_bundle_id=$(extract_bundle_id_from_pkg "${app_name}_${version}.pkg")
-                  log_bundle_id_change "$WORKSPACE_DIR/Apps/${app_name}.json" "$extracted_bundle_id"
+                  if ! require_bundle_id_match "$WORKSPACE_DIR/Apps/${app_name}.json" "$extracted_bundle_id"; then
+                    rm -f "${download_path}.pkg" "${app_name}_${version}.pkg"
+                    rm -rf "$temp_dir"
+                    FAILED_APPS+=("$app_name")
+                    ERROR_LOG+=("$app_name: Inner package bundle ID mismatch")
+                    continue
+                  fi
 
                   # Calculate SHA256 hash
                   echo "🔐 Calculating SHA256 hash..."
@@ -887,14 +892,23 @@ jobs:
                 continue
               fi
               
-              # Find PKG file
-              echo "🔍 Searching for PKG file..."
-              pkg_file=$(find "${download_path}_mount" -name "*.pkg" -print -quit)
+              declared_app=$(jq -r '.artifact_app // empty' "$WORKSPACE_DIR/Apps/${app_name}.json")
+              declared_pkg=$(jq -r '.artifact_pkg // empty' "$WORKSPACE_DIR/Apps/${app_name}.json")
+              app_file=$(find_app_payload "${download_path}_mount" "$declared_app")
+              pkg_file=""
+              [ -n "$app_file" ] || pkg_file=$(find_pkg_payload "${download_path}_mount" "$declared_pkg")
 
               # The DMG must be unmounted whether this succeeds or not, so
               # failures set a flag here and are recorded after the cleanup.
               pkg_in_dmg_error=""
-              if [ -n "$pkg_file" ]; then
+              if [ -n "$app_file" ]; then
+                extracted_bundle_id=$(extract_bundle_id_from_plist "$app_file/Contents/Info.plist")
+                if ! require_bundle_id_match "$WORKSPACE_DIR/Apps/${app_name}.json" "$extracted_bundle_id"; then
+                  pkg_in_dmg_error="Declared app bundle ID mismatch"
+                elif ! pkgbuild --install-location /Applications --component "$app_file" "${app_name}_${version}.pkg" 2>/dev/null; then
+                  pkg_in_dmg_error="Failed to build PKG from declared app"
+                fi
+              elif [ -n "$pkg_file" ]; then
                 echo "✅ Found PKG file: $pkg_file"
                 echo "📦 Package size: $(ls -lh "$pkg_file" | awk '{print $5}')"
                 
@@ -905,7 +919,14 @@ jobs:
                 cp "$pkg_file" "${app_name}_${version}.pkg" || true
 
                 extracted_bundle_id=$(extract_bundle_id_from_pkg "${app_name}_${version}.pkg")
-                log_bundle_id_change "$WORKSPACE_DIR/Apps/${app_name}.json" "$extracted_bundle_id"
+                if ! require_bundle_id_match "$WORKSPACE_DIR/Apps/${app_name}.json" "$extracted_bundle_id"; then
+                  pkg_in_dmg_error="Declared package bundle ID mismatch"
+                fi
+              else
+                pkg_in_dmg_error="No declared app or package found inside DMG from $url"
+              fi
+
+              if [ -z "$pkg_in_dmg_error" ] && [ -f "${app_name}_${version}.pkg" ]; then
                 
                 # Calculate SHA256 hash
                 echo "🔐 Calculating SHA256 hash..."
@@ -931,11 +952,6 @@ jobs:
                   echo "❌ Failed to upload to Azure"
                   pkg_in_dmg_error="Immutable Azure upload failed for $new_blob_name"
                 fi
-              else
-                echo "❌ No PKG file found in DMG for $app_name"
-                echo "📁 Contents of mount point:"
-                ls -R "${download_path}_mount"
-                pkg_in_dmg_error="No PKG found inside DMG from $url"
               fi
 
               # Cleanup
@@ -1108,7 +1124,14 @@ jobs:
                   cp "$pkg_file" "${app_name}_${version}.pkg" || true
 
                   extracted_bundle_id=$(extract_bundle_id_from_pkg "${app_name}_${version}.pkg")
-                  log_bundle_id_change "$WORKSPACE_DIR/Apps/${app_name}.json" "$extracted_bundle_id"
+                  if ! require_bundle_id_match "$WORKSPACE_DIR/Apps/${app_name}.json" "$extracted_bundle_id"; then
+                    cd "$WORKSPACE_DIR"
+                    rm -rf "${app_name}_extracted"
+                    rm -f "${app_name}_${version}.pkg"
+                    FAILED_APPS+=("$app_name")
+                    ERROR_LOG+=("$app_name: Extracted package bundle ID mismatch")
+                    continue
+                  fi
                   
                   # Calculate SHA256 hash
                   echo "🔐 Calculating SHA256 hash..."
@@ -1165,7 +1188,12 @@ jobs:
               echo "✅ Found .app file: $app_file"
               
               extracted_bundle_id=$(extract_bundle_id_from_plist "$app_file/Contents/Info.plist")
-              log_bundle_id_change "$WORKSPACE_DIR/Apps/${app_name}.json" "$extracted_bundle_id"
+              if ! require_bundle_id_match "$WORKSPACE_DIR/Apps/${app_name}.json" "$extracted_bundle_id"; then
+                rm -rf "${app_name}_extracted"
+                FAILED_APPS+=("$app_name")
+                ERROR_LOG+=("$app_name: Extracted app bundle ID mismatch")
+                continue
+              fi
 
               # Build PKG with version in filename
               echo "Building PKG for $app_name version $version..."

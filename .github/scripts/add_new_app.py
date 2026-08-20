@@ -47,15 +47,25 @@ def artifact_types(homebrew_data):
     }
 
 
-def binary_only_cask_reason(homebrew_data):
-    """Explain why a cask is not deployable when it only installs CLI binaries."""
+def unsupported_cask_reason(homebrew_data):
+    """Explain why a cask has no directly deployable app/package payload."""
     types = artifact_types(homebrew_data)
     if 'binary' in types and types.isdisjoint(DEPLOYABLE_ARTIFACT_TYPES):
         return (
             "Homebrew installs only command-line binaries; IntuneBrew requires "
             "a deployable app or package artifact"
         )
+    if 'installer' in types and types.isdisjoint(DEPLOYABLE_ARTIFACT_TYPES):
+        return (
+            "Homebrew exposes only a bootstrap installer; IntuneBrew requires "
+            "a directly deployable app or package artifact"
+        )
+    if types.isdisjoint(DEPLOYABLE_ARTIFACT_TYPES):
+        return "Homebrew cask has no deployable app or package artifact"
     return None
+
+
+binary_only_cask_reason = unsupported_cask_reason
 
 
 def set_output(name, value):
@@ -472,7 +482,7 @@ def main():
             failed_apps.append({'cask': cask_name, 'reason': 'not found on Homebrew'})
             continue
 
-        validation_error = binary_only_cask_reason(homebrew_data)
+        validation_error = unsupported_cask_reason(homebrew_data)
         if validation_error:
             print(f"Failed {cask_name}: {validation_error}")
             failed_apps.append({'cask': cask_name, 'reason': validation_error})
