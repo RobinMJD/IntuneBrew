@@ -11,6 +11,6 @@
   "sha": "6ffc4aaeabd1b89871af51ece6d18faf83ae2c746ec168fb6402ebe292c8fc5f",
   "category": "Utilities",
   "publisher": "MacPacker",
-  "previous_version": "0.19.0",
+  "previous_version": "0.20.0",
   "homebrew_cask": "macpacker"
 }

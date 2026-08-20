@@ -8,5 +8,6 @@
   "homepage": "https://www.macusb.app/",
   "homebrew_cask": "macusb",
   "fileName": "macUSB.2.4.dmg",
-  "sha": "fe3f25cb03c0b6437a148977e36a6e00fbbfcb1d2c868a041812e2b769fde1ae"
+  "sha": "fe3f25cb03c0b6437a148977e36a6e00fbbfcb1d2c868a041812e2b769fde1ae",
+  "previous_version": "2.4"
 }

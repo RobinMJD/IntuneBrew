@@ -10,7 +10,7 @@
   "type": "app",
   "sha": "e820210235d8e93f5e7c61a2a75f689a4def33732fe5b40d9b496f243a565736",
   "changelog": "https://godotengine.org/changelog/",
-  "previous_version": "4.7.1",
+  "previous_version": "4.7.2",
   "qa_info": {
     "qa_timestamp": "2025-05-13T08:19:14Z",
     "qa_result": "Installation successful and verified",

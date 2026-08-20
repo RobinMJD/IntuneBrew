@@ -11,6 +11,6 @@
   "sha": "7c131487f432d1e0bd2489e340109aec59232903edf604ae45f9c087d88438de",
   "category": "Developer Tools",
   "publisher": "SwiftBar",
-  "previous_version": "2.0.1",
+  "previous_version": "2.1.1",
   "homebrew_cask": "swiftbar"
 }

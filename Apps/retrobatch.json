@@ -1,16 +1,16 @@
 {
   "name": "Retrobatch",
   "description": "Batch image processor",
-  "version": "2.4",
-  "url": "https://intcybintunebrewprd01st.blob.core.windows.net/pkg/retrobatch_2.4.pkg",
-  "vendor_url": "https://flyingmeat.com/download/Retrobatch-2.4.zip",
+  "version": "2.4.1",
+  "url": "https://intcybintunebrewprd01st.blob.core.windows.net/pkg/retrobatch_2.4.1.pkg",
+  "vendor_url": "https://flyingmeat.com/download/Retrobatch-2.4.1.zip",
   "bundleId": "com.flyingmeat.Retrobatch",
   "homepage": "https://flyingmeat.com/retrobatch/",
-  "fileName": "retrobatch_2.4.pkg",
+  "fileName": "retrobatch_2.4.1.pkg",
   "type": "app",
-  "sha": "cec9a2169a2d280a0c16edf96a803b937a8901d1278c9491420e0a882c7c67c3",
+  "sha": "948380c34c09f07dd5308eda2cef4705553aa16bffddb7d1910df872c9e068d3",
   "category": "Utilities",
   "publisher": "Flying Meat, Inc.",
-  "previous_version": "2.3.1",
+  "previous_version": "2.4",
   "homebrew_cask": "retrobatch"
 }

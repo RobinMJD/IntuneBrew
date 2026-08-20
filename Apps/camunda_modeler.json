@@ -11,6 +11,6 @@
   "sha": "aa6c69b1b5f562b1119da065cf65090c0af8de0eaab3f4f57f2cc3612d72a679",
   "category": "Developer Tools",
   "publisher": "Camunda Services GmbH",
-  "previous_version": "5.49.0",
+  "previous_version": "5.50.1",
   "homebrew_cask": "camunda-modeler"
 }

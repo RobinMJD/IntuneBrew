@@ -8,5 +8,6 @@
   "homepage": "https://cmtraceopen.com/",
   "homebrew_cask": "cmtrace-open",
   "fileName": "CMTrace.Open_1.5.2_aarch64.dmg",
-  "sha": "d4b5783fb8b2f6942d88c489dd8b94c35684590f161c36e0f802ddcf9354883e"
+  "sha": "d4b5783fb8b2f6942d88c489dd8b94c35684590f161c36e0f802ddcf9354883e",
+  "previous_version": "1.5.2"
 }

@@ -8,7 +8,8 @@
   "homepage": "https://software.charliemonroe.net/permute/",
   "homebrew_cask": "permute",
   "fileName": "Permute_4_4151.dmg",
+  "sha": "42045cc79dc817472a3ab433888377d2750b94ffb78a3c14d7bf38a0a1c6dc0d",
   "category": "Media",
   "publisher": "Charlie Monroe",
-  "previous_version": "4.0.6"
+  "previous_version": "4.0.7"
 }

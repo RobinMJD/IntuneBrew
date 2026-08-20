@@ -8,9 +8,9 @@
   "homepage": "https://www.plex.tv/",
   "fileName": "plex_media_server_1.43.3.10896.pkg",
   "type": "app",
-  "sha": "52bf8fae84b3d16daf8644c58150f407ad9c3012f7a768640263fa2b44f9a753",
+  "sha": "15e9c1079955d3ab00cd1d88761812a690892d7717fe0353d72becc6988b0bc4",
   "category": "Media",
   "publisher": "Plex, Inc.",
-  "previous_version": "1.43.3.10861",
+  "previous_version": "1.43.3.10896",
   "homebrew_cask": "plex-media-server"
 }

@@ -9,7 +9,7 @@
   "fileName": "hey_1.3.6.pkg",
   "type": "app",
   "sha": "b79db9582034631d918fb28bde657879cd63525dcb1b76314423ae9234244bb8",
-  "previous_version": "1.3.3",
+  "previous_version": "1.3.6",
   "category": "Communication",
   "publisher": "Basecamp, LLC",
   "homebrew_cask": "hey-desktop"

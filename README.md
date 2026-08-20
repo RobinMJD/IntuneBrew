@@ -18,7 +18,7 @@
     <a href="https://www.powershellgallery.com/packages/IntuneBrew">
       <img src="https://img.shields.io/powershellgallery/dt/IntuneBrew?style=flat&label=PSGallery%20Downloads&color=brightgreen" alt="PowerShell Gallery Downloads"/>
     </a>
-                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              <p>
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                <p>
     <a href="#-supported-applications">
       <img src="https://img.shields.io/badge/Apps_Available-1159-2ea44f?style=flat" alt="TotalApps"/>
     </a>
@@ -577,285 +577,20 @@ This project uses publicly available metadata from Homebrew’s JSON API. Homebr
 
 
 
+
 ## 🔄 Latest Updates
 
-*Last checked: 2026-08-19 21:26 UTC*
+*Last checked: 2026-08-20 01:06 UTC*
 
 | Application | Previous Version | New Version |
 |-------------|-----------------|-------------|
-| Signal | 8.22.0 | 8.23.0 |
-| Sequel Ace | 5.3.1 | 5.4.0 |
-| Superlist | 1.56.4 | 1.57.0 |
-| HEY | 1.3.3 | 1.3.6 |
-| superwhisper | 2.17.2 | 2.18.0 |
-| Swift Shift | 1.3.2 | 1.4.0 |
-| MarsEdit | 5.4.4 | 5.4.5 |
-| Mattermost | 6.2.2 | 6.3.0 |
-| Goose | 1.45.0 | 1.46.0 |
-| Plex | 1.112.0.359 | 1.115.0.426 |
-| MacWhisper | 14.6 | 14.7.1 |
-| Microsoft Visual Studio Code | 1.132.0 | 1.134.0 |
-| Postman | 12.22.8 | 12.24.2 |
-| Fantastical | 4.1.17 | 4.1.18 |
-| Vivaldi | 8.1.4087.62 | 8.1.4087.68 |
-| GitHub Desktop | 3.6.3-931da4a1 | 3.6.4-28955b81 |
-| 1Password | 8.12.30 | 8.12.33 |
-| Asana | 2.8.0 | 2.8.1 |
-| Arc | 1.159.0 | 1.160.0 |
-| Claude | 1.26832.0 | 1.32885.1 |
-| Cursor | 3.15.6 | 3.16.29 |
-| Godot Engine | 4.7.1 | 4.7.2 |
-| Ollama | 0.32.6 | 0.32.14 |
-| PDF Expert | 3.12 | 3.13 |
-| AltTab | 11.4.4 | 11.5.0 |
-| Maccy | 2.7.0 | 2.7.1 |
-| WhatsApp | 26.31.27 | 26.33.17 |
-| Logitech Options+ | 2.5.926888 | 2.6.944893 |
-| BetterTouchTool | 6.681 | 6.726 |
-| Beeper | 4.3.20 | 4.3.34 |
-| Airfoil | 5.12.6 | 5.12.7 |
-| Fission | 2.9.4 | 2.9.5 |
-| Logitech G HUB | 2026.4.919028 | 2026.5.939708 |
-| Jumpshare | 3.5.1 | 3.5.2 |
-| Element | 1.12.25 | 1.12.26 |
-| ForkLift | 4.7.3 | 4.7.4 |
-| FSNotes | 7.3.1 | 7.3.2 |
-| Orion Browser | 1.1.1 | 1.1.2 |
-| Paste | 6.6.6 | 6.6.8 |
-| Tower | 17.1 | 17.1.1 |
-| WorkFlowy | 4.3.2608061204 | 4.3.2608181120 |
-| Altair GraphQL Client | 8.5.7 | 8.5.9 |
-| Framer | 2026.31.2 | 2026.32.0 |
-| Hepta | 1.102.0 | 1.104.0 |
-| Rambox | 2.7.0 | 2.7.1 |
-| RemNote | 1.27.19 | 1.28.0 |
-| Superhuman | 1041.0.29 | 1041.0.32 |
-| TIDAL | 2.43.0 | 2.43.2 |
-| Whimsical | 2026.10.1 | 2026.10.2 |
-| Amie | 260722.1.0 | 260814.0.0 |
-| 1Password CLI | 2.38.1 | 2.39.0 |
-| Google Antigravity | 2.6.0 | 2.8.1 |
-| Camunda Modeler | 5.49.0 | 5.50.1 |
-| Captin | 1.3.1 | 2.0.1 |
-| Cardhop | 2.4.8 | 2.4.9 |
-| Chipmunk Log Analyzer & Viewer | 4.1.0 | 4.2.0 |
-| Clockify | 2.12.5 | 2.12.6 |
-| Dialpad | 2607.1.1 | 2607.1.3 |
-| Fastmail | 1.5.1 | 1.6.0 |
-| FreeFileSync | 14.10 | 14.11 |
-| Gitfox | 4.6.2 | 4.9.0 |
-| Gitify | 7.2.0 | 7.4.0 |
-| HoudahSpot | 6.8.2 | 6.8.3 |
-| MacPacker | 0.19.0 | 0.20.0 |
-| Melodics | 5.0.993 | 5.0.1001 |
-| Netron | 9.2.1 | 9.2.2 |
-| OK JSON | 2.10.2 | 3.0.1 |
-| Piezo | 1.9.9 | 1.9.10 |
-| Plex Media Server | 1.43.3.10861 | 1.43.3.10896 |
-| Positron | 2026.08.0-331 | 2026.08.1-2 |
-| RawTherapee | 5.12 | 5.13 |
-| Retrobatch | 2.3.1 | 2.4 |
-| Surge | 6.8.0 | 6.8.1 |
-| SwiftBar | 2.0.1 | 2.1.1 |
-| Tuple | 3.1.3 | 3.2.0 |
-| Wavebox | 151.2.148.2 | 151.2.154.2 |
-| WhatRoute | 2.8.0 | 2.8.1 |
-| Wins | 3.4 | 3.5 |
-| ClickShare | 4.50.0 | 4.51.0 |
-| Dia | 1.43.1 | 1.44.1 |
-| Meta | 2.5.1 | 2.5.5 |
-| sipgate | 2.42.0 | 2.43.2 |
-| Mozilla Firefox ESR | 140.13.0 | 140.14.0 |
-| Mozilla Firefox Developer Edition | 154.0b8 | 155.0b2 |
-| Fathom | 3.5.0 | 3.6.0 |
-| Proton Pass | 1.38.1 | 1.39.1 |
-| Reqable | 3.2.17 | 3.2.23 |
-| ProcessSpy | 1.14.0 | 1.14.1 |
-| UPDF | 2.5.5 | 2.5.6 |
-| Rive | 0.8.5390 | 0.8.5516 |
-| Clop | 3.3.3 | 3.3.4 |
-| Syncovery | 11.16.0 | 12.5.1 |
-| MarkEdit | 1.33.1 | 1.34.0 |
-| Dockside | 2.9.26 | 2.9.28 |
-| Readest | 0.11.20 | 0.12.1 |
-| SABnzbd | 5.0.4 | 5.1.1 |
-| Jamie | 5.7.10 | 5.7.13 |
-| A Better Finder Rename | 12.31 | 12.32 |
-| Mozilla Thunderbird | 153.0.2 | 154.0 |
-| NordPass | 7.9.4 | 7.9.5 |
-| Rectangle Pro | 3.82 | 3.87 |
-| Rocket.Chat | 4.15.6 | 4.16.0 |
-| LookAway | 2.4.0 | 2.4.1 |
-| Bambu Studio | 02.07.01.62 | 02.08.02.60 |
-| Apifox | 2.8.41 | 2.8.43 |
-| NVIDIA GeForce NOW | 2.0.87.131 | 2.0.87.134 |
-| JetBrains Rider | 2026.2.0.2 | 2026.2.1 |
-| QQ | 6.9.99 | 7.0.0 |
-| ChatWise | 26.7.8 | 26.8.0 |
-| JetBrains PhpStorm | 2026.2.0.1 | 2026.2.1 |
-| Proxyman | 6.14.0 | 6.15.0 |
-| Lens | 2026.6.260931 | 2026.8.190756 |
-| WeChat for Mac | 4.1.12.29 | 4.1.13.7 |
-| LocalSend | 1.17.0 | 1.18.0 |
-| DBeaver Community Edition | 26.1.4 | 26.1.5 |
-| Downie | 4.12.12 | 4.12.13 |
-| Mozilla Firefox | 153.0.3 | 154.0 |
-| Slack | 4.51.180 | 4.51.191 |
-| Microsoft Teams | 26198.202.4929.7171 | 26213.1006.5011.1671 |
-| Spotify | 1.2.95.453 | 1.2.96.518 |
-| Synology Drive | 4.0.3 | 4.2.0 |
-| Grammarly Desktop | 1.181.2.0 | 1.185.0.0 |
-| XMind | 26.05.01105-202607290707 | 26.05.01106-202608091830 |
-| Docker Desktop | 4.85.0 | 4.87.0 |
-| Webex | 46.8.0.33593 | 46.8.0.35631 |
-| Notion | 7.29.0 | 7.31.0 |
-| Android Studio | 2026.1.3.7 | 2026.1.3.8 |
-| Brave | 1.93.134.0 | 1.93.136.0 |
-| Dropbox | 264.4.3385 | 266.4.3911 |
-| Krisp | 3.14.6 | 3.15.6 |
-| Obsidian | 1.13.4 | 1.13.7 |
-| RStudio | 2026.07.1 | 2026.08.1 |
-| BetterDisplay | 4.3.5 | 4.3.6 |
-| CapCut | 9.2.0.4444 | 9.3.0.4490 |
-| Termius | 9.42.2 | 9.43.1 |
-| AWS Corretto JDK | 21.0.12.8.1 | 21.0.12.9.1 |
-| ChatGPT | 26.803.41515 | 26.814.41957 |
-| Citrix Workspace | 26.07.0.71 | 26.07.0.76 |
-| Discord | 0.0.406 | 0.0.408 |
-| DuckDuckGo | 1.201.0 | 1.203.0 |
-| Elgato Camera Hub | 2.3.0.7286 | 2.3.0.7295 |
-| Foxit PDF Editor | 14.0.5.69339 | 14.0.6.69341 |
-| Goland | 2026.2.0.1 | 2026.2.1.1 |
-| Keeper Password Manager | 18.5.0 | 18.6.0 |
-| Raycast | 1.104.24 | 1.104.25 |
-| Azul Zulu Java Standard Edition Development Kit | 26.0.2 | 26.0.2.1 |
-| Stats | 3.0.10 | 3.0.11 |
-| Zed | 1.14.2 | 1.16.1 |
-| Oracle VirtualBox | 7.2.14 | 7.2.16 |
-| Microsoft Edge | 151.0.4129.72 | 151.0.4129.93 |
-| OBS | 32.2.1 | 32.2.2 |
-| Microsoft Office | 16.111.26080215 | 16.112.26081720 |
-| OneDrive | 26.119.0622.0003 | 26.139.0720.0007 |
-| LM Studio | 0.4.20 | 0.4.21 |
-| Zen Browser | 1.21.12b | 1.21.15b |
-| Opera | 134.0.5954.46 | 134.0.5954.66 |
-| JetBrains Toolbox | 3.6.4 | 3.7 |
-| BoltAI 2 | 2.14.4 | 2.15.0 |
-| Apidog | 2.8.41 | 2.8.43 |
-| Badgeify | 1.14.4 | 1.14.5 |
-| Airtable | 1.6.6 | 1.7.1 |
-| DbGate | 7.2.4 | 7.2.5 |
-| Camtasia | 2026.1.4 | 2026.2.0 |
-| Remote Desktop Manager | 2026.2.4.4 | 2026.2.5.1 |
-| IntelliJ IDEA Ultimate | 2026.2.0.1 | 2026.2.1 |
-| Warp | 0.2026.08.05.09.03.stable | 0.2026.08.18.02.52.stable |
-| Another Redis Desktop Manager | 1.7.2 | 1.7.4 |
-| AppFlowy | 0.13.0 | 0.13.2 |
-| Beekeeper Studio | 5.9.3 | 6.0.4 |
-| Craft | 3.5.3 | 3.5.5 |
-| HTTP Toolkit | 1.27.0 | 1.27.1 |
-| Lark | 7.73.11 | 7.74.22 |
-| Milanote | 3.18.119 | 3.18.123 |
-| Movist Pro | 2.17.2 | 2.17.4 |
-| Mullvad Browser | 15.0.19 | 15.0.20 |
-| Permute | 4.0.6 | 4.0.7 |
-| Sensei | 2.1.1 | 2.1.2 |
-| SuperDuper! | 4.0.1 | 4.0.3 |
-| TablePlus | 26.8.6 | 26.9.6 |
-| Tor Browser | 15.0.19 | 15.0.20 |
-| Biscuit | 2.1.1 | 2.1.2 |
-| Capacities | 1.67.19 | 1.68.2 |
-| Ferdium | 7.1.2 | 7.2.0 |
-| Franz | 6.5.3 | 6.7.1 |
-| Missive | 11.29.0 | 11.33.0 |
-| ocenaudio | 3.20.2 | 3.20.5 |
-| Opera GX | 134.0.5954.44 | 134.0.5954.67 |
-| PyCharm | 2026.2.0.1 | 2026.2.1 |
-| REAPER | 7.78 | 7.79 |
-| RubyMine | 2026.2 | 2026.2.1 |
-| Shift | 9.6.7.1268 | 9.6.8.1270 |
-| TextExpander | 8.4.6 | 8.4.7 |
-| Transcribe! | 9.60.3 | 9.60.7 |
-| Waterfox | 6.6.17 | 6.7.0 |
-| Defold | 1.13.0 | 1.13.1 |
-| DingTalk | 8.0.2 | 8.5.0 |
-| Douyin | 8.3.0 | 8.4.0 |
-| Electron Cash | 4.4.5 | 4.4.6 |
-| 4K YouTube to MP3 | 26.2.1 | 26.3.1 |
-| Anytype | 0.56.1 | 0.56.4 |
-| Nektony App Cleaner & Uninstaller | 9.2.4 | 9.3 |
-| BitBox | 4.51.3 | 4.51.4 |
-| ChatWork | 2.24.0 | 2.25.0 |
-| Connect Fonts | 28.1.6 | 28.1.7 |
-| DevKnife | 1.16.0 | 1.17.0 |
-| Electrum | 4.8.0 | 4.8.1 |
-| FileMaker Pro | 26.0.1.51 | 26.0.2.212 |
-| FLEXOPTIX App | 5.66.0-latest | 5.67.0-latest |
-| GDevelop | 5.6.277 | 5.6.279 |
-| GitHub Copilot for Xcode | 0.50.0 | 0.51.0 |
-| Granola | 7.469.1 | 7.488.3 |
-| jamovi | 28.1.0.0 | 28.2.0.0 |
-| LightBurn | 2.1.03 | 2.1.04 |
-| Loom | 0.367.1 | 0.369.2 |
-| Loupdeck | 6.3.0.340 | 6.4.1.364 |
-| MacPilot | 17.5 | 18.0 |
-| Moom | 4.5.1 | 4.6.0 |
-| Nextcloud Talk Desktop | 2.2.3 | 2.2.4 |
-| Notesnook | 3.4.5 | 3.4.6 |
-| OpenAudible | 4.8.7 | 4.8.8 |
-| PicView | 5.0.2 | 5.0.4 |
-| Pitch | 2.139.0 | 2.141.0 |
-| GraphPad Prism | 11.0.2 | 11.1.0 |
-| Raspberry Pi Imager | 2.0.10 | 2.0.11.1 |
-| Riverside Studio | 1.29.0 | 1.29.1 |
-| Rize | 3.0.26 | 3.0.45 |
-| Scratch | 3.32.0 | 3.32.1 |
-| Shapr3D | 26.141.0.11474 | 26.150.0.11562 |
-| Silhouette Studio | 5.0.414.001 | 5.0.523.001 |
-| SoundAnchor | 1.8.2 | 1.8.3 |
-| Taskade | 4.6.14 | 4.6.15 |
-| TickTick | 8.0.75 | 8.0.80 |
-| Tuta Mail | 356.260807.0 | 357.260818.1 |
-| Unity Hub | 3.20.0 | 3.21.0 |
-| Wealthfolio | 3.6.2 | 3.6.3 |
-| WebCatalog | 77.8.0 | 77.9.1 |
-| YACReader | 10.1.0.260703260 | 10.2.0.260808325 |
-| Zotero | 9.0.6 | 10.0 |
-| Claude Code | 2.1.220 | 2.1.227 |
-| kiro | 1.0.288 | 1.0.337 |
-| Brain.fm | 0.0.295 | 0.0.309 |
-| FluidVoice | 1.6.7 | 1.6.9 |
-| MultiViewer | 2.8.3 | 2.8.4 |
-| Insta360 Studio | 5.9.10 | 6.0.2 |
-| AWS Client VPN | 6.0.0 | 6.0.2 |
-| Malwarebytes for Mac | 5.25.2.4106 | 5.26.1.4152 |
-| NordLayer | 3.11.0 | 3.12.0 |
-| NordVPN | 10.8.1 | 10.9.0 |
-| Nota Gyazo GIF | 10.12.0 | 11.0.0 |
-| Nextcloud | 34.0.1 | 34.0.2 |
-| Cloudflare WARP | 2026.6.880.0 | 2026.7.1343.0 |
-| Cisco Jabber | 20260122074039 | 20260722023311 |
-| Box Drive | 2.53.219 | 2.53.223 |
-| Microsoft Office BusinessPro | 16.111.26080215 | 16.112.26081720 |
-| Mullvad VPN | 2026.3 | 2026.4 |
-| WhatSize | 8.2.7 | 8.2.8 |
-| eM Client | 10.4.5647 | 10.4.5674 |
-| Microsoft Excel | 16.111.26080215 | 16.112.26081720 |
-| Microsoft OneNote | 16.111.26080215 | 16.112.26081720 |
-| Microsoft Build of OpenJDK | 25.0.4 | 25.0.4.1 |
-| Microsoft Outlook | 16.111.26071325 | 16.112.26081720 |
-| Microsoft PowerPoint | 16.111.26080215 | 16.112.26081720 |
-| Microsoft Word | 16.111.26080215 | 16.112.26081720 |
-| PureVPN | 9.45.0 | 9.46.0 |
-| Perimeter 81 | 12.10.1.12081 | 12.11.0.12314 |
-| UniFi Identity Endpoint | 4.1.1 | 4.2.0 |
-| Microsoft 365 Copilot | 1.2607.2701 | 1.2608.0301 |
-| .NET SDK | 10.0.302 | 10.0.400 |
-| Adobe Acrobat Pro DC | 26.001.21771 | 26.001.21789 |
-| Chrome Remote Desktop | 151.0.7922.13 | 152.0.7977.9 |
-| Google Drive | 129.0.1 | 130.0.1 |
-| Omnissa Horizon Client | 2506-8.16.0-16536825094 | 2603-8.18.0-24230061568 |
-| Wireshark | 4.6.7 | 4.6.8 |
+| Signal | 8.23.0 | 8.24.0 |
+| Retrobatch | 2.4 | 2.4.1 |
+| Rive | 0.8.5516 | 0.8.5520 |
+| Windows App | 11.3.8 | 11.3.9 |
+| Brave | 1.93.136.0 | 1.93.137.0 |
+| Wealthfolio | 3.6.3 | 3.7.0 |
+| Claude Code | 2.1.227 | 2.1.228 |
 ## ✨ Features
 
 - 🚀 Automated app uploads to Microsoft Intune
@@ -1044,7 +779,7 @@ This project uses publicly available metadata from Homebrew’s JSON API. Homebr
 | <img src='Logos/boxcryptor.png' width='32' height='32'> Boxcryptor | 3.13.680 |
 | <img src='Logos/brackets.png' width='32' height='32'> Brackets | 2.2.0 |
 | ❌ Brain.fm | 0.0.309 |
-| <img src='Logos/brave.png' width='32' height='32'> Brave | 1.93.136.0 |
+| <img src='Logos/brave.png' width='32' height='32'> Brave | 1.93.137.0 |
 | <img src='Logos/breaktimer.png' width='32' height='32'> BreakTimer | 2.0.3 |
 | <img src='Logos/bria.png' width='32' height='32'> Bria | 6.8.7.1 |
 | <img src='Logos/browserstack_local_testing.png' width='32' height='32'> BrowserStack Local Testing | 3.7.8 |
@@ -1099,7 +834,7 @@ This project uses publicly available metadata from Homebrew’s JSON API. Homebr
 | <img src='Logos/citrix_workspace.png' width='32' height='32'> Citrix Workspace | 26.07.0.76 |
 | <img src='Logos/clamxav.png' width='32' height='32'> ClamXAV | 3.10.2 |
 | <img src='Logos/claude.png' width='32' height='32'> Claude | 1.32885.1 |
-| ❌ Claude Code | 2.1.227 |
+| ❌ Claude Code | 2.1.228 |
 | <img src='Logos/cleanclip.png' width='32' height='32'> CleanClip | 2.4.7 |
 | <img src='Logos/cleanmymac.png' width='32' height='32'> CleanMyMac | 5.5.7 |
 | <img src='Logos/cleanmymac_x_chinese.png' width='32' height='32'> CleanMyMac X Chinese | 4.15.14 |
@@ -1832,13 +1567,13 @@ This project uses publicly available metadata from Homebrew’s JSON API. Homebr
 | <img src='Logos/responsively.png' width='32' height='32'> Responsively | 1.18.0 |
 | <img src='Logos/retcon.png' width='32' height='32'> Retcon | 1.6.2 |
 | <img src='Logos/retroarch.png' width='32' height='32'> RetroArch | 1.22.2 |
-| <img src='Logos/retrobatch.png' width='32' height='32'> Retrobatch | 2.4 |
+| <img src='Logos/retrobatch.png' width='32' height='32'> Retrobatch | 2.4.1 |
 | <img src='Logos/rewind.png' width='32' height='32'> Rewind | 1.5310 |
 | <img src='Logos/rewritebar.png' width='32' height='32'> RewriteBar | 2.31.0 |
 | <img src='Logos/rhinoceros.png' width='32' height='32'> Rhinoceros | 8.20.25157.13002 |
 | <img src='Logos/rightfont.png' width='32' height='32'> RightFont | 10.1.1 |
 | <img src='Logos/ringcentral.png' width='32' height='32'> RingCentral | 26.2.30 |
-| <img src='Logos/rive.png' width='32' height='32'> Rive | 0.8.5516 |
+| <img src='Logos/rive.png' width='32' height='32'> Rive | 0.8.5520 |
 | <img src='Logos/riverside_studio.png' width='32' height='32'> Riverside Studio | 1.29.1 |
 | <img src='Logos/rize.png' width='32' height='32'> Rize | 3.0.45 |
 | <img src='Logos/roam_research.png' width='32' height='32'> Roam Research | 0.0.38 |
@@ -1896,7 +1631,7 @@ This project uses publicly available metadata from Homebrew’s JSON API. Homebr
 | <img src='Logos/shutter_encoder.png' width='32' height='32'> Shutter Encoder | 20.2 |
 | <img src='Logos/sidenotes.png' width='32' height='32'> SideNotes | 1.6.3 |
 | <img src='Logos/sigmaos.png' width='32' height='32'> SigmaOS | 1.19.0.4 |
-| <img src='Logos/signal.png' width='32' height='32'> Signal | 8.23.0 |
+| <img src='Logos/signal.png' width='32' height='32'> Signal | 8.24.0 |
 | <img src='Logos/silentknight.png' width='32' height='32'> SilentKnight | 2.14 |
 | <img src='Logos/silhouette_studio.png' width='32' height='32'> Silhouette Studio | 5.0.523.001 |
 | <img src='Logos/siliconmotion_instantview.png' width='32' height='32'> SiliconMotion InstantView | 3.24 |
@@ -2102,7 +1837,7 @@ This project uses publicly available metadata from Homebrew’s JSON API. Homebr
 | <img src='Logos/wave_terminal.png' width='32' height='32'> Wave Terminal | 0.14.5 |
 | <img src='Logos/wavebox.png' width='32' height='32'> Wavebox | 151.2.154.2 |
 | ❌ Wazuh Agent | 4.14.7 |
-| <img src='Logos/wealthfolio.png' width='32' height='32'> Wealthfolio | 3.6.3 |
+| <img src='Logos/wealthfolio.png' width='32' height='32'> Wealthfolio | 3.7.0 |
 | <img src='Logos/weasis.png' width='32' height='32'> Weasis | 4.7.2 |
 | <img src='Logos/webcatalog.png' width='32' height='32'> WebCatalog | 77.9.1 |
 | <img src='Logos/webex.png' width='32' height='32'> Webex | 46.8.0.35631 |
@@ -2120,7 +1855,7 @@ This project uses publicly available metadata from Homebrew’s JSON API. Homebr
 | <img src='Logos/wifiman_desktop.png' width='32' height='32'> WiFiman Desktop | 1.2.8 |
 | <img src='Logos/winbox.png' width='32' height='32'> WinBox | 4.3 |
 | <img src='Logos/windowkeys.png' width='32' height='32'> WindowKeys | 3.0.1 |
-| <img src='Logos/windows_app.png' width='32' height='32'> Windows App | 11.3.8 |
+| <img src='Logos/windows_app.png' width='32' height='32'> Windows App | 11.3.9 |
 | <img src='Logos/windsurf.png' width='32' height='32'> Windsurf | 2.3.15 |
 | <img src='Logos/winehqstable.png' width='32' height='32'> WineHQ-stable | 11.0 |
 | <img src='Logos/wins.png' width='32' height='32'> Wins | 3.5 |

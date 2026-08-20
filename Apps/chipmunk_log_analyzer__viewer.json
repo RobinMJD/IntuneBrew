@@ -11,6 +11,6 @@
   "sha": "309a33606919a524da58b4f76e18c715856446e148c9e1d6121ca4728a5c7526",
   "category": "Developer Tools",
   "publisher": "ESR Labs",
-  "previous_version": "4.1.0",
+  "previous_version": "4.2.0",
   "homebrew_cask": "chipmunk"
 }

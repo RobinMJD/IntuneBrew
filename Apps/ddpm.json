@@ -8,5 +8,6 @@
   "homepage": "https://dell.com/",
   "homebrew_cask": "ddpm",
   "fileName": "DDPMv2.3.0.0023.zip",
-  "type": "app"
+  "type": "app",
+  "previous_version": "2.3.0.0023"
 }
