@@ -10,5 +10,8 @@
   "fileName": "monotype_desktop_app_7.7.0.pkg",
   "type": "app",
   "sha": "0b0268a0629a6fc020b538a831f6e0b78e18bb1dcd4dbace8c3f4603085584fe",
-  "previous_version": "7.7.0"
+  "previous_version": "7.7.0",
+  "source_version": "7.7.0",
+  "source_sha256": "9c462812d2440afff4cbd3673b9f1d9865f7f6e70dc41d001cdc22623a15dc1e",
+  "source_sha256_provenance": "homebrew"
 }

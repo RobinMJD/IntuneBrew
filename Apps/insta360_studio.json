@@ -12,5 +12,8 @@
   "sha": "533a02e6d5c330a013792485a75b02eadd3fda8d34c322fa8d383805542a168f",
   "category": "Media",
   "publisher": "Insta360",
-  "previous_version": "6.0.2"
+  "previous_version": "6.0.2",
+  "source_version": "6.0.2,release_insta360,RC_build111,_20260817_195644_signed_1787026375195,df3b6ccefe99451fb55b7a0d0523affb",
+  "source_sha256": "66b859c469eec1ca3ac0783c30b3970a02eae50f3fa6624fc129f7ac4a0999fc",
+  "source_sha256_provenance": "homebrew"
 }

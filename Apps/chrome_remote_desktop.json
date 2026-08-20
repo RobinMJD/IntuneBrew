@@ -23,5 +23,8 @@
   },
   "category": "Utilities",
   "publisher": "Google LLC",
-  "previous_version": "152.0.7977.9"
+  "previous_version": "152.0.7977.9",
+  "source_version": "152.0.7977.9",
+  "source_sha256": "no_check",
+  "packaging_pending": true
 }

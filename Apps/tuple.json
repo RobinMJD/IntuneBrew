@@ -12,5 +12,8 @@
   "category": "Developer Tools",
   "publisher": "Tuple",
   "previous_version": "3.2.0",
-  "homebrew_cask": "tuple"
+  "homebrew_cask": "tuple",
+  "source_version": "3.2.0,2026-08-12,9d2e82a561",
+  "source_sha256": "4167e08cae307e360d158dc1d2589535e762da84b2892762bfcadc0e8d99791d",
+  "source_sha256_provenance": "homebrew"
 }

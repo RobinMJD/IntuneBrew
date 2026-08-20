@@ -12,5 +12,8 @@
   "category": "Communication",
   "publisher": "sipgate GmbH",
   "previous_version": "2.43.2",
-  "homebrew_cask": "sipgate"
+  "homebrew_cask": "sipgate",
+  "source_version": "2.43.2",
+  "source_sha256": "9d3a23a9d2fa0852ee02d3e5641278ad5622fcca399a3ec476861ccd7c948f84",
+  "source_sha256_provenance": "homebrew"
 }

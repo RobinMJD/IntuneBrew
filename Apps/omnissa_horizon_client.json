@@ -12,5 +12,8 @@
   "sha": "a4f30fd79c6c8daf986f7665ef8278b9d9724b62e6f5c7c1da40e0726f531cc5",
   "category": "Productivity",
   "publisher": "Omnissa",
-  "previous_version": "2603-8.18.0-24230061568"
+  "previous_version": "2603-8.18.0-24230061568",
+  "source_version": "2603-8.18.0-24230061568,CART27FQ1_MAC_2603",
+  "source_sha256": "303f3f302cfdad7765d6534ab00b557bb791f5bd3ee0c8e0352e72922cace75f",
+  "source_sha256_provenance": "homebrew"
 }

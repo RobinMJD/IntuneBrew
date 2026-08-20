@@ -12,5 +12,8 @@
   "category": "Productivity",
   "publisher": "RemNote",
   "previous_version": "1.28.0",
-  "homebrew_cask": "remnote"
+  "homebrew_cask": "remnote",
+  "source_version": "1.28.0",
+  "source_sha256": "780701321011f383d957b599f69307f8f9138942627efab71d851c03413c806d",
+  "source_sha256_provenance": "homebrew"
 }

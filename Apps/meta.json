@@ -12,5 +12,8 @@
   "category": "Media",
   "publisher": "NightBirdsEvolve",
   "previous_version": "2.5.5",
-  "homebrew_cask": "meta"
+  "homebrew_cask": "meta",
+  "source_version": "2.5.5",
+  "source_sha256": "9c88193cfc9cf9858f10635c8836e9a535c0cc52454082ca97a1213f57ed6080",
+  "source_sha256_provenance": "homebrew"
 }

@@ -22,5 +22,8 @@
   },
   "category": "Productivity",
   "publisher": "Adobe Inc.",
-  "previous_version": "26.001.21789"
+  "previous_version": "26.001.21789",
+  "source_version": "26.001.21789",
+  "source_sha256": "no_check",
+  "packaging_pending": true
 }

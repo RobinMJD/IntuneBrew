@@ -13,5 +13,8 @@
   "changelog": "https://www.wireshark.org/news/",
   "category": "Developer Tools",
   "publisher": "The Wireshark Foundation",
-  "previous_version": "4.6.8"
+  "previous_version": "4.6.8",
+  "source_version": "4.6.8",
+  "source_sha256": "7de945ed1ba324259ba7e3b2ca2fe11a854cf48a33dc6d4423dd531e466a1f3a",
+  "source_sha256_provenance": "homebrew"
 }

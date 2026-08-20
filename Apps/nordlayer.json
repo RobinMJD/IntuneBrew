@@ -12,5 +12,8 @@
   "sha": "771005dc194c5619614f2a9c8c0540150dccaac90364676a3b1094d06ceca4c3",
   "category": "Security",
   "publisher": "Nord Security",
-  "previous_version": "3.12.0"
+  "previous_version": "3.12.0",
+  "source_version": "3.12.0",
+  "source_sha256": "f52f3981c883cce9615ccb483661733d5fd9be19fc97db286d618615e256a3e2",
+  "source_sha256_provenance": "homebrew"
 }

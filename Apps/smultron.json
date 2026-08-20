@@ -12,5 +12,8 @@
   "category": "Developer Tools",
   "publisher": "Peter Borg Apps",
   "previous_version": "14.4.9",
-  "homebrew_cask": "smultron"
+  "homebrew_cask": "smultron",
+  "source_version": "14.4.9,14491",
+  "source_sha256": "no_check",
+  "packaging_pending": true
 }

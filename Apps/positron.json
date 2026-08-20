@@ -12,5 +12,8 @@
   "category": "Developer Tools",
   "publisher": "Posit, PBC",
   "previous_version": "2026.08.1-2",
-  "homebrew_cask": "positron"
+  "homebrew_cask": "positron",
+  "source_version": "2026.08.1-2",
+  "source_sha256": "d3e14e33d4692bdb8ca8a9f178c8cf519d4339850900cb291582630231a7d9ad",
+  "source_sha256_provenance": "homebrew"
 }

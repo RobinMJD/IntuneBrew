@@ -12,5 +12,8 @@
   "category": "Productivity",
   "publisher": "Heptabase",
   "previous_version": "1.104.0",
-  "homebrew_cask": "heptabase"
+  "homebrew_cask": "heptabase",
+  "source_version": "1.104.0",
+  "source_sha256": "db5186c91b925be8fc7aaf35476840f750e6f856865a5c844bc517b3e743371b",
+  "source_sha256_provenance": "homebrew"
 }
