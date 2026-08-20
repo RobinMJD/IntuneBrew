@@ -23,6 +23,14 @@ class CaskArtifactValidationTests(unittest.TestCase):
             add_new_app.extract_casks_from_urls(
                 "https://formulae.brew.sh/api/formula/vim.json"
             )
+
+    def test_formula_page_and_brew_formula_are_rejected(self):
+        with self.assertRaisesRegex(ValueError, "formula URLs are unsupported"):
+            add_new_app.extract_casks_from_urls(
+                "https://formulae.brew.sh/formula/copilot"
+            )
+        with self.assertRaisesRegex(ValueError, "explicitly use --cask"):
+            add_new_app.extract_casks_from_urls("brew install copilot")
     def test_codex_cli_is_rejected(self):
         codex = cask_data(
             "https://example.test/codex-package-aarch64-apple-darwin.tar.gz",

@@ -119,6 +119,7 @@ jobs:
   build:
     needs: collect
     runs-on: macos-latest
+    timeout-minutes: 180
     environment: catalog-storage
 
     # The job-scoped token is sufficient for catalog commits and issue comments.
@@ -497,11 +498,55 @@ jobs:
             local source_path="$1"
             local expected_sha="$2"
             local actual_sha=""
-            if ! [[ "$expected_sha" =~ ^[0-9a-fA-F]{64}$ ]]; then
+            if [ "$expected_sha" = "no_check" ]; then
               return 0
             fi
+            [[ "$expected_sha" =~ ^[0-9a-fA-F]{64}$ ]] || return 1
             actual_sha=$(shasum -a 256 "$source_path" | awk '{print $1}')
             [ "$actual_sha" = "$(printf '%s' "$expected_sha" | tr 'A-F' 'a-f')" ]
+          }
+
+          # GitHub macOS has about 14 GiB available. Keep one app below 6 GiB
+          # compressed, 10 GiB expanded, and require 2 GiB free headroom.
+          MAX_SOURCE_BYTES=6442450944
+          MAX_EXPANDED_BYTES=10737418240
+          MIN_FREE_KB=2097152
+
+          require_free_disk() {
+            local path="$1"
+            local free_kb=""
+            free_kb=$(df -Pk "$path" | awk 'NR==2 {print $4}')
+            [ "${free_kb:-0}" -ge "$MIN_FREE_KB" ]
+          }
+
+          download_source() {
+            local destination="$1"
+            local source_url="$2"
+            require_free_disk "$app_temp_dir" || return 1
+            curl -fLsS --connect-timeout 30 --max-time 1800 --retry 3 \
+              --retry-all-errors --max-filesize "$MAX_SOURCE_BYTES" \
+              -o "$destination" "$source_url"
+          }
+
+          require_archive_quota() {
+            local archive="$1"
+            local format="$2"
+            local expanded=0
+            case "$format" in
+              zip)
+                expanded=$(python -c 'import sys, zipfile; print(sum(item.file_size for item in zipfile.ZipFile(sys.argv[1]).infolist()))' "$archive")
+                probe_status=$?
+                ;;
+              tar.gz|tar.xz|tar.bz2)
+                expanded=$(python -c 'import sys, tarfile; print(sum(item.size for item in tarfile.open(sys.argv[1]).getmembers()))' "$archive")
+                probe_status=$?
+                ;;
+              *) return 1 ;;
+            esac
+            [ "${probe_status:-1}" -eq 0 ] || return 1
+            [[ "$expanded" =~ ^[0-9]+$ ]] || return 1
+            [ "$expanded" -le "$MAX_EXPANDED_BYTES" ] \
+              && require_free_disk "$app_temp_dir"
           }
 
           record_observed_source_digest() {
@@ -731,7 +776,7 @@ jobs:
               outer_pkg_ready=false
               if [[ "$url" == *".zip" ]]; then
                 echo "URL is a ZIP file, downloading and extracting first..."
-                if ! curl -f -L -o "${download_path}.zip" "$url"; then
+                if ! download_source "${download_path}.zip" "$url"; then
                   echo "Failed to download ZIP file"
                   FAILED_APPS+=("$app_name")
                   ERROR_LOG+=("$app_name: Failed to download ZIP from $url")
@@ -769,7 +814,7 @@ jobs:
                 rm -rf "$zip_extract_dir" "${download_path}.zip"
               else
                 # Direct PKG download
-                if curl -f -L -o "$outer_pkg_path" "$url"; then
+                if download_source "$outer_pkg_path" "$url"; then
                   if verify_source_file "$outer_pkg_path" "$source_sha"; then
                     record_observed_source_digest "$outer_pkg_path" "$WORKSPACE_DIR/Apps/${app_name}.json"
                     outer_pkg_ready=true
@@ -908,7 +953,7 @@ jobs:
               
               # Set download path
               # Download DMG
-              if curl -f -L -o "${download_path}.dmg" "$url"; then
+              if download_source "${download_path}.dmg" "$url"; then
                 echo "✅ DMG download successful"
                 ls -lh "${download_path}.dmg"
               else
@@ -1045,7 +1090,7 @@ jobs:
               case "$kind" in
                 pkg)
                   source_path="$app_temp_dir/source.pkg"
-                  if ! curl -f -L -o "$source_path" "$url"; then
+                  if ! download_source "$source_path" "$url"; then
                     FAILED_APPS+=("$app_name")
                     ERROR_LOG+=("$app_name: Failed to download direct PKG from $url")
                     rm -rf "$extract_dir"
@@ -1062,7 +1107,7 @@ jobs:
                   ;;
                 dmg|dmg_gzip)
                   if [ "$kind" = "dmg_gzip" ]; then
-                    if ! curl -f -L -o "${download_path}.dmg.gz" "$url"; then
+                    if ! download_source "${download_path}.dmg.gz" "$url"; then
                       FAILED_APPS+=("$app_name")
                       ERROR_LOG+=("$app_name: Failed to download gzip-compressed DMG from $url")
                       rm -rf "$extract_dir"
@@ -1083,7 +1128,7 @@ jobs:
                       continue
                     fi
                     rm -f "${download_path}.dmg.gz"
-                  elif ! curl -f -L -o "${download_path}.dmg" "$url"; then
+                  elif ! download_source "${download_path}.dmg" "$url"; then
                     FAILED_APPS+=("$app_name")
                     ERROR_LOG+=("$app_name: Failed to download DMG from $url")
                     rm -rf "$extract_dir"
@@ -1117,7 +1162,7 @@ jobs:
                   ;;
                 archive)
                   archive_path="${download_path}.archive"
-                  if ! curl -f -L -o "$archive_path" "$url"; then
+                  if ! download_source "$archive_path" "$url"; then
                     FAILED_APPS+=("$app_name")
                     ERROR_LOG+=("$app_name: Failed to download archive from $url")
                     rm -rf "$extract_dir"
@@ -1139,6 +1184,12 @@ jobs:
                       *.tar.xz) archive_format="tar.xz" ;;
                       *.tar.bz2|*.tbz) archive_format="tar.bz2" ;;
                     esac
+                  fi
+                  if ! require_archive_quota "$archive_path" "$archive_format"; then
+                    FAILED_APPS+=("$app_name")
+                    ERROR_LOG+=("$app_name: Archive exceeds extraction quota or disk headroom")
+                    rm -f "$archive_path"
+                    continue
                   fi
                   case "$archive_format" in
                     zip)
@@ -1545,61 +1596,6 @@ jobs:
         run: |
           echo "::error::Catalog publication blocked because ${FAILED_COUNT:-unknown} apps failed packaging"
           exit 1
-
-      # Apps are only downloadable once the steps above have published them, so
-      # this is the first point at which a requester can be told their app is live.
-      - name: Resolve pending app requests
-        id: pending
-        run: python .github/scripts/pending_requests.py resolve
-
-      - name: Notify requesters
-        if: steps.pending.outputs.notify_count != '0'
-        uses: actions/github-script@v7
-        with:
-          script: |
-            const fs = require('fs');
-            const notifications = JSON.parse(fs.readFileSync('pending-notifications.json', 'utf8'));
-
-            for (const item of notifications) {
-              let body = `## Now live\n\n`;
-              body += `The app you requested has been packaged and is available in the catalog.\n\n`;
-              body += `| App | Version |\n|-----|---------|\n`;
-              for (const app of item.apps) {
-                body += `| ${app.name} | \`${app.version}\` |\n`;
-              }
-              body += `\nIt will appear in IntuneBrew on the next run, and updates are `;
-              body += `picked up automatically from Homebrew from here on.`;
-
-              try {
-                await github.rest.issues.createComment({
-                  owner: context.repo.owner,
-                  repo: context.repo.repo,
-                  issue_number: item.issue,
-                  body: body
-                });
-                console.log(`Commented on #${item.issue}`);
-              } catch (e) {
-                // A deleted or locked issue must not fail the build.
-                console.log(`Could not comment on #${item.issue}: ${e.message}`);
-              }
-            }
-
-      - name: Commit resolved requests
-        run: |
-          git config --local user.email "action@github.com"
-          git config --local user.name "GitHub Action"
-          git add .github/pending-requests.json
-
-          if git diff --staged --quiet; then
-            echo "No pending request changes to commit"
-            exit 0
-          fi
-
-          git commit -m "Clear resolved app requests [skip ci]"
-          if ! git push origin HEAD:main; then
-            echo "::error::main changed before pending requests could be committed"
-            exit 1
-          fi
 
       - name: Publish catalog state
         if: success() && steps.process-apps.outputs.packaging_succeeded == 'true'

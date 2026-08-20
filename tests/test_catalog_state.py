@@ -145,16 +145,14 @@ class CatalogWorkflowTests(unittest.TestCase):
         process = self.workflow.index("- name: Process apps")
         commit = self.workflow.index("- name: Commit and push changes")
         report = self.workflow.index("- name: Report packaging failures")
-        requests = self.workflow.index("- name: Commit resolved requests")
         marker = self.workflow.index("- name: Publish catalog state")
 
         self.assertLess(process, commit)
         self.assertLess(commit, report)
-        self.assertLess(report, requests)
-        self.assertLess(requests, marker)
+        self.assertLess(report, marker)
         self.assertNotIn("- name:", self.workflow[marker + 1 :])
-        request_commit = self.workflow[requests:marker]
-        self.assertNotIn("if: steps.pending.outputs.notify_count", request_commit)
+        self.assertNotIn("pending_requests.py resolve", self.workflow)
+        self.assertNotIn("Commit resolved requests", self.workflow)
 
     def test_marker_requires_proven_success_and_exact_catalog_commit(self):
         marker = self.workflow.split("- name: Publish catalog state", 1)[1]

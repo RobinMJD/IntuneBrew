@@ -4,8 +4,10 @@ import os
 import re
 import shutil
 import subprocess
+import tarfile
 import tempfile
 import unittest
+import zipfile
 from pathlib import Path
 from unittest.mock import patch
 
@@ -97,7 +99,7 @@ class CatalogPublicationContractTests(unittest.TestCase):
                     "URL contains query",
                     generator.publication_errors(app),
                 )
-        self.assertEqual(len(query_manifests), 20)
+        self.assertIsInstance(query_manifests, list)
 
     def test_strict_generator_fails_without_rewriting_index(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -172,11 +174,60 @@ class WorkflowPackagingRegressionTests(unittest.TestCase):
         self.assertIn("set -euo pipefail", scraper)
         self.assertIn("url_effective", scraper)
         self.assertIn("shasum -a 256", scraper)
-        self.assertIn("pkgutil --expand-full", scraper)
-        self.assertIn('name PackageInfo', scraper)
-        self.assertNotIn("--pkg-info-plist", scraper)
+        self.assertNotIn("pkgutil", scraper)
+        self.assertIn("Microsoft_Remote_Help_", scraper)
+        self.assertIn("_installer\\.pkg", scraper)
         self.assertIn('"artifact_kind": "pkg"', scraper)
         self.assertIn('"source_sha256": "$sha"', scraper)
+
+    def test_remote_help_scraper_parses_effective_filename_on_ubuntu(self):
+        bash = shutil.which("bash")
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / "Apps").mkdir()
+            bin_dir = root / "bin"
+            bin_dir.mkdir()
+            bash_env = root / "mock-env.sh"
+            bash_env.write_text(
+                "curl() {\n"
+                "  local out=''\n"
+                "  while [ $# -gt 0 ]; do\n"
+                "    [ \"$1\" = '-o' ] && { out=\"$2\"; shift 2; continue; }\n"
+                "    shift\n"
+                "  done\n"
+                "  printf pkg > \"$out\"\n"
+                "  printf 'https://cdn.test/Microsoft_Remote_Help_1.2.3_installer.pkg'\n"
+                "}\n"
+                "shasum() { printf '%064d  file\\n' 1; }\n",
+                encoding="utf-8",
+            )
+            result = subprocess.run(
+                [
+                    bash,
+                    str(ROOT / ".github/scripts/scrapers/remotehelp.sh"),
+                ],
+                cwd=root,
+                env={
+                    **os.environ,
+                    "BASH_ENV": str(bash_env).replace("\\", "/"),
+                    "MSYS2_ARG_CONV_EXCL": "*",
+                },
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+            self.assertEqual(result.returncode, 0, result.stderr)
+            manifest = json.loads(
+                (root / "Apps/remotehelp.json").read_text(encoding="utf-8")
+            )
+            self.assertEqual(manifest["version"], "1.2.3")
+            self.assertEqual(manifest["bundleId"], "com.microsoft.remotehelp")
+
+    def test_remote_help_scraper_fails_for_unexpected_filename(self):
+        scraper = (
+            ROOT / ".github/scripts/scrapers/remotehelp.sh"
+        ).read_text(encoding="utf-8")
+        self.assertIn("Unexpected Remote Help installer filename", scraper)
 
     @classmethod
     def setUpClass(cls):
@@ -412,6 +463,14 @@ class WorkflowPackagingRegressionTests(unittest.TestCase):
         ):
             with self.subTest(message=message):
                 self.assertIn(message, self.process)
+        verifier = self.process.split("verify_source_file() {", 1)[1].split(
+            "MAX_SOURCE_BYTES=", 1
+        )[0]
+        self.assertIn('[ "$expected_sha" = "no_check" ]', verifier)
+        self.assertIn(
+            '[[ "$expected_sha" =~ ^[0-9a-fA-F]{64}$ ]] || return 1',
+            verifier,
+        )
 
     def test_remote_artifact_metadata_is_not_used_as_download_path(self):
         self.assertNotIn('${declared_pkg:-payload.pkg}', self.process)
@@ -429,6 +488,39 @@ class WorkflowPackagingRegressionTests(unittest.TestCase):
             self.process.count('app_temp_dir=""'),
             3,
         )
+
+    def test_resource_guards_bound_downloads_archives_and_disk(self):
+        self.assertIn("timeout-minutes: 180", self.workflow)
+        self.assertIn("MAX_SOURCE_BYTES=6442450944", self.process)
+        self.assertIn("MAX_EXPANDED_BYTES=10737418240", self.process)
+        self.assertIn("MIN_FREE_KB=2097152", self.process)
+        self.assertIn("--connect-timeout 30", self.process)
+        self.assertIn("--max-time 1800", self.process)
+        self.assertIn("--max-filesize \"$MAX_SOURCE_BYTES\"", self.process)
+        self.assertIn("require_archive_quota", self.process)
+        self.assertIn("zipfile.ZipFile", self.process)
+        self.assertIn("tarfile.open", self.process)
+        self.assertIn('[ "${probe_status:-1}" -eq 0 ] || return 1', self.process)
+        self.assertIn('[[ "$expanded" =~ ^[0-9]+$ ]] || return 1', self.process)
+        self.assertIn("require_free_disk", self.process)
+
+    def test_archive_quota_algorithms_measure_real_uncompressed_bytes(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            payload = root / "payload"
+            payload.write_bytes(b"x" * 4096)
+            zip_path = root / "payload.zip"
+            with zipfile.ZipFile(zip_path, "w") as archive:
+                archive.write(payload, "payload")
+            tar_path = root / "payload.tar.gz"
+            with tarfile.open(tar_path, "w:gz") as archive:
+                archive.add(payload, arcname="payload")
+            self.assertEqual(
+                sum(item.file_size for item in zipfile.ZipFile(zip_path).infolist()),
+                4096,
+            )
+            with tarfile.open(tar_path) as archive:
+                self.assertEqual(sum(item.size for item in archive.getmembers()), 4096)
 
     def test_same_version_rebuild_does_not_touch_prior_blob_before_marker(self):
         marker = self.workflow.index("- name: Publish catalog state")

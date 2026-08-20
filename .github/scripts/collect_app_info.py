@@ -2221,6 +2221,7 @@ def main():
     
     supported_apps = []
     apps_info = []
+    collection_errors = []
 
     prefetch_cask_data(
         app_urls + homebrew_cask_urls + pkg_in_pkg_urls + pkg_urls + pkg_in_dmg_urls
@@ -2310,8 +2311,7 @@ def main():
         except SourceHashMismatchError:
             raise
         except Exception as e:
-            print(f"Error processing special app {url}: {str(e)}")
-            print(f"Full error details: ", e)
+            collection_errors.append(f"{url}: {e}")
 
     # Process regular Homebrew cask URLs
     for url in homebrew_cask_urls:
@@ -2398,7 +2398,7 @@ def main():
         except SourceHashMismatchError:
             raise
         except Exception as e:
-            print(f"Error processing {url}: {str(e)}")
+            collection_errors.append(f"{url}: {e}")
 
     # Process pkg_in_pkg apps
     for url in pkg_in_pkg_urls:
@@ -2454,7 +2454,7 @@ def main():
         except CaskUnavailableError as e:
             require_deprecation_tombstone(apps_folder, e.display_name, e.reason, e.cask_token)
         except Exception as e:
-            print(f"Error processing PKG in PKG app {url}: {str(e)}")
+            collection_errors.append(f"{url}: {e}")
 
     # Process direct pkg apps
     for url in pkg_urls:
@@ -2541,7 +2541,7 @@ def main():
         except SourceHashMismatchError:
             raise
         except Exception as e:
-            print(f"Error processing direct PKG app {url}: {str(e)}")
+            collection_errors.append(f"{url}: {e}")
 
     # Process pkg_in_dmg apps
     for url in pkg_in_dmg_urls:
@@ -2596,7 +2596,7 @@ def main():
         except CaskUnavailableError as e:
             require_deprecation_tombstone(apps_folder, e.display_name, e.reason, e.cask_token)
         except Exception as e:
-            print(f"Error processing PKG in DMG app {url}: {str(e)}")
+            collection_errors.append(f"{url}: {e}")
 
     # Run custom scrapers and update apps_info accordingly
     for scraper in custom_scrapers:
@@ -2640,6 +2640,13 @@ def main():
     # so the run must go red before anything is committed.
     if report_filename_collisions():
         sys.exit(1)
+    if collection_errors:
+        print("COLLECTION FAILURES:", file=sys.stderr)
+        for error in collection_errors:
+            print(f"- {error}", file=sys.stderr)
+        raise RuntimeError(
+            f"{len(collection_errors)} configured apps failed collection"
+        )
 
 if __name__ == "__main__":
     main()
