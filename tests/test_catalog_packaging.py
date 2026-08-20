@@ -207,6 +207,50 @@ class WorkflowPackagingRegressionTests(unittest.TestCase):
         self.assertIn("if ! az storage blob delete", cleanup_step)
         self.assertIn("::warning::Could not delete superseded blob", cleanup_step)
 
+    def test_cleanup_uses_exact_prior_manifest_blob_without_prefix_listing(self):
+        self.assertNotIn("az storage blob list", self.process)
+        self.assertNotIn("--prefix", self.process)
+        self.assertIn(
+            'prior_catalog_url=$(printf \'%s\' "$prior_manifest"',
+            self.process,
+        )
+        self.assertIn(
+            'record_prior_blob_cleanup "$cleanup_prior_blob" "$new_blob_name"',
+            self.process,
+        )
+        self.assertIn('safe_blob_leaf "$prior_blob"', self.process)
+
+    def test_prefix_collision_names_cannot_be_cleanup_candidates(self):
+        for shorter, longer in (
+            ("battery", "battery_buddy"),
+            ("geekbench", "geekbench_ai"),
+            ("plex", "plex_media_server"),
+        ):
+            with self.subTest(shorter=shorter, longer=longer):
+                self.assertNotIn(
+                    f'--prefix "${{{shorter}}}_"',
+                    self.process,
+                )
+        self.assertNotIn("existing_versions", self.process)
+
+    def test_new_uploads_are_full_sha_content_addressed_and_immutable(self):
+        self.assertIn(
+            'new_blob_name="${app_name}_${version}_${file_hash}.pkg"',
+            self.process,
+        )
+        self.assertIn('upload_immutable_blob()', self.process)
+        self.assertIn('--overwrite false', self.process)
+        self.assertNotIn('--overwrite true', self.process)
+        self.assertIn('immutable_blob_exists "$blob_name"', self.process)
+
+    def test_same_version_rebuild_does_not_touch_prior_blob_before_marker(self):
+        marker = self.workflow.index("- name: Publish catalog state")
+        before_marker = self.workflow[:marker]
+        self.assertNotIn("az storage blob delete", before_marker)
+        self.assertIn('prior_sha=$(printf', self.process)
+        self.assertIn('prior_vendor_url=$(printf', self.process)
+        self.assertIn('"$prior_vendor_url" != "$url"', self.process)
+
     def test_strict_index_generation_runs_after_packaging(self):
         pre = self.workflow.index(
             "python .github/scripts/generate_supported_apps.py --allow-incomplete"

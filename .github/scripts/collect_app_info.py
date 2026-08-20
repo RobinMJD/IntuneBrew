@@ -19,6 +19,12 @@ ARTIFACT_KIND_OVERRIDES = {
     "visual-studio-code": ("archive", "zip"),
     "whatsapp": ("archive", "zip"),
 }
+ARTIFACT_METADATA_KEYS = {
+    "artifact_app",
+    "artifact_pkg",
+    "artifact_kind",
+    "archive_format",
+}
 
 
 def get_artifact_kind(url):
@@ -73,7 +79,7 @@ def has_installer_artifact(data):
 
 
 def sync_artifact_metadata(existing_data, app_info):
-    for key in ("artifact_app", "artifact_pkg", "artifact_kind", "archive_format"):
+    for key in ARTIFACT_METADATA_KEYS:
         if app_info.get(key):
             existing_data[key] = app_info[key]
         else:
@@ -2209,8 +2215,9 @@ def main():
                     # processed: these casks are vendor-served DMGs, so the fresh app_info
                     # carries no type key at all and a stale repackaging type is dropped.
                     for key in existing_data:
-                        if key not in ["version", "url", "sha", "previous_version", "deprecated", "deprecation_reason",
-                                       "type", "homebrew_cask", "vendor_url"]:
+                        if (key not in ["version", "url", "sha", "previous_version", "deprecated", "deprecation_reason",
+                                        "type", "homebrew_cask", "vendor_url"]
+                                and key not in ARTIFACT_METADATA_KEYS):
                             app_info[key] = existing_data[key]
                     
                     # Update version, url, sha and previous_version
@@ -2264,8 +2271,9 @@ def main():
                     # type, homebrew_cask and vendor_url are owned by the list being
                     # processed, so the fresh "pkg_in_pkg" values win over whatever is on disk.
                     for key in existing_data:
-                        if key not in ["version", "url", "previous_version", "deprecated", "deprecation_reason",
-                                       "type", "homebrew_cask", "vendor_url"]:
+                        if (key not in ["version", "url", "previous_version", "deprecated", "deprecation_reason",
+                                        "type", "homebrew_cask", "vendor_url"]
+                                and key not in ARTIFACT_METADATA_KEYS):
                             app_info[key] = existing_data[key]
                     
                     # Update version, url and previous_version
@@ -2343,8 +2351,9 @@ def main():
                     # type, homebrew_cask and vendor_url are owned by the list being
                     # processed, so the fresh "pkg" values win over whatever is on disk.
                     for key in existing_data:
-                        if key not in ["version", "url", "sha", "previous_version", "deprecated", "deprecation_reason",
-                                       "type", "homebrew_cask", "vendor_url"]:
+                        if (key not in ["version", "url", "sha", "previous_version", "deprecated", "deprecation_reason",
+                                        "type", "homebrew_cask", "vendor_url"]
+                                and key not in ARTIFACT_METADATA_KEYS):
                             app_info[key] = existing_data[key]
                     
                     # Update version, url, sha and previous_version
@@ -2400,8 +2409,9 @@ def main():
                     # type, homebrew_cask and vendor_url are owned by the list being
                     # processed, so the fresh "pkg_in_dmg" values win over whatever is on disk.
                     for key in existing_data:
-                        if key not in ["version", "url", "previous_version", "deprecated", "deprecation_reason",
-                                       "type", "homebrew_cask", "vendor_url"]:
+                        if (key not in ["version", "url", "previous_version", "deprecated", "deprecation_reason",
+                                        "type", "homebrew_cask", "vendor_url"]
+                                and key not in ARTIFACT_METADATA_KEYS):
                             app_info[key] = existing_data[key]
                     
                     # Update version, url and previous_version

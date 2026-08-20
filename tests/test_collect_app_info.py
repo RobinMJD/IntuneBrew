@@ -271,6 +271,17 @@ class CollectAppInfoTests(unittest.TestCase):
         self.assertEqual(existing["artifact_kind"], "dmg")
         self.assertNotIn("archive_format", existing)
 
+    def test_every_existing_merge_excludes_stale_artifact_metadata(self):
+        source = (
+            ROOT / ".github/scripts/collect_app_info.py"
+        ).read_text(encoding="utf-8")
+        merge_section = source.split("# Process regular Homebrew cask URLs", 1)[1]
+        merge_section = merge_section.split("# Run custom scrapers", 1)[0]
+        self.assertEqual(
+            merge_section.count("and key not in ARTIFACT_METADATA_KEYS"),
+            4,
+        )
+
     def test_installer_only_cask_is_rejected(self):
         url = "https://formulae.brew.sh/api/cask/battle-net.json"
         payload = {

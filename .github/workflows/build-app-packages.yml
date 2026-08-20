@@ -387,20 +387,76 @@ jobs:
             fi
           }
 
-          # Record cleanup candidates only. Deletion is deferred until after the
-          # immutable marker is committed and pushed, so every previously
-          # published marker keeps a reachable package throughout this run.
-          record_superseded_blobs() {
-            local cleanup_app="$1"
-            local cleanup_version="$2"
-            local cleanup_blobs="$3"
-            local blob_name=""
-            [ -n "$cleanup_blobs" ] || return 0
-            while IFS= read -r blob_name; do
-              if [ -n "$blob_name" ] && [ "$blob_name" != "${cleanup_app}_${cleanup_version}.pkg" ]; then
-                printf '%s\n' "$blob_name" >> "$WORKSPACE_DIR/superseded-blobs.txt"
-              fi
-            done <<< "$cleanup_blobs"
+          safe_blob_leaf() {
+            [[ "$1" =~ ^[A-Za-z0-9._@+=-]+\.pkg$ ]] && [[ "$1" != .* ]]
+          }
+
+          configured_blob_leaf() {
+            local blob_url="$1"
+            local leaf=""
+            case "$blob_url" in
+              "$STORAGE_BASE_URL"/*) leaf="${blob_url#"$STORAGE_BASE_URL"/}" ;;
+              *) return 1 ;;
+            esac
+            safe_blob_leaf "$leaf" || return 1
+            printf '%s\n' "$leaf"
+          }
+
+          reusable_blob_leaf() {
+            local blob_url="$1"
+            local leaf=""
+            case "$blob_url" in
+              "$STORAGE_BASE_URL"/*) leaf="${blob_url#"$STORAGE_BASE_URL"/}" ;;
+              https://*.blob.core.windows.net/"$AZURE_STORAGE_CONTAINER"/*)
+                leaf="${blob_url##*/}"
+                ;;
+              *) return 1 ;;
+            esac
+            safe_blob_leaf "$leaf" || return 1
+            printf '%s\n' "$leaf"
+          }
+
+          immutable_blob_exists() {
+            [ "$(az storage blob exists \
+              --account-name "$AZURE_STORAGE_ACCOUNT" \
+              --container-name "$AZURE_STORAGE_CONTAINER" \
+              --auth-mode login \
+              --name "$1" \
+              --query exists \
+              -o tsv)" = "true" ]
+          }
+
+          upload_immutable_blob() {
+            local package_path="$1"
+            local blob_name="$2"
+            safe_blob_leaf "$blob_name" || {
+              echo "Unsafe immutable blob name: $blob_name" >&2
+              return 1
+            }
+            if immutable_blob_exists "$blob_name"; then
+              echo "Immutable blob already exists: $blob_name"
+              return 0
+            fi
+            if az storage blob upload \
+              --account-name "$AZURE_STORAGE_ACCOUNT" \
+              --container-name "$AZURE_STORAGE_CONTAINER" \
+              --auth-mode login \
+              --file "$package_path" \
+              --name "$blob_name" \
+              --overwrite false; then
+              return 0
+            fi
+            # A concurrent run may have created the same content-addressed blob.
+            immutable_blob_exists "$blob_name"
+          }
+
+          record_prior_blob_cleanup() {
+            local prior_blob="$1"
+            local new_blob="$2"
+            [ -n "$prior_blob" ] || return 0
+            safe_blob_leaf "$prior_blob" || return 1
+            [ "$prior_blob" != "$new_blob" ] || return 0
+            printf '%s\n' "$prior_blob" >> "$WORKSPACE_DIR/superseded-blobs.txt"
             return 0
           }
 
@@ -435,6 +491,14 @@ jobs:
               echo "📄 Using existing JSON file for $app_name"
             fi
 
+            prior_manifest=$(git -C "$WORKSPACE_DIR" show "HEAD:Apps/${app_name}.json" 2>/dev/null || true)
+            prior_catalog_url=$(printf '%s' "$prior_manifest" | jq -r '.url // empty' 2>/dev/null || true)
+            prior_vendor_url=$(printf '%s' "$prior_manifest" | jq -r '.vendor_url // empty' 2>/dev/null || true)
+            prior_version=$(printf '%s' "$prior_manifest" | jq -r '.version // empty' 2>/dev/null || true)
+            prior_sha=$(printf '%s' "$prior_manifest" | jq -r '.sha // empty' 2>/dev/null || true)
+            prior_blob=$(reusable_blob_leaf "$prior_catalog_url" 2>/dev/null || true)
+            cleanup_prior_blob=$(configured_blob_leaf "$prior_catalog_url" 2>/dev/null || true)
+
             catalog_url=$(jq -r '.url // empty' "$WORKSPACE_DIR/Apps/${app_name}.json")
             vendor_url=$(jq -r '.vendor_url // empty' "$WORKSPACE_DIR/Apps/${app_name}.json")
             if [ -n "$vendor_url" ] && ! is_storage_package_url "$vendor_url"; then
@@ -455,122 +519,32 @@ jobs:
               continue
             fi
             
-            # List existing versions of this app in Azure storage
-            existing_versions=$(az storage blob list \
-              --account-name "$AZURE_STORAGE_ACCOUNT" \
-              --container-name "$AZURE_STORAGE_CONTAINER" \
-              --auth-mode login \
-              --prefix "${app_name}_" \
-              --query "[].name" \
-              -o tsv)
-            
-            # Check if the exact version already exists
             reuse_existing_blob=false
-            if echo "$existing_versions" | grep -q "^${app_name}_${version}.pkg$"; then
+            if [ "$prior_version" = "$version" ] \
+              && [[ "$prior_sha" =~ ^[0-9a-fA-F]{64}$ ]] \
+              && [ -n "$prior_blob" ] \
+              && immutable_blob_exists "$prior_blob"; then
               reuse_existing_blob=true
             fi
 
-            # The blob name carries the version only, and collect_app_info.py
-            # strips the build component of casks using "version,build" syntax.
-            # A build-only bump therefore leaves ${app_name}_${version}.pkg
-            # unchanged while the vendor artifact behind it moves, and reusing
-            # the blob would serve the superseded package forever. The two
-            # vendor artifacts are compared explicitly to catch that.
-            #
-            # Where each side comes from at this point in the run:
-            #   $url             the .url the collector refreshed with this run's
-            #                    vendor artifact, carried here through
-            #                    APPS_TO_BUILD by "Find apps needing packaging".
-            #   HEAD .vendor_url the vendor artifact the blob in Azure was built
-            #                    from, stashed by the run that built it and
-            #                    committed at the end of that run. The working
-            #                    tree copy cannot serve as that memory: the
-            #                    collector overwrites both url and vendor_url
-            #                    with the fresh artifact for every repackaged
-            #                    type, and nothing is committed before this step.
-            built_from_url=""
             if [ "$reuse_existing_blob" = true ]; then
-              # cwd moves around inside this loop, so the repo is addressed
-              # explicitly. A file that is new or unreadable in HEAD yields an
-              # empty value, which keeps the pre-existing behavior.
-              built_from_url=$(git -C "$WORKSPACE_DIR" show "HEAD:Apps/${app_name}.json" 2>/dev/null | jq -r '.vendor_url // empty' 2>/dev/null) || built_from_url=""
-
-              # Both sides must be vendor URLs. An app the collector skipped this
-              # run still carries the Azure URL in .url, and comparing that
-              # against a vendor URL would repackage every night for nothing.
               if is_storage_package_url "$url"; then
-                built_from_url=""
+                prior_vendor_url=""
               fi
 
-              if [ -n "$built_from_url" ] && [ -n "$url" ] && [ "$built_from_url" != "$url" ]; then
-                echo "Rebuilding ${app_name}_${version}.pkg: vendor artifact changed from $built_from_url to $url"
+              if [ -n "$prior_vendor_url" ] && [ -n "$url" ] && [ "$prior_vendor_url" != "$url" ]; then
+                echo "Rebuilding $app_name: vendor artifact changed from $prior_vendor_url to $url"
                 reuse_existing_blob=false
               fi
             fi
 
             if [ "$reuse_existing_blob" = true ]; then
-              echo "Package ${app_name}_${version}.pkg already exists in Azure storage."
-              
-              # Check if SHA already exists in JSON
-              existing_sha=$(jq -r '.sha // empty' "$WORKSPACE_DIR/Apps/${app_name}.json")
-              
-              if [ -n "$existing_sha" ]; then
-                echo "✅ SHA already exists in JSON file: $existing_sha"
-                # Update only URL and version without downloading
-                azure_url="${STORAGE_BASE_URL}/${app_name}_${version}.pkg"
-                current_version=$(jq -r '.version' "$WORKSPACE_DIR/Apps/${app_name}.json")
-                if jq --arg url "$azure_url" --arg version "$version" --arg prev_version "$current_version" --arg filename "${app_name}_${version}.pkg" '(if has("vendor_url") then .vendor_url else .url end) as $vurl | .url = $url | .vendor_url = $vurl | .version = $version | .previous_version = $prev_version | .fileName = $filename | del(.packaging_pending)' "$WORKSPACE_DIR/Apps/${app_name}.json" > temp.json && mv temp.json "$WORKSPACE_DIR/Apps/${app_name}.json"; then
-                  echo "✅ JSON file updated (SHA preserved)"
-                else
-                  echo "Failed to update JSON file for $app_name, it keeps its previous contents"
-                  FAILED_APPS+=("$app_name")
-                  ERROR_LOG+=("$app_name: Failed to update catalog JSON for existing package")
-                fi
-              else
-                echo "⚠️ SHA missing in JSON file, downloading to calculate..."
-                # Download the file to calculate SHA256
-                temp_pkg="${app_name}_${version}_temp.pkg"
-                # A failed download must not abort the step: the -f test below is
-                # what decides, and it owns the "could not download" arm.
-                az storage blob download \
-                  --account-name "$AZURE_STORAGE_ACCOUNT" \
-                  --container-name "$AZURE_STORAGE_CONTAINER" \
-                  --auth-mode login \
-                  --name "${app_name}_${version}.pkg" \
-                  --file "$temp_pkg" \
-                  --no-progress || true
-                
-                if [ -f "$temp_pkg" ]; then
-                  # Calculate SHA256 hash
-                  echo "🔐 Calculating SHA256 hash..."
-                  file_hash=$(shasum -a 256 "$temp_pkg" | awk '{print $1}')
-                  echo "📝 SHA256: $file_hash"
-                  rm -f "$temp_pkg"
-                  
-                  # Update JSON with SHA
-                  azure_url="${STORAGE_BASE_URL}/${app_name}_${version}.pkg"
-                  current_version=$(jq -r '.version' "$WORKSPACE_DIR/Apps/${app_name}.json")
-                  if jq --arg url "$azure_url" --arg version "$version" --arg prev_version "$current_version" --arg sha "$file_hash" --arg filename "${app_name}_${version}.pkg" '(if has("vendor_url") then .vendor_url else .url end) as $vurl | .url = $url | .vendor_url = $vurl | .version = $version | .previous_version = $prev_version | .sha = $sha | .fileName = $filename | del(.packaging_pending)' "$WORKSPACE_DIR/Apps/${app_name}.json" > temp.json && mv temp.json "$WORKSPACE_DIR/Apps/${app_name}.json"; then
-                    echo "✅ JSON file updated with SHA256"
-                  else
-                    echo "Failed to update JSON file for $app_name, it keeps its previous contents"
-                    FAILED_APPS+=("$app_name")
-                    ERROR_LOG+=("$app_name: Failed to add SHA to catalog JSON")
-                  fi
-                else
-                  echo "❌ Could not download file to calculate SHA256"
-                  azure_url="${STORAGE_BASE_URL}/${app_name}_${version}.pkg"
-                  current_version=$(jq -r '.version' "$WORKSPACE_DIR/Apps/${app_name}.json")
-                  if jq --arg url "$azure_url" --arg version "$version" --arg prev_version "$current_version" --arg filename "${app_name}_${version}.pkg" '(if has("vendor_url") then .vendor_url else .url end) as $vurl | .url = $url | .vendor_url = $vurl | .version = $version | .previous_version = $prev_version | .fileName = $filename' "$WORKSPACE_DIR/Apps/${app_name}.json" > temp.json && mv temp.json "$WORKSPACE_DIR/Apps/${app_name}.json"; then
-                    echo "⚠️ JSON file updated without SHA256"
-                  else
-                    echo "Failed to update JSON file for $app_name, it keeps its previous contents"
-                  fi
-                  FAILED_APPS+=("$app_name")
-                  ERROR_LOG+=("$app_name: Could not verify SHA for existing package")
-                fi
+              echo "Reusing exact manifest blob: $prior_blob"
+              azure_url="${STORAGE_BASE_URL}/${prior_blob}"
+              if ! jq --arg url "$azure_url" --arg version "$version" --arg prev_version "$prior_version" --arg sha "$prior_sha" --arg filename "$prior_blob" '(if has("vendor_url") then .vendor_url else .url end) as $vurl | .url = $url | .vendor_url = $vurl | .version = $version | .previous_version = $prev_version | .sha = $sha | .fileName = $filename | del(.packaging_pending)' "$WORKSPACE_DIR/Apps/${app_name}.json" > temp.json || ! mv temp.json "$WORKSPACE_DIR/Apps/${app_name}.json"; then
+                FAILED_APPS+=("$app_name")
+                ERROR_LOG+=("$app_name: Failed to update catalog JSON for exact existing package")
               fi
-              
               continue
             fi
             
@@ -692,25 +666,16 @@ jobs:
                   echo "🔐 Calculating SHA256 hash..."
                   file_hash=$(shasum -a 256 "${app_name}_${version}.pkg" | awk '{print $1}')
                   echo "📝 SHA256: $file_hash"
+                  new_blob_name="${app_name}_${version}_${file_hash}.pkg"
+                  azure_url="${STORAGE_BASE_URL}/${new_blob_name}"
 
-                  # Upload to Azure
-                  echo "☁️ Uploading to Azure Blob Storage..."
-                  if az storage blob upload \
-                    --account-name "$AZURE_STORAGE_ACCOUNT" \
-                    --container-name "$AZURE_STORAGE_CONTAINER" \
-                    --auth-mode login \
-                    --file "${app_name}_${version}.pkg" \
-                    --name "${app_name}_${version}.pkg" \
-                    --overwrite true; then
+                  if upload_immutable_blob "${app_name}_${version}.pkg" "$new_blob_name"; then
                     echo "✅ Upload successful"
-
-                    # Only reached with the new blob confirmed in the container.
-                    record_superseded_blobs "$app_name" "$version" "$existing_versions"
+                    record_prior_blob_cleanup "$cleanup_prior_blob" "$new_blob_name"
 
                     # Update JSON with Azure URL and SHA256
                     echo "📝 Updating JSON file with new Azure URL and SHA256..."
-                    azure_url="${STORAGE_BASE_URL}/${app_name}_${version}.pkg"
-                    if jq --arg url "$azure_url" --arg filename "${app_name}_${version}.pkg" --arg sha "$file_hash" --arg bundleid "$extracted_bundle_id" '(if has("vendor_url") then .vendor_url else .url end) as $vurl | .url = $url | .vendor_url = $vurl | .fileName = $filename | .sha = $sha | (if $bundleid == "" then . else .bundleId = $bundleid end) | del(.packaging_pending)' "$WORKSPACE_DIR/Apps/${app_name}.json" > temp.json && mv temp.json "$WORKSPACE_DIR/Apps/${app_name}.json"; then
+                    if jq --arg url "$azure_url" --arg filename "$new_blob_name" --arg sha "$file_hash" --arg bundleid "$extracted_bundle_id" '(if has("vendor_url") then .vendor_url else .url end) as $vurl | .url = $url | .vendor_url = $vurl | .fileName = $filename | .sha = $sha | (if $bundleid == "" then . else .bundleId = $bundleid end) | del(.packaging_pending)' "$WORKSPACE_DIR/Apps/${app_name}.json" > temp.json && mv temp.json "$WORKSPACE_DIR/Apps/${app_name}.json"; then
                       echo "✅ JSON file updated successfully"
                       echo "🔗 New URL: $azure_url"
                     else
@@ -726,7 +691,7 @@ jobs:
                     rm -f "${download_path}.pkg"
                     rm -rf "$temp_dir"
                     FAILED_APPS+=("$app_name")
-                    ERROR_LOG+=("$app_name: Azure upload failed for ${app_name}_${version}.pkg")
+                    ERROR_LOG+=("$app_name: Immutable Azure upload failed for $new_blob_name")
                     continue
                   fi
                 else
@@ -821,25 +786,16 @@ jobs:
                 echo "🔐 Calculating SHA256 hash..."
                 file_hash=$(shasum -a 256 "${app_name}_${version}.pkg" | awk '{print $1}')
                 echo "📝 SHA256: $file_hash"
+                new_blob_name="${app_name}_${version}_${file_hash}.pkg"
+                azure_url="${STORAGE_BASE_URL}/${new_blob_name}"
 
-                # Upload to Azure
-                echo "☁️ Uploading to Azure Blob Storage..."
-                if az storage blob upload \
-                  --account-name "$AZURE_STORAGE_ACCOUNT" \
-                  --container-name "$AZURE_STORAGE_CONTAINER" \
-                  --auth-mode login \
-                  --file "${app_name}_${version}.pkg" \
-                  --name "${app_name}_${version}.pkg" \
-                  --overwrite true; then
+                if upload_immutable_blob "${app_name}_${version}.pkg" "$new_blob_name"; then
                   echo "✅ Upload successful"
-
-                  # Only reached with the new blob confirmed in the container.
-                  record_superseded_blobs "$app_name" "$version" "$existing_versions"
+                  record_prior_blob_cleanup "$cleanup_prior_blob" "$new_blob_name"
 
                   # Update JSON with Azure URL and SHA256
                   echo "📝 Updating JSON file with new Azure URL and SHA256..."
-                  azure_url="${STORAGE_BASE_URL}/${app_name}_${version}.pkg"
-                  if jq --arg url "$azure_url" --arg filename "${app_name}_${version}.pkg" --arg sha "$file_hash" --arg bundleid "$extracted_bundle_id" '(if has("vendor_url") then .vendor_url else .url end) as $vurl | .url = $url | .vendor_url = $vurl | .fileName = $filename | .sha = $sha | (if $bundleid == "" then . else .bundleId = $bundleid end) | del(.packaging_pending)' "$WORKSPACE_DIR/Apps/${app_name}.json" > temp.json && mv temp.json "$WORKSPACE_DIR/Apps/${app_name}.json"; then
+                  if jq --arg url "$azure_url" --arg filename "$new_blob_name" --arg sha "$file_hash" --arg bundleid "$extracted_bundle_id" '(if has("vendor_url") then .vendor_url else .url end) as $vurl | .url = $url | .vendor_url = $vurl | .fileName = $filename | .sha = $sha | (if $bundleid == "" then . else .bundleId = $bundleid end) | del(.packaging_pending)' "$WORKSPACE_DIR/Apps/${app_name}.json" > temp.json && mv temp.json "$WORKSPACE_DIR/Apps/${app_name}.json"; then
                     echo "✅ JSON file updated successfully"
                     echo "🔗 New URL: $azure_url"
                   else
@@ -848,7 +804,7 @@ jobs:
                   fi
                 else
                   echo "❌ Failed to upload to Azure"
-                  pkg_in_dmg_error="Azure upload failed for ${app_name}_${version}.pkg"
+                  pkg_in_dmg_error="Immutable Azure upload failed for $new_blob_name"
                 fi
               else
                 echo "❌ No PKG file found in DMG for $app_name"
@@ -1018,27 +974,16 @@ jobs:
                   echo "🔐 Calculating SHA256 hash..."
                   file_hash=$(shasum -a 256 "${app_name}_${version}.pkg" | awk '{print $1}')
                   echo "📝 SHA256: $file_hash"
+                  new_blob_name="${app_name}_${version}_${file_hash}.pkg"
+                  azure_url="${STORAGE_BASE_URL}/${new_blob_name}"
 
-                  # Upload to Azure
-                  echo "☁️ Uploading to Azure Blob Storage..."
-                  if az storage blob upload \
-                    --account-name "$AZURE_STORAGE_ACCOUNT" \
-                    --container-name "$AZURE_STORAGE_CONTAINER" \
-                    --auth-mode login \
-                    --file "${app_name}_${version}.pkg" \
-                    --name "${app_name}_${version}.pkg" \
-                    --overwrite true; then
+                  if upload_immutable_blob "${app_name}_${version}.pkg" "$new_blob_name"; then
                     echo "✅ Upload successful"
-
-                    # Only reached with the new blob confirmed in the container.
-                    # $existing_versions is the same loop-local listing the .app
-                    # path uses; this fallback runs in the same iteration.
-                    record_superseded_blobs "$app_name" "$version" "$existing_versions"
+                    record_prior_blob_cleanup "$cleanup_prior_blob" "$new_blob_name"
 
                     # Update JSON with Azure URL and SHA256
                     echo "📝 Updating JSON file with new Azure URL and SHA256..."
-                    azure_url="${STORAGE_BASE_URL}/${app_name}_${version}.pkg"
-                    if jq --arg url "$azure_url" --arg filename "${app_name}_${version}.pkg" --arg sha "$file_hash" --arg bundleid "$extracted_bundle_id" '(if has("vendor_url") then .vendor_url else .url end) as $vurl | .url = $url | .vendor_url = $vurl | .fileName = $filename | .sha = $sha | (if $bundleid == "" then . else .bundleId = $bundleid end) | del(.packaging_pending)' "$WORKSPACE_DIR/Apps/${app_name}.json" > temp.json && mv temp.json "$WORKSPACE_DIR/Apps/${app_name}.json"; then
+                    if jq --arg url "$azure_url" --arg filename "$new_blob_name" --arg sha "$file_hash" --arg bundleid "$extracted_bundle_id" '(if has("vendor_url") then .vendor_url else .url end) as $vurl | .url = $url | .vendor_url = $vurl | .fileName = $filename | .sha = $sha | (if $bundleid == "" then . else .bundleId = $bundleid end) | del(.packaging_pending)' "$WORKSPACE_DIR/Apps/${app_name}.json" > temp.json && mv temp.json "$WORKSPACE_DIR/Apps/${app_name}.json"; then
                       echo "✅ JSON file updated successfully"
                       echo "🔗 New URL: $azure_url"
                     else
@@ -1054,7 +999,7 @@ jobs:
                     cd "$WORKSPACE_DIR"
                     rm -rf "${app_name}_extracted"
                     FAILED_APPS+=("$app_name")
-                    ERROR_LOG+=("$app_name: Azure upload failed for ${app_name}_${version}.pkg")
+                    ERROR_LOG+=("$app_name: Immutable Azure upload failed for $new_blob_name")
                     continue
                   fi
 
@@ -1096,38 +1041,33 @@ jobs:
               echo "🔐 Calculating SHA256 hash..."
               file_hash=$(shasum -a 256 "${app_name}_${version}.pkg" | awk '{print $1}')
               echo "📝 SHA256: $file_hash"
+              new_blob_name="${app_name}_${version}_${file_hash}.pkg"
+              azure_url="${STORAGE_BASE_URL}/${new_blob_name}"
 
               # Upload to Azure with version in filename. The old versions are
               # only deleted and the JSON only rewritten after a confirmed
               # upload, otherwise a transient Azure failure would remove the
               # last working package and leave the catalog pointing at nothing.
               echo "Uploading $app_name version $version to Azure Blob Storage..."
-              if ! az storage blob upload \
-                --account-name "$AZURE_STORAGE_ACCOUNT" \
-                --container-name "$AZURE_STORAGE_CONTAINER" \
-                --auth-mode login \
-                --file "${app_name}_${version}.pkg" \
-                --name "${app_name}_${version}.pkg" \
-                --overwrite true; then
-                echo "❌ Failed to upload ${app_name}_${version}.pkg to Azure"
+              if ! upload_immutable_blob "${app_name}_${version}.pkg" "$new_blob_name"; then
+                echo "❌ Failed to upload $new_blob_name to Azure"
                 sudo rm -rf "${app_name}_extracted"
                 rm -f "${app_name}_${version}.pkg"
                 FAILED_APPS+=("$app_name")
-                ERROR_LOG+=("$app_name: Azure upload failed for ${app_name}_${version}.pkg")
+                ERROR_LOG+=("$app_name: Immutable Azure upload failed for $new_blob_name")
                 continue
               fi
 
               # Defer deletion until the catalog marker has been published.
-              record_superseded_blobs "$app_name" "$version" "$existing_versions"
+              record_prior_blob_cleanup "$cleanup_prior_blob" "$new_blob_name"
 
               # Update the JSON file with Azure URL, filename and SHA256
-              azure_url="${STORAGE_BASE_URL}/${app_name}_${version}.pkg"
               # The package is already uploaded at this point, so a failed
               # rewrite must leave the JSON alone and let the loop continue
               # rather than take the remaining apps down with it.
               # Braces keep the negation on the whole list: "!" alone would bind
               # to jq and turn mv into the failure branch.
-              if ! { jq --arg url "$azure_url" --arg filename "${app_name}_${version}.pkg" --arg sha "$file_hash" --arg bundleid "$extracted_bundle_id" '(if has("vendor_url") then .vendor_url else .url end) as $vurl | .url = $url | .vendor_url = $vurl | .fileName = $filename | .sha = $sha | (if $bundleid == "" then . else .bundleId = $bundleid end) | del(.packaging_pending)' "$WORKSPACE_DIR/Apps/${app_name}.json" > temp.json && mv temp.json "$WORKSPACE_DIR/Apps/${app_name}.json"; }; then
+              if ! { jq --arg url "$azure_url" --arg filename "$new_blob_name" --arg sha "$file_hash" --arg bundleid "$extracted_bundle_id" '(if has("vendor_url") then .vendor_url else .url end) as $vurl | .url = $url | .vendor_url = $vurl | .fileName = $filename | .sha = $sha | (if $bundleid == "" then . else .bundleId = $bundleid end) | del(.packaging_pending)' "$WORKSPACE_DIR/Apps/${app_name}.json" > temp.json && mv temp.json "$WORKSPACE_DIR/Apps/${app_name}.json"; }; then
                 echo "❌ Failed to update JSON file"
                 sudo rm -rf "${app_name}_extracted"
                 FAILED_APPS+=("$app_name")
@@ -1500,6 +1440,10 @@ jobs:
 
           sort -u superseded-blobs.txt | while IFS= read -r blob_name; do
             [ -n "$blob_name" ] || continue
+            if ! [[ "$blob_name" =~ ^[A-Za-z0-9._@+=-]+\.pkg$ ]] || [[ "$blob_name" = .* ]]; then
+              echo "::warning::Skipping unsafe cleanup candidate: $blob_name"
+              continue
+            fi
             echo "Deleting superseded package blob: $blob_name"
             if ! az storage blob delete \
               --account-name "$AZURE_STORAGE_ACCOUNT" \

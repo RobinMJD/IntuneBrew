@@ -322,7 +322,7 @@ class CatalogStorageWorkflowTests(unittest.TestCase):
         )
         self.assertIn('"$STORAGE_BASE_URL"/*)', self.workflow)
         self.assertIn(
-            'azure_url="${STORAGE_BASE_URL}/${app_name}_${version}.pkg"',
+            'azure_url="${STORAGE_BASE_URL}/${new_blob_name}"',
             self.workflow,
         )
 
