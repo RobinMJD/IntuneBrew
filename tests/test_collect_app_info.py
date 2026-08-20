@@ -454,7 +454,10 @@ class CollectAppInfoTests(unittest.TestCase):
                 )
 
     def test_metadata_sync_cannot_downgrade_stored_bundle_authority(self):
-        existing = {"bundleId": "com.figma.Desktop"}
+        existing = {
+            "bundleId": "com.figma.Desktop",
+            "bundleId_source": "package",
+        }
         fresh = {
             "bundleId": "com.figma.agent",
             "bundleId_source": "heuristic",
@@ -463,7 +466,23 @@ class CollectAppInfoTests(unittest.TestCase):
         collect_app_info.sync_artifact_metadata(existing, fresh)
         collect_app_info.merge_fresh_bundle_id(existing, fresh)
         self.assertEqual(existing["bundleId"], "com.figma.Desktop")
-        self.assertEqual(existing["bundleId_source"], "legacy")
+        self.assertEqual(existing["bundleId_source"], "package")
+
+    def test_generic_metadata_sync_never_touches_bundle_provenance(self):
+        existing = {
+            "bundleId": "com.example.app",
+            "bundleId_source": "stored",
+        }
+        collect_app_info.sync_artifact_metadata(
+            existing,
+            {
+                "bundleId": "com.example.helper",
+                "bundleId_source": "heuristic",
+                "artifact_kind": "dmg",
+            },
+        )
+        self.assertEqual(existing["bundleId"], "com.example.app")
+        self.assertEqual(existing["bundleId_source"], "stored")
 
     def test_wildcard_bundle_ids_are_never_concrete(self):
         self.assertFalse(collect_app_info.is_concrete_bundle_id("com.example.*"))
@@ -551,6 +570,7 @@ class CollectAppInfoTests(unittest.TestCase):
             4,
         )
         self.assertGreaterEqual(merge_section.count('"bundleId"'), 4)
+        self.assertEqual(merge_section.count('"bundleId_source"'), 4)
 
     def test_installer_only_cask_is_rejected(self):
         url = "https://formulae.brew.sh/api/cask/battle-net.json"

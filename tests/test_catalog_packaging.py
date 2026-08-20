@@ -509,17 +509,18 @@ class WorkflowPackagingRegressionTests(unittest.TestCase):
         self.assertIn('source_path="$app_temp_dir/source.pkg"', self.process)
 
     def test_package_workspace_is_bounded_and_cleaned(self):
-        self.assertIn('app_temp_dir=$(mktemp -d', self.process)
+        self.assertIn("WORKSPACE_CAPACITY=10g", self.process)
+        self.assertIn("hdiutil create", self.process)
+        self.assertIn("hdiutil attach", self.process)
+        self.assertIn("hdiutil detach", self.process)
+        self.assertIn("trap destroy_app_workspace EXIT", self.process)
         self.assertIn('package_path="$app_temp_dir/output.pkg"', self.process)
         self.assertNotIn('$HOME/Desktop/${app_name}', self.process)
         self.assertNotIn('${app_name}_extracted', self.process)
         self.assertNotIn('cd "$HOME/Desktop"', self.process)
-        self.assertIn('rm -rf "$app_temp_dir"', self.process)
-        self.assertIn('[ -z "${app_temp_dir:-}" ] || rm -rf', self.process)
-        self.assertGreaterEqual(
-            self.process.count('app_temp_dir=""'),
-            3,
-        )
+        self.assertIn('[ -z "${app_mount_dir:-}" ] || rm -rf', self.process)
+        self.assertIn('[ -z "${app_sparse_image:-}" ] || rm -f', self.process)
+        self.assertGreaterEqual(self.process.count("destroy_app_workspace"), 4)
 
     def test_resource_guards_bound_downloads_archives_and_disk(self):
         self.assertIn("timeout-minutes: 180", self.workflow)
@@ -553,11 +554,46 @@ class WorkflowPackagingRegressionTests(unittest.TestCase):
             tar_path = root / "payload.tar.gz"
             with tarfile.open(tar_path, "w:gz") as archive:
                 archive.add(payload, arcname="payload")
-            self.assertEqual(archive_quota.archive_totals(zip_path, "zip"), (4096, 1))
             self.assertEqual(
-                archive_quota.archive_totals(tar_path, "tar.gz"),
+                archive_quota.archive_totals(
+                    zip_path,
+                    "zip",
+                    8192,
+                    10,
+                ),
                 (4096, 1),
             )
+            self.assertEqual(
+                archive_quota.archive_totals(
+                    tar_path,
+                    "tar.gz",
+                    8192,
+                    10,
+                ),
+                (4096, 1),
+            )
+
+    def test_archive_quota_aborts_on_member_limit(self):
+        spec = importlib.util.spec_from_file_location(
+            "archive_quota",
+            ROOT / ".github/scripts/archive_quota.py",
+        )
+        archive_quota = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(archive_quota)
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "many.tar.gz"
+            payload = Path(directory) / "item"
+            payload.write_bytes(b"x")
+            with tarfile.open(path, "w:gz") as archive:
+                for index in range(5):
+                    archive.add(payload, arcname=f"item-{index}")
+            with self.assertRaises(archive_quota.QuotaExceeded):
+                archive_quota.archive_totals(
+                    path,
+                    "tar.gz",
+                    1024,
+                    2,
+                )
 
     def test_same_version_rebuild_does_not_touch_prior_blob_before_marker(self):
         self.assertNotIn("az storage blob delete", self.workflow)
@@ -568,8 +604,11 @@ class WorkflowPackagingRegressionTests(unittest.TestCase):
     def test_cross_account_reuse_requires_downloaded_sha_match(self):
         self.assertIn("prior_blob_sha_matches()", self.process)
         self.assertIn("verify_blob_sha \"$blob_name\"", self.process)
-        self.assertIn("az storage blob download", self.process)
-        self.assertIn('actual_sha=$(shasum -a 256', self.process)
+        self.assertIn("az account get-access-token", self.process)
+        self.assertIn("Authorization: Bearer", self.process)
+        self.assertNotIn("az storage blob download", self.process)
+        self.assertIn('actual_sha=$(curl -fLsS', self.process)
+        self.assertIn('| shasum -a 256', self.process)
         self.assertIn('[ "$actual_sha" = "$expected_lower" ]', self.process)
         self.assertIn(
             'prior_blob_sha_matches "$prior_is_configured" "$prior_blob" "$prior_sha"',

@@ -4,18 +4,78 @@
 import argparse
 import gzip
 import tarfile
-import zipfile
+import struct
 
 
-def archive_totals(path, archive_format):
+class QuotaExceeded(ValueError):
+    pass
+
+
+def _add(total, members, size, max_bytes, max_members):
+    total += size
+    members += 1
+    if total > max_bytes or members > max_members:
+        raise QuotaExceeded("archive exceeds quota")
+    return total, members
+
+
+def zip_totals(path, max_bytes, max_members):
+    total = members = 0
+    with open(path, "rb") as source:
+        while signature := source.read(4):
+            if signature == b"PK\x03\x04":
+                header = source.read(26)
+                if len(header) != 26:
+                    raise ValueError("truncated ZIP header")
+                (
+                    _version,
+                    flags,
+                    _compression,
+                    _time,
+                    _date,
+                    _crc,
+                    compressed,
+                    uncompressed,
+                    name_length,
+                    extra_length,
+                ) = struct.unpack("<HHHHHIIIHH", header)
+                if flags & 0x08:
+                    raise ValueError("ZIP data descriptors require central-directory scan")
+                total, members = _add(
+                    total,
+                    members,
+                    uncompressed,
+                    max_bytes,
+                    max_members,
+                )
+                source.seek(name_length + extra_length + compressed, 1)
+            elif signature in {b"PK\x01\x02", b"PK\x05\x06", b"PK\x06\x06"}:
+                break
+            else:
+                raise ValueError("invalid ZIP signature")
+    return total, members
+
+
+def archive_totals(path, archive_format, max_bytes, max_members):
     if archive_format == "zip":
-        with zipfile.ZipFile(path) as archive:
-            items = archive.infolist()
-            return sum(item.file_size for item in items), len(items)
+        return zip_totals(path, max_bytes, max_members)
     if archive_format in {"tar.gz", "tar.xz", "tar.bz2"}:
-        with tarfile.open(path) as archive:
-            items = archive.getmembers()
-            return sum(item.size for item in items), len(items)
+        total = members = 0
+        mode = {
+            "tar.gz": "r|gz",
+            "tar.xz": "r|xz",
+            "tar.bz2": "r|bz2",
+        }[archive_format]
+        with tarfile.open(path, mode=mode) as archive:
+            for item in archive:
+                total, members = _add(
+                    total,
+                    members,
+                    item.size,
+                    max_bytes,
+                    max_members,
+                )
+        return total, members
     raise ValueError(f"unsupported archive format: {archive_format}")
 
 
@@ -43,13 +103,16 @@ def main():
     args = parser.parse_args()
     try:
         if args.command == "archive":
-            size, members = archive_totals(args.file, args.format)
-            if size > args.max_bytes or members > args.max_members:
-                raise SystemExit(1)
+            size, members = archive_totals(
+                args.file,
+                args.format,
+                args.max_bytes,
+                args.max_members,
+            )
             print(size, members)
         elif not gzip_within_limit(args.file, args.max_bytes):
             raise SystemExit(1)
-    except (OSError, ValueError, tarfile.TarError, zipfile.BadZipFile) as error:
+    except (OSError, ValueError, tarfile.TarError) as error:
         raise SystemExit(f"archive quota probe failed: {error}") from error
 
 

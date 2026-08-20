@@ -30,7 +30,6 @@ ARTIFACT_METADATA_KEYS = {
     "source_version",
     "source_sha256",
     "source_sha256_provenance",
-    "bundleId_source",
 }
 INSTALLER_ONLY_DEPRECATION_REASON = (
     "Bootstrap installer only; no directly deployable app or package artifact"
@@ -2378,7 +2377,7 @@ def main():
                     # carries no type key at all and a stale repackaging type is dropped.
                     for key in existing_data:
                         if (key not in ["version", "url", "sha", "previous_version", "deprecated", "deprecation_reason",
-                                        "type", "homebrew_cask", "vendor_url", "bundleId"]
+                                        "type", "homebrew_cask", "vendor_url", "bundleId", "bundleId_source"]
                                 and key not in ARTIFACT_METADATA_KEYS):
                             app_info[key] = existing_data[key]
                     
@@ -2437,7 +2436,7 @@ def main():
                     # processed, so the fresh "pkg_in_pkg" values win over whatever is on disk.
                     for key in existing_data:
                         if (key not in ["version", "url", "previous_version", "deprecated", "deprecation_reason",
-                                        "type", "homebrew_cask", "vendor_url", "bundleId"]
+                                        "type", "homebrew_cask", "vendor_url", "bundleId", "bundleId_source"]
                                 and key not in ARTIFACT_METADATA_KEYS):
                             app_info[key] = existing_data[key]
                     
@@ -2519,7 +2518,7 @@ def main():
                     # processed, so the fresh "pkg" values win over whatever is on disk.
                     for key in existing_data:
                         if (key not in ["version", "url", "sha", "previous_version", "deprecated", "deprecation_reason",
-                                        "type", "homebrew_cask", "vendor_url", "bundleId"]
+                                        "type", "homebrew_cask", "vendor_url", "bundleId", "bundleId_source"]
                                 and key not in ARTIFACT_METADATA_KEYS):
                             app_info[key] = existing_data[key]
                     
@@ -2580,7 +2579,7 @@ def main():
                     # processed, so the fresh "pkg_in_dmg" values win over whatever is on disk.
                     for key in existing_data:
                         if (key not in ["version", "url", "previous_version", "deprecated", "deprecation_reason",
-                                        "type", "homebrew_cask", "vendor_url", "bundleId"]
+                                        "type", "homebrew_cask", "vendor_url", "bundleId", "bundleId_source"]
                                 and key not in ARTIFACT_METADATA_KEYS):
                             app_info[key] = existing_data[key]
                     

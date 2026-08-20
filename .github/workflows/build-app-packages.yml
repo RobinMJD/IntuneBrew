@@ -519,6 +519,7 @@ jobs:
           MAX_EXPANDED_BYTES=6442450944
           MAX_ARCHIVE_MEMBERS=100000
           MIN_FREE_KB=2097152
+          WORKSPACE_CAPACITY=10g
 
           require_free_disk() {
             local path="$1"
@@ -526,6 +527,33 @@ jobs:
             free_kb=$(df -Pk "$path" | awk 'NR==2 {print $4}')
             [ "${free_kb:-0}" -ge "$MIN_FREE_KB" ]
           }
+
+          destroy_app_workspace() {
+            if [ -n "${app_mount_dir:-}" ] && mount | grep -Fq " on $app_mount_dir "; then
+              hdiutil detach "$app_mount_dir" -force >/dev/null 2>&1 || true
+            fi
+            [ -z "${app_mount_dir:-}" ] || rm -rf "$app_mount_dir"
+            [ -z "${app_sparse_image:-}" ] || rm -f "$app_sparse_image"
+            app_temp_dir=""
+            app_mount_dir=""
+            app_sparse_image=""
+          }
+
+          create_app_workspace() {
+            local safe_app=""
+            require_free_disk "${TMPDIR:-/tmp}" || return 1
+            safe_app=$(printf '%s' "$app_name" | tr -cd 'A-Za-z0-9._-')
+            app_sparse_image=$(mktemp -u "${TMPDIR:-/tmp}/intunebrew-${safe_app}.XXXXXX.sparseimage")
+            app_mount_dir=$(mktemp -d "${TMPDIR:-/tmp}/intunebrew-mount-${safe_app}.XXXXXX")
+            hdiutil create -quiet -size "$WORKSPACE_CAPACITY" -fs APFS \
+              -type SPARSE -volname "IntuneBrew-$safe_app" "$app_sparse_image" \
+              || { destroy_app_workspace; return 1; }
+            hdiutil attach -quiet "$app_sparse_image" -mountpoint "$app_mount_dir" \
+              -nobrowse || { destroy_app_workspace; return 1; }
+            app_temp_dir="$app_mount_dir"
+          }
+
+          trap destroy_app_workspace EXIT
 
           download_source() {
             local destination="$1"
@@ -623,24 +651,21 @@ jobs:
           verify_blob_sha() {
             local blob_name="$1"
             local expected_sha="$2"
-            local temp_pkg=""
             local actual_sha=""
             local expected_lower=""
+            local token=""
             [[ "$expected_sha" =~ ^[0-9a-fA-F]{64}$ ]] || return 1
             expected_lower=$(printf '%s' "$expected_sha" | tr 'A-F' 'a-f')
-            temp_pkg=$(mktemp "${TMPDIR:-/tmp}/intunebrew-verify.XXXXXX.pkg") || return 1
-            if ! az storage blob download \
-              --account-name "$AZURE_STORAGE_ACCOUNT" \
-              --container-name "$AZURE_STORAGE_CONTAINER" \
-              --auth-mode login \
-              --name "$blob_name" \
-              --file "$temp_pkg" \
-              --no-progress >/dev/null; then
-              rm -f "$temp_pkg"
-              return 1
-            fi
-            actual_sha=$(shasum -a 256 "$temp_pkg" | awk '{print $1}')
-            rm -f "$temp_pkg"
+            token=$(az account get-access-token \
+              --resource https://storage.azure.com/ \
+              --query accessToken -o tsv) || return 1
+            actual_sha=$(curl -fLsS --connect-timeout 30 --max-time 300 \
+              --retry 3 --retry-max-time 300 \
+              --max-filesize "$MAX_SOURCE_BYTES" \
+              -H "Authorization: Bearer $token" \
+              -H "x-ms-version: 2023-11-03" \
+              "$STORAGE_BASE_URL/$blob_name" \
+              | shasum -a 256 | awk '{print $1}') || return 1
             [ "$actual_sha" = "$expected_lower" ]
           }
 
@@ -696,8 +721,12 @@ jobs:
           
           for app_info in $APPS_TO_BUILD; do
             IFS=':' read -r app_name ignored_url <<< "$app_info"
-            [ -z "${app_temp_dir:-}" ] || rm -rf "$app_temp_dir"
-            app_temp_dir=$(mktemp -d "${TMPDIR:-/tmp}/intunebrew-${app_name}.XXXXXX")
+            destroy_app_workspace
+            if ! create_app_workspace; then
+              FAILED_APPS+=("$app_name")
+              ERROR_LOG+=("$app_name: Could not create bounded APFS workspace")
+              continue
+            fi
             download_path="$app_temp_dir/source"
             package_path="$app_temp_dir/output.pkg"
             
@@ -791,8 +820,7 @@ jobs:
                 FAILED_APPS+=("$app_name")
                 ERROR_LOG+=("$app_name: Failed to update catalog JSON for exact existing package")
               fi
-              rm -rf "$app_temp_dir"
-              app_temp_dir=""
+              destroy_app_workspace
               continue
             fi
             
@@ -1367,8 +1395,7 @@ jobs:
                   rm -rf "$extract_dir"
                   SUCCESSFUL_APPS+=("$app_name")
                   echo "✅ Completed processing $app_name"
-                  rm -rf "$app_temp_dir"
-                  app_temp_dir=""
+                  destroy_app_workspace
                   continue
                 else
                   echo "❌ No .app or .pkg file found for $app_name"
@@ -1442,12 +1469,11 @@ jobs:
             fi
 
             SUCCESSFUL_APPS+=("$app_name")
-            rm -rf "$app_temp_dir"
-            app_temp_dir=""
+            destroy_app_workspace
             echo "✅ Completed processing $app_name"
             echo "------------------------------------------------"
           done
-          [ -z "${app_temp_dir:-}" ] || rm -rf "$app_temp_dir"
+          destroy_app_workspace
 
           # Never publish the collector's vendor URL or source-archive SHA for a
           # package that failed. Keep the last committed manifest until a build
