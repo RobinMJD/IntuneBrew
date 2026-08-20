@@ -12,5 +12,8 @@
   "sha": "5db65098e8b871486ea4aa976ab7590a47274d602502922e6fe1260a60f4a07b",
   "category": "Security",
   "publisher": "Twingate, Inc.",
-  "previous_version": "2026.182.26057"
+  "previous_version": "2026.182.26057",
+  "source_version": "2026.182.26057",
+  "source_sha256": "de64c52f5a7b52c81ca0cffd6e37f563d9d17cff497b88246835df6807e1126a",
+  "source_sha256_provenance": "homebrew"
 }

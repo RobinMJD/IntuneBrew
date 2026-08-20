@@ -12,5 +12,8 @@
   "category": "Media",
   "publisher": "Max Planck Institute for Psycholinguistics",
   "previous_version": "7.1",
-  "homebrew_cask": "elan"
+  "homebrew_cask": "elan",
+  "source_version": "7.1",
+  "source_sha256": "71106952d5a1d301c6f4f764a10e654d2581cc8922e8d451a0c091ecf000d99c",
+  "source_sha256_provenance": "homebrew"
 }

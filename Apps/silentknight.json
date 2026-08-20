@@ -12,5 +12,8 @@
   "previous_version": "2.14",
   "category": "Security",
   "publisher": "The Eclectic Light Company",
-  "homebrew_cask": "silentknight"
+  "homebrew_cask": "silentknight",
+  "source_version": "2.14,2026.03",
+  "source_sha256": "adeed760e2d4482a250b48013fde40916afc6cbcb253bce491c9bdbc64f8023b",
+  "source_sha256_provenance": "homebrew"
 }

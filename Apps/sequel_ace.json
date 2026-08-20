@@ -12,5 +12,8 @@
   "previous_version": "5.4.0",
   "category": "Developer Tools",
   "publisher": "Sequel Ace",
-  "homebrew_cask": "sequel-ace"
+  "homebrew_cask": "sequel-ace",
+  "source_version": "5.4.0,20109",
+  "source_sha256": "1522e43725f4a990a7cd7f24cc7ad7b2979a6c891f0cc72d4b6554774820b5bb",
+  "source_sha256_provenance": "homebrew"
 }

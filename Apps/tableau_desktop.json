@@ -13,5 +13,8 @@
   "changelog": "https://www.tableau.com/support/releases/desktop",
   "category": "Productivity",
   "publisher": "Tableau Software, LLC",
-  "previous_version": "2026.2.1"
+  "previous_version": "2026.2.1",
+  "source_version": "2026.2.1",
+  "source_sha256": "c5710b65cda0b902009f035983e8b4b1705645e3b9e578afe79dee370954d595",
+  "source_sha256_provenance": "homebrew"
 }

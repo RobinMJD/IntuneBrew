@@ -12,5 +12,8 @@
   "category": "Utilities",
   "publisher": "Peter Borg Apps",
   "previous_version": "9.6.6",
-  "homebrew_cask": "lingon-x"
+  "homebrew_cask": "lingon-x",
+  "source_version": "9.6.6",
+  "source_sha256": "7cafd1fc98cd23662f0670eed996698dccc98762fe1a284036ee76132553e7f3",
+  "source_sha256_provenance": "homebrew"
 }

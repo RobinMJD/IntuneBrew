@@ -22,5 +22,8 @@
   },
   "category": "Security",
   "publisher": "ts1",
-  "homebrew_cask": "bleunlock"
+  "homebrew_cask": "bleunlock",
+  "source_version": "1.12.2",
+  "source_sha256": "9ceddc874cf519efc7411c8340abab9e1ff8a4b5b252eff6ca32a94b8cafef5b",
+  "source_sha256_provenance": "homebrew"
 }

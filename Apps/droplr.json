@@ -12,5 +12,8 @@
   "category": "Productivity",
   "publisher": "Droplr",
   "previous_version": "5.9.19",
-  "homebrew_cask": "droplr"
+  "homebrew_cask": "droplr",
+  "source_version": "5.9.19,478",
+  "source_sha256": "d2d0741f7caad6bae1d9db9a97f09d21fc2086c3d1155c3427542842b8ab9402",
+  "source_sha256_provenance": "homebrew"
 }

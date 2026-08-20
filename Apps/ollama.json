@@ -13,5 +13,8 @@
   "previous_version": "0.32.14",
   "category": "Developer Tools",
   "publisher": "Ollama",
-  "homebrew_cask": "ollama-app"
+  "homebrew_cask": "ollama-app",
+  "source_version": "0.32.14",
+  "source_sha256": "72f8545a4300ac597036e890fb5fa9a54b8ed5ec3032254d184ba9d9d59d2d51",
+  "source_sha256_provenance": "homebrew"
 }

@@ -22,5 +22,8 @@
   },
   "category": "Utilities",
   "publisher": "Rogue Amoeba",
-  "homebrew_cask": "audio-hijack"
+  "homebrew_cask": "audio-hijack",
+  "source_version": "4.5.9",
+  "source_sha256": "no_check",
+  "packaging_pending": true
 }

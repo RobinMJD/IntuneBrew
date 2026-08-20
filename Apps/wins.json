@@ -12,5 +12,8 @@
   "category": "Utilities",
   "publisher": "Wins",
   "previous_version": "3.5",
-  "homebrew_cask": "wins"
+  "homebrew_cask": "wins",
+  "source_version": "3.5,52",
+  "source_sha256": "no_check",
+  "packaging_pending": true
 }

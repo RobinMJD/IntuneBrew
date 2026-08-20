@@ -12,5 +12,8 @@
   "category": "Utilities",
   "publisher": "BZG Apps",
   "previous_version": "6.6",
-  "homebrew_cask": "unite"
+  "homebrew_cask": "unite",
+  "source_version": "6.6",
+  "source_sha256": "3b6e006e91d61694262c807598c7c4c62938fa642757083ef224cbce6e36d5ff",
+  "source_sha256_provenance": "homebrew"
 }

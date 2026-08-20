@@ -12,5 +12,8 @@
   "category": "Media",
   "publisher": "Yattee",
   "previous_version": "1.5.1",
-  "homebrew_cask": "yattee"
+  "homebrew_cask": "yattee",
+  "source_version": "1.5.1",
+  "source_sha256": "46def4264ad5f8d5dfdf38ff0f503e38e1a62e2c510059960b0c292ec3dc1e62",
+  "source_sha256_provenance": "homebrew"
 }

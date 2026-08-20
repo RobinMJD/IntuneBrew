@@ -12,5 +12,7 @@
   "category": "Productivity",
   "publisher": "Brawo Software",
   "previous_version": "4.2.3",
-  "homebrew_cask": "ubar"
+  "homebrew_cask": "ubar",
+  "deprecated": true,
+  "deprecation_reason": "Vendor download host is no longer resolvable"
 }

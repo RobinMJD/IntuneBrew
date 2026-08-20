@@ -12,5 +12,8 @@
   "previous_version": "0.7.426",
   "category": "Productivity",
   "publisher": "Huly",
-  "homebrew_cask": "huly"
+  "homebrew_cask": "huly",
+  "source_version": "0.7.426",
+  "source_sha256": "1965a7f09dff166586f3675aded9a9b53e1733096beacbc87967ab3b4f82a926",
+  "source_sha256_provenance": "homebrew"
 }

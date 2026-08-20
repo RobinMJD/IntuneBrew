@@ -12,5 +12,8 @@
   "sha": "8e09037ebef47e6ff18eddc697892596b72c3cad5233fe7106d94f804214a3b4",
   "category": "Productivity",
   "publisher": "Choosy LLC",
-  "homebrew_cask": "choosy"
+  "homebrew_cask": "choosy",
+  "source_version": "2.5.2",
+  "source_sha256": "9ad4bb583c48b9ddd7a90b2dfb00427c09ce3d55c9965f89d96f81ecca274dd8",
+  "source_sha256_provenance": "homebrew"
 }

@@ -23,5 +23,8 @@
   },
   "category": "Developer Tools",
   "publisher": "Unknown",
-  "homebrew_cask": "coderunner"
+  "homebrew_cask": "coderunner",
+  "source_version": "4.5",
+  "source_sha256": "d41c09e7d11226c0e0709ad55c04d4500adce9345568f4ef3da6c8e8190e4651",
+  "source_sha256_provenance": "homebrew"
 }

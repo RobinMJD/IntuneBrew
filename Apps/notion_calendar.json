@@ -13,5 +13,8 @@
   "previous_version": "1.139.0",
   "category": "Productivity",
   "publisher": "Notion Labs, Inc.",
-  "homebrew_cask": "notion-calendar"
+  "homebrew_cask": "notion-calendar",
+  "source_version": "1.139.0",
+  "source_sha256": "f1fb3dc449a1b37ccacf5c450c41fe12c0fd9b8c3f33cad1353eed1289022724",
+  "source_sha256_provenance": "homebrew"
 }

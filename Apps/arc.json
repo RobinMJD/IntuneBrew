@@ -22,5 +22,8 @@
   },
   "category": "Browsers",
   "publisher": "The Browser Company, LLC",
-  "homebrew_cask": "arc"
+  "homebrew_cask": "arc",
+  "source_version": "1.160.0,85122",
+  "source_sha256": "12bc9de1803c39a72486a02f5b4701377123d224dfb4d7d1952359b14045e204",
+  "source_sha256_provenance": "homebrew"
 }

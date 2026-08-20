@@ -12,5 +12,8 @@
   "category": "Productivity",
   "publisher": "Superhuman, Inc.",
   "previous_version": "1041.0.32",
-  "homebrew_cask": "superhuman"
+  "homebrew_cask": "superhuman",
+  "source_version": "1041.0.32",
+  "source_sha256": "771dc034520a9dc4648d98504210989eeabbdb963a1df7902c580faa004e85fd",
+  "source_sha256_provenance": "homebrew"
 }

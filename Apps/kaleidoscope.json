@@ -12,5 +12,8 @@
   "sha": "ea6f418cca89d7266e7d4ae5ca15f8709285affadd57c4a713f69b00f9e51890",
   "category": "Developer Tools",
   "publisher": "Black Pixel",
-  "homebrew_cask": "kaleidoscope"
+  "homebrew_cask": "kaleidoscope",
+  "source_version": "7.0.1,10509",
+  "source_sha256": "56834d2ac91c14eaf5109e37f971a03903489674e26b2c7db9d2ea7cdc834e77",
+  "source_sha256_provenance": "homebrew"
 }

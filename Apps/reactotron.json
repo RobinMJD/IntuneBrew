@@ -12,5 +12,8 @@
   "previous_version": "3.11.0",
   "category": "Developer Tools",
   "publisher": "Infinite Red",
-  "homebrew_cask": "reactotron"
+  "homebrew_cask": "reactotron",
+  "source_version": "3.11.0",
+  "source_sha256": "9d0cd7ddf65de5587160dd7a9e4b862265b7275df548423d20e12dcce1cef1ae",
+  "source_sha256_provenance": "homebrew"
 }

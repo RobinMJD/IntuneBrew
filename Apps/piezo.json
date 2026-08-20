@@ -12,5 +12,8 @@
   "category": "Media",
   "publisher": "Rogue Amoeba",
   "previous_version": "1.9.10",
-  "homebrew_cask": "piezo"
+  "homebrew_cask": "piezo",
+  "source_version": "1.9.10",
+  "source_sha256": "no_check",
+  "packaging_pending": true
 }

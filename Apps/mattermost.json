@@ -12,5 +12,8 @@
   "previous_version": "6.3.0",
   "category": "Communication",
   "publisher": "Mattermost, Inc.",
-  "homebrew_cask": "mattermost"
+  "homebrew_cask": "mattermost",
+  "source_version": "6.3.0",
+  "source_sha256": "b6d22403e8a96cf54ba3a9ecf7267a5c7bb7ce225249ce12d53a60c8b4db5bfd",
+  "source_sha256_provenance": "homebrew"
 }

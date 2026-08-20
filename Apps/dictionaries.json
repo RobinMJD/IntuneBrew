@@ -12,5 +12,8 @@
   "category": "Productivity",
   "publisher": "Dictionaries.io",
   "previous_version": "2.9",
-  "homebrew_cask": "dictionaries"
+  "homebrew_cask": "dictionaries",
+  "source_version": "2.9",
+  "source_sha256": "c4c189f0f4a80874e30777457ef089af5bafb27f5ceebec5e382d80fea99133c",
+  "source_sha256_provenance": "homebrew"
 }

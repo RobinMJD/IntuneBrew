@@ -12,5 +12,8 @@
   "category": "Productivity",
   "publisher": "SelfControl Project",
   "previous_version": "4.0.2",
-  "homebrew_cask": "selfcontrol"
+  "homebrew_cask": "selfcontrol",
+  "source_version": "4.0.2",
+  "source_sha256": "15d8fd17839746c608d0c4e929b650d741e691ebee6f893320c783e86ac75926",
+  "source_sha256_provenance": "homebrew"
 }

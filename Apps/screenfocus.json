@@ -12,5 +12,8 @@
   "previous_version": "1.1.1",
   "category": "Productivity",
   "publisher": "Apptorium",
-  "homebrew_cask": "screenfocus"
+  "homebrew_cask": "screenfocus",
+  "source_version": "1.1.1",
+  "source_sha256": "4b4bafc62e0f17896c11b3683cff2dbc7f4dc68f0d46a32c817bf9a6eb254959",
+  "source_sha256_provenance": "homebrew"
 }

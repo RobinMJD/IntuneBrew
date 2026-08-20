@@ -12,5 +12,8 @@
   "sha": "cf14baa2c6465e3bf917a767a0737dd527ce4cfaeeb5e68938de5fe19c4c44bd",
   "category": "Security",
   "publisher": "NordVPN S.A.",
-  "previous_version": "10.9.0"
+  "previous_version": "10.9.0",
+  "source_version": "10.9.0",
+  "source_sha256": "d619a30c5f1c40bd095dff9bd1b60fbea3f952861423248f06e86c7812d00f7d",
+  "source_sha256_provenance": "homebrew"
 }

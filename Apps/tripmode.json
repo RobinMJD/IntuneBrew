@@ -12,5 +12,8 @@
   "sha": "218140631be441f78bc28a10e20b496d9cf7ab71b0be6fd97c3aa261ffb622ea",
   "category": "Utilities",
   "publisher": "TripMode",
-  "homebrew_cask": "tripmode"
+  "homebrew_cask": "tripmode",
+  "source_version": "3.2.4,1385",
+  "source_sha256": "2a5a21ac4c13b5a1a5d43e6aeb2b7588ea9af0116e41829fca19cf9752265410",
+  "source_sha256_provenance": "homebrew"
 }

@@ -12,5 +12,8 @@
   "previous_version": "0.12.2",
   "category": "Utilities",
   "publisher": "Sproutcube",
-  "homebrew_cask": "shortcat"
+  "homebrew_cask": "shortcat",
+  "source_version": "0.12.2",
+  "source_sha256": "8e6a7d981318203d1972efe8e880983d2f10187852c1c2f3d3bda31b7cd1da63",
+  "source_sha256_provenance": "homebrew"
 }

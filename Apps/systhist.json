@@ -12,5 +12,8 @@
   "category": "Utilities",
   "publisher": "Eclectic Light Co.",
   "previous_version": "1.22",
-  "homebrew_cask": "systhist"
+  "homebrew_cask": "systhist",
+  "source_version": "1.22,2026.06",
+  "source_sha256": "3a19d75b1f439bca183d538f7386f4499afad1bb09763fe3c8a63ccc9ca6390c",
+  "source_sha256_provenance": "homebrew"
 }

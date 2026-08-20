@@ -12,5 +12,8 @@
   "sha": "3f33212c6d685b8bf70e2ce4ea33e11bd6cb375868353e8900de1b5a1e307269",
   "category": "Security",
   "publisher": "Okta, Inc.",
-  "previous_version": "1.109.0"
+  "previous_version": "1.109.0",
+  "source_version": "1.109.0",
+  "source_sha256": "a6ef7ee13cd6b5e2ca4cf264c255d3644f6a389acf5ca34a84b63253d4c87679",
+  "source_sha256_provenance": "homebrew"
 }

@@ -12,5 +12,8 @@
   "category": "Developer Tools",
   "publisher": "Soma Zone",
   "previous_version": "2.10.5",
-  "homebrew_cask": "launchcontrol"
+  "homebrew_cask": "launchcontrol",
+  "source_version": "2.10.5",
+  "source_sha256": "275ef2032c20abb1e7a60c0101076aeef9c9471c29996b8b64131c064935dba8",
+  "source_sha256_provenance": "homebrew"
 }

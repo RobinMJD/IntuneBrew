@@ -22,5 +22,8 @@
   },
   "category": "Utilities",
   "publisher": "MacItBetter",
-  "homebrew_cask": "betterzip"
+  "homebrew_cask": "betterzip",
+  "source_version": "6.0.4",
+  "source_sha256": "b37f810f1fb73bcb61b9c8165cb4eea690b59cedc3584736e9ff776b0a06b90c",
+  "source_sha256_provenance": "homebrew"
 }

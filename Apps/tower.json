@@ -12,5 +12,8 @@
   "sha": "82cb4b9ddf5fdef0b63211f4fbfb127ed53785e63a8f045e0d429c364c8fa4a7",
   "category": "Developer Tools",
   "publisher": "Absolutist Ltd.",
-  "homebrew_cask": "tower"
+  "homebrew_cask": "tower",
+  "source_version": "17.1.1,553,594bc90a",
+  "source_sha256": "5ca3e07994e24418eece6cc5245ebd56da9f10fb1e3b486aff654865682070ab",
+  "source_sha256_provenance": "homebrew"
 }

@@ -23,5 +23,8 @@
   },
   "category": "Developer Tools",
   "publisher": "Godot Engine",
-  "homebrew_cask": "godot"
+  "homebrew_cask": "godot",
+  "source_version": "4.7.2",
+  "source_sha256": "c58a24e31d720be9d62f60cb5627c4e695fb72f21b0cfe1bc9ccaa9a3b3ba63e",
+  "source_sha256_provenance": "homebrew"
 }

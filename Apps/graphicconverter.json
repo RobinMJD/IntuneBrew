@@ -12,5 +12,8 @@
   "category": "Design",
   "publisher": "Lemkesoft GmbH",
   "previous_version": "12.5.2",
-  "homebrew_cask": "graphicconverter"
+  "homebrew_cask": "graphicconverter",
+  "source_version": "12.5.2,7231",
+  "source_sha256": "2a0aa9ff08ca549c3c3d2c348da14ee2cb6d756059875f56da5fa308a37937cb",
+  "source_sha256_provenance": "homebrew"
 }

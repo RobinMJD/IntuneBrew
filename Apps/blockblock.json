@@ -12,5 +12,7 @@
   "category": "Security",
   "publisher": "Objective-See",
   "previous_version": "2.5.0",
-  "homebrew_cask": "blockblock"
+  "homebrew_cask": "blockblock",
+  "deprecated": true,
+  "deprecation_reason": "Bootstrap installer only; no directly deployable app or package artifact"
 }

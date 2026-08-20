@@ -12,5 +12,8 @@
   "category": "Utilities",
   "publisher": "MRR Software",
   "previous_version": "3.4.4",
-  "homebrew_cask": "namechanger"
+  "homebrew_cask": "namechanger",
+  "source_version": "3.4.4",
+  "source_sha256": "47c52b763eb4b2084cda5d616b6e30be57e2d1e75ec175d7091bff90066fa880",
+  "source_sha256_provenance": "homebrew"
 }

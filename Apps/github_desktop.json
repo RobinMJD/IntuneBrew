@@ -22,5 +22,8 @@
   },
   "category": "Developer Tools",
   "publisher": "GitHub, Inc.",
-  "homebrew_cask": "github"
+  "homebrew_cask": "github",
+  "source_version": "3.6.4-28955b81",
+  "source_sha256": "ff99e90964b866af854eb4c0701020bf2b2e209fe06d0ba28308836ec2e34106",
+  "source_sha256_provenance": "homebrew"
 }

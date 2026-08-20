@@ -12,5 +12,8 @@
   "previous_version": "8.23.0",
   "category": "Communication",
   "publisher": "Signal Foundation",
-  "homebrew_cask": "signal"
+  "homebrew_cask": "signal",
+  "source_version": "8.24.0",
+  "source_sha256": "c25689d73ae56665ec7e02becbc7f792e00c2bf65f8b14d73fb85f2779832ef2",
+  "source_sha256_provenance": "homebrew"
 }

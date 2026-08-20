@@ -12,5 +12,8 @@
   "sha": "092de7fec9ee79649b06794b37ef3fb65203458e66d0f2fdcfc8c541153597b5",
   "category": "Utilities",
   "publisher": "PilotMoon Software",
-  "homebrew_cask": "popclip"
+  "homebrew_cask": "popclip",
+  "source_version": "2026.7.1",
+  "source_sha256": "e1349705783831bf5d3d02458932649f85089d1f275d947fdf0f5821306d7246",
+  "source_sha256_provenance": "homebrew"
 }

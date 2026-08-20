@@ -12,5 +12,8 @@
   "previous_version": "0.10.5",
   "category": "Utilities",
   "publisher": "KeyCastr",
-  "homebrew_cask": "keycastr"
+  "homebrew_cask": "keycastr",
+  "source_version": "0.10.5",
+  "source_sha256": "c97c63eadbf4304c04802c0c8375c99b58084584be314e964c8366eca318b752",
+  "source_sha256_provenance": "homebrew"
 }

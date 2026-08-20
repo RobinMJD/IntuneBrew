@@ -12,5 +12,8 @@
   "category": "Media",
   "publisher": "Castr",
   "previous_version": "3.1.0",
-  "homebrew_cask": "castr"
+  "homebrew_cask": "castr",
+  "source_version": "3.1.0",
+  "source_sha256": "bb1876f1ba051f08c7bf32e6681341bf03c8c410267294e4490c9e357fb16455",
+  "source_sha256_provenance": "homebrew"
 }

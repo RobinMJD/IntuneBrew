@@ -22,5 +22,8 @@
   },
   "category": "Utilities",
   "publisher": "Bartender Team",
-  "homebrew_cask": "bartender"
+  "homebrew_cask": "bartender",
+  "source_version": "6.6.2",
+  "source_sha256": "e178616bc09956e39f0ab0ff9112b8fe89f744b406f8e417fb7b2aaf3524e064",
+  "source_sha256_provenance": "homebrew"
 }

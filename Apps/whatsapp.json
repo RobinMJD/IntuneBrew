@@ -13,5 +13,8 @@
   "previous_version": "26.33.17",
   "category": "Communication",
   "publisher": "WhatsApp LLC",
-  "homebrew_cask": "whatsapp"
+  "homebrew_cask": "whatsapp",
+  "source_version": "26.33.17",
+  "source_sha256": "8b5fc5370f6b0c74ccf207ec8b011d2ccea3abb3203b769b248b00acd23d7321",
+  "source_sha256_provenance": "homebrew"
 }

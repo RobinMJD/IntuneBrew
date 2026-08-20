@@ -12,5 +12,8 @@
   "category": "Utilities",
   "publisher": "TRex",
   "previous_version": "2.0.0",
-  "homebrew_cask": "trex"
+  "homebrew_cask": "trex",
+  "source_version": "2.0.0",
+  "source_sha256": "4e8defc680daa6e09cb2daba576aa243683c775b93a9510ce5f12544d222de4d",
+  "source_sha256_provenance": "homebrew"
 }

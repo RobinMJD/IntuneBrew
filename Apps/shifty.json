@@ -12,5 +12,8 @@
   "category": "Utilities",
   "publisher": "Nate Thompson",
   "previous_version": "1.2",
-  "homebrew_cask": "shifty"
+  "homebrew_cask": "shifty",
+  "source_version": "1.2",
+  "source_sha256": "111b1df97cf5cbca91f4130e6d68d409dbefeffa9fde5f5c92f30f712a7215e9",
+  "source_sha256_provenance": "homebrew"
 }

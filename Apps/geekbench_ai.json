@@ -22,5 +22,8 @@
   },
   "category": "Developer Tools",
   "publisher": "Primate Labs, Inc.",
-  "homebrew_cask": "geekbench-ai"
+  "homebrew_cask": "geekbench-ai",
+  "source_version": "1.7.0",
+  "source_sha256": "04248377f5a6a9a268f8b84b9834f30b756943a352976e1414c6be1df932dc19",
+  "source_sha256_provenance": "homebrew"
 }

@@ -12,5 +12,8 @@
   "sha": "cfae5e5d706d3ade778fc31acc7719336cf96a03e2d033e693baf70882f88f2d",
   "category": "Productivity",
   "publisher": "Jump Desktop",
-  "homebrew_cask": "jump-desktop"
+  "homebrew_cask": "jump-desktop",
+  "source_version": "9.1.9,90109",
+  "source_sha256": "9ed0cf53d0e2a61ca741c2ba999f91e0ca13473b4ca59692a59c67d05c8cc199",
+  "source_sha256_provenance": "homebrew"
 }

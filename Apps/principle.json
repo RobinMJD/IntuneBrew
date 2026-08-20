@@ -13,5 +13,8 @@
   "previous_version": "6.43",
   "category": "Design",
   "publisher": "Principle",
-  "homebrew_cask": "principle"
+  "homebrew_cask": "principle",
+  "source_version": "6.43",
+  "source_sha256": "e6a2def395492c476563e6dc99fcce1e3872166b235b072f2b963dceae13ca96",
+  "source_sha256_provenance": "homebrew"
 }

@@ -12,5 +12,8 @@
   "category": "Utilities",
   "publisher": "Seense",
   "previous_version": "1.6.4",
-  "homebrew_cask": "mx-power-gadget"
+  "homebrew_cask": "mx-power-gadget",
+  "source_version": "1.6.4",
+  "source_sha256": "no_check",
+  "packaging_pending": true
 }

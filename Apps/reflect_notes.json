@@ -12,5 +12,8 @@
   "category": "Productivity",
   "publisher": "Reflect",
   "previous_version": "3.3.6",
-  "homebrew_cask": "reflect"
+  "homebrew_cask": "reflect",
+  "source_version": "3.3.6",
+  "source_sha256": "476bbf824f6d627a2c2b7acb385e01a606994195313af48fab90afc4d3c9f9ef",
+  "source_sha256_provenance": "homebrew"
 }

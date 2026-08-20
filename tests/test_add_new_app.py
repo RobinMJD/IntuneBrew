@@ -18,6 +18,60 @@ def cask_data(url, artifacts):
 
 
 class CaskArtifactValidationTests(unittest.TestCase):
+    def test_formula_api_url_is_rejected(self):
+        with self.assertRaisesRegex(ValueError, "formula URLs are unsupported"):
+            add_new_app.extract_casks_from_urls(
+                "https://formulae.brew.sh/api/formula/vim.json"
+            )
+
+    def test_formula_page_and_brew_formula_are_rejected(self):
+        with self.assertRaisesRegex(ValueError, "formula URLs are unsupported"):
+            add_new_app.extract_casks_from_urls(
+                "https://formulae.brew.sh/formula/copilot"
+            )
+        with self.assertRaisesRegex(ValueError, "explicitly use --cask"):
+            add_new_app.extract_casks_from_urls("brew install copilot")
+
+    def test_deprecated_disabled_and_opaque_sources_are_rejected(self):
+        for data, reason in (
+            (
+                {
+                    "deprecated": True,
+                    "url": "https://example.test/app.dmg",
+                    "artifacts": [{"app": ["App.app"]}],
+                },
+                "deprecated",
+            ),
+            (
+                {
+                    "disabled": True,
+                    "url": "https://example.test/app.dmg",
+                    "artifacts": [{"app": ["App.app"]}],
+                },
+                "disabled",
+            ),
+            (
+                {
+                    "token": "apipost",
+                    "url": "https://example.test/download",
+                    "artifacts": [{"app": ["App.app"]}],
+                },
+                "opaque",
+            ),
+        ):
+            with self.subTest(reason=reason):
+                self.assertIn(
+                    reason,
+                    add_new_app.unsupported_cask_reason(data).lower(),
+                )
+
+    def test_tested_opaque_override_is_admitted(self):
+        data = {
+            "token": "postman",
+            "url": "https://example.test/download",
+            "artifacts": [{"app": ["Postman.app"]}],
+        }
+        self.assertIsNone(add_new_app.unsupported_cask_reason(data))
     def test_codex_cli_is_rejected(self):
         codex = cask_data(
             "https://example.test/codex-package-aarch64-apple-darwin.tar.gz",
@@ -137,6 +191,102 @@ class CaskArtifactValidationTests(unittest.TestCase):
 
         self.assertIsNone(add_new_app.binary_only_cask_reason(packaged_app))
 
+    def test_installer_only_cask_is_rejected_before_list_write(self):
+        bootstrap = cask_data(
+            "https://example.test/bootstrap.zip",
+            [{"installer": [{"manual": "Bootstrap.app"}]}],
+        )
+        self.assertIn(
+            "bootstrap installer",
+            add_new_app.unsupported_cask_reason(bootstrap),
+        )
+
+    def test_mixed_request_is_atomic_when_one_cask_is_installer_only(self):
+        valid = cask_data(
+            "https://example.test/Valid.zip",
+            [{"app": ["Valid.app"]}],
+        )
+        valid["name"] = ["Valid"]
+        invalid = cask_data(
+            "https://example.test/Bootstrap.zip",
+            [{"installer": [{"manual": "Bootstrap.app"}]}],
+        )
+        invalid["name"] = ["Bootstrap"]
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = pathlib.Path(temp_dir)
+            script_path = root / ".github/scripts/collect_app_info.py"
+            script_path.parent.mkdir(parents=True)
+            original = "app_urls = []\n"
+            script_path.write_text(original, encoding="utf-8")
+            previous_cwd = os.getcwd()
+            try:
+                os.chdir(root)
+                with (
+                    patch.dict(
+                        os.environ,
+                        {
+                            "ISSUE_TITLE": "Add Valid and Bootstrap",
+                            "ISSUE_BODY": "",
+                            "COMMENT_BODY": "/approve valid, bootstrap",
+                        },
+                        clear=True,
+                    ),
+                    patch.object(
+                        add_new_app,
+                        "fetch_homebrew_info",
+                        side_effect=lambda token: {
+                            "valid": valid,
+                            "bootstrap": invalid,
+                        }[token],
+                    ),
+                    self.assertRaises(SystemExit) as context,
+                ):
+                    add_new_app.main()
+            finally:
+                os.chdir(previous_cwd)
+            self.assertEqual(context.exception.code, 1)
+            self.assertEqual(script_path.read_text(encoding="utf-8"), original)
+
+    def test_duplicate_tokens_are_added_once(self):
+        valid = cask_data(
+            "https://example.test/Valid.zip",
+            [{"app": ["Valid.app"]}],
+        )
+        valid["name"] = ["Valid"]
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = pathlib.Path(temp_dir)
+            script_path = root / ".github/scripts/collect_app_info.py"
+            script_path.parent.mkdir(parents=True)
+            script_path.write_text("app_urls = []\n", encoding="utf-8")
+            previous_cwd = os.getcwd()
+            try:
+                os.chdir(root)
+                with (
+                    patch.dict(
+                        os.environ,
+                        {
+                            "ISSUE_TITLE": "Add Valid",
+                            "ISSUE_BODY": "",
+                            "COMMENT_BODY": "/approve valid, valid",
+                        },
+                        clear=True,
+                    ),
+                    patch.object(
+                        add_new_app,
+                        "fetch_homebrew_info",
+                        return_value=valid,
+                    ),
+                ):
+                    add_new_app.main()
+            finally:
+                os.chdir(previous_cwd)
+            self.assertEqual(
+                script_path.read_text(encoding="utf-8").count(
+                    "api/cask/valid.json"
+                ),
+                1,
+            )
+
 
 class ApprovalWorkflowTests(unittest.TestCase):
     def test_approval_workflows_test_catalog_before_committing(self):
@@ -220,7 +370,7 @@ class CatalogStorageWorkflowTests(unittest.TestCase):
         login = self.workflow.index("uses: azure/login@v3", build)
         first_storage_operation = self.workflow.index("az storage blob", build)
         self.assertLess(login, first_storage_operation)
-        self.assertIn("AZURE_LOGIN_POST_CLEANUP: true", self.workflow)
+        self.assertIn("AZURE_LOGIN_POST_CLEANUP: false", self.workflow)
 
         for variable, login_input in (
             ("AZURE_CLIENT_ID", "client-id"),
@@ -322,7 +472,7 @@ class CatalogStorageWorkflowTests(unittest.TestCase):
         )
         self.assertIn('"$STORAGE_BASE_URL"/*)', self.workflow)
         self.assertIn(
-            'azure_url="${STORAGE_BASE_URL}/${app_name}_${version}.pkg"',
+            'azure_url="${STORAGE_BASE_URL}/${new_blob_name}"',
             self.workflow,
         )
 

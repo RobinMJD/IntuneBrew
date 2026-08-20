@@ -12,5 +12,8 @@
   "category": "Communication",
   "publisher": "Zight, Inc.",
   "previous_version": "8.7.2",
-  "homebrew_cask": "zight"
+  "homebrew_cask": "zight",
+  "source_version": "8.7.2,3615",
+  "source_sha256": "b64dfcbf9ab1a0b90f0346d7815f5547510d4e7cd9b3945ef62fc72c5663f40b",
+  "source_sha256_provenance": "homebrew"
 }

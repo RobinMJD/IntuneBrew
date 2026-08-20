@@ -12,5 +12,8 @@
   "sha": "5862c4b23c24d73f543058a4dac025f53c394837993f195da7ed02c8c92a3599",
   "category": "Utilities",
   "publisher": "Rogue Amoeba",
-  "homebrew_cask": "soundsource"
+  "homebrew_cask": "soundsource",
+  "source_version": "6.1.1",
+  "source_sha256": "no_check",
+  "packaging_pending": true
 }

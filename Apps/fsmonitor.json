@@ -23,5 +23,8 @@
   },
   "category": "Developer Tools",
   "publisher": "FSMonitor",
-  "homebrew_cask": "fsmonitor"
+  "homebrew_cask": "fsmonitor",
+  "source_version": "2.0,158",
+  "source_sha256": "9e9b73568bfcd91ef64980782b847e1fc721b001ae38a0fa03fbf5de08bef6ef",
+  "source_sha256_provenance": "homebrew"
 }

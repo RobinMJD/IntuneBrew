@@ -12,5 +12,8 @@
   "sha": "7ddb15c857a56e7a0edf6ca62a7dc8ea391e9ea9a21906b6fba2f34975b352e5",
   "category": "Productivity",
   "publisher": "Monkeybread Software",
-  "homebrew_cask": "combine-pdfs"
+  "homebrew_cask": "combine-pdfs",
+  "source_version": "5.6.1",
+  "source_sha256": "c0840985ce6a8ff8e90dc0d92137af57fb9229b1b53ad8728faf847f464f288f",
+  "source_sha256_provenance": "homebrew"
 }

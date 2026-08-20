@@ -12,5 +12,8 @@
   "category": "Utilities",
   "publisher": "DEVONtechnologies",
   "previous_version": "1.9.11",
-  "homebrew_cask": "xmenu"
+  "homebrew_cask": "xmenu",
+  "source_version": "1.9.11",
+  "source_sha256": "dec29c0006cae59f2720df4628891a8f8d157a598897892b763521beb3f3105d",
+  "source_sha256_provenance": "homebrew"
 }

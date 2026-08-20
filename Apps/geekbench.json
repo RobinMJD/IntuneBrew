@@ -22,5 +22,8 @@
   },
   "category": "Utilities",
   "publisher": "Primate Labs, Inc.",
-  "homebrew_cask": "geekbench"
+  "homebrew_cask": "geekbench",
+  "source_version": "6.7.1",
+  "source_sha256": "0cceb31fce4f40af265292c3ffe050ceb509aeabe647240dde73842e62401008",
+  "source_sha256_provenance": "homebrew"
 }

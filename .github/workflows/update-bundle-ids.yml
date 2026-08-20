@@ -28,9 +28,16 @@ permissions:
 jobs:
   update-bundle-ids:
     runs-on: ubuntu-latest
-    if: ${{ github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success' }}
+    if: >-
+      ${{
+        github.event_name != 'workflow_run' ||
+        (github.event.workflow_run.conclusion == 'success' &&
+         github.event.workflow_run.head_branch == 'main')
+      }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: main
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -122,7 +129,7 @@ jobs:
             if git pull --rebase origin main; then
               git stash pop || true
 
-              if git push; then
+              if git push origin HEAD:main; then
                 echo "Push successful"
                 exit 0
               fi

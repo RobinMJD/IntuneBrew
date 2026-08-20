@@ -22,5 +22,7 @@
   },
   "category": "Other",
   "publisher": "Blizzard Entertainment, Inc.",
-  "homebrew_cask": "battle-net"
+  "homebrew_cask": "battle-net",
+  "deprecated": true,
+  "deprecation_reason": "Bootstrap installer only; no directly deployable app or package artifact"
 }

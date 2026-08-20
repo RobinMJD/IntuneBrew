@@ -12,5 +12,8 @@
   "sha": "80911da2548e1365c048f1bad6a951343468a04bf17e4b2f7a83e86498f5f957",
   "category": "Security",
   "publisher": "Nord Security",
-  "previous_version": "4.26.1"
+  "previous_version": "4.26.1",
+  "source_version": "4.26.1",
+  "source_sha256": "no_check",
+  "packaging_pending": true
 }

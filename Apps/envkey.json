@@ -12,5 +12,8 @@
   "category": "Security",
   "publisher": "EnvKey, Inc.",
   "previous_version": "1.5.10",
-  "homebrew_cask": "envkey"
+  "homebrew_cask": "envkey",
+  "source_version": "1.5.10",
+  "source_sha256": "97f672b9473b1f213cb068de147fb2c8b7f01beb2c2d747910dfcde29c0efb7a",
+  "source_sha256_provenance": "homebrew"
 }

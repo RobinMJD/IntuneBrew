@@ -13,5 +13,8 @@
   "previous_version": "3.9",
   "category": "Utilities",
   "publisher": "Seense",
-  "homebrew_cask": "menubar-stats"
+  "homebrew_cask": "menubar-stats",
+  "source_version": "3.9",
+  "source_sha256": "no_check",
+  "packaging_pending": true
 }

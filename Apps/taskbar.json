@@ -12,5 +12,8 @@
   "previous_version": "1.6.1",
   "category": "Utilities",
   "publisher": "Lawand",
-  "homebrew_cask": "taskbar"
+  "homebrew_cask": "taskbar",
+  "source_version": "1.6.1,2026,05",
+  "source_sha256": "86cd42b1c58063f53cb7b2ab4a73d4256da120ab01b229aef7098af39a9e236b",
+  "source_sha256_provenance": "homebrew"
 }

@@ -12,5 +12,8 @@
   "category": "Productivity",
   "publisher": "Clockify",
   "previous_version": "2.12.6",
-  "homebrew_cask": "clockify"
+  "homebrew_cask": "clockify",
+  "source_version": "2.12.6",
+  "source_sha256": "no_check",
+  "packaging_pending": true
 }

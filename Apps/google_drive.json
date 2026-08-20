@@ -13,5 +13,8 @@
   "changelog": "https://support.google.com/drive/answer/2375082",
   "category": "Productivity",
   "publisher": "Google LLC",
-  "previous_version": "130.0.1"
+  "previous_version": "130.0.1",
+  "source_version": "130.0.1",
+  "source_sha256": "no_check",
+  "packaging_pending": true
 }

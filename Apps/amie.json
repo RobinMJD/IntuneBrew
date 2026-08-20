@@ -12,5 +12,8 @@
   "sha": "ae4b1deb781c51bd522c83323397ba34ad9f8a800b3ad09ddb6642a27dcb1ddd",
   "category": "Productivity",
   "publisher": "Amie",
-  "homebrew_cask": "amie"
+  "homebrew_cask": "amie",
+  "source_version": "260814.0.0",
+  "source_sha256": "23b4600002f9b5948541189170567c490d98c5d841612c8be3063a0bd4d0dac8",
+  "source_sha256_provenance": "homebrew"
 }

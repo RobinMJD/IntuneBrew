@@ -12,5 +12,8 @@
   "sha": "45e3d3e46ab7bc186012ab89c74987b28fbc8151cbd0a2ab412d148aa3a08ade",
   "category": "Utilities",
   "publisher": "Battery Buddy",
-  "homebrew_cask": "battery-buddy"
+  "homebrew_cask": "battery-buddy",
+  "source_version": "1.0.4",
+  "source_sha256": "no_check",
+  "packaging_pending": true
 }

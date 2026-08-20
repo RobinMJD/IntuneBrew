@@ -12,5 +12,8 @@
   "category": "Productivity",
   "publisher": "ProjectWizards GmbH",
   "previous_version": "9.2.0",
-  "homebrew_cask": "merlin-project"
+  "homebrew_cask": "merlin-project",
+  "source_version": "9.2.0",
+  "source_sha256": "no_check",
+  "packaging_pending": true
 }

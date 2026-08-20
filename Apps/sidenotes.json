@@ -12,5 +12,8 @@
   "category": "Productivity",
   "publisher": "Apptorium",
   "previous_version": "1.6.3",
-  "homebrew_cask": "sidenotes"
+  "homebrew_cask": "sidenotes",
+  "source_version": "1.6.3",
+  "source_sha256": "6b0fff7ff9a22701dd24bec14da178fa17465276a6c201e75d993ba19e77f4fe",
+  "source_sha256_provenance": "homebrew"
 }

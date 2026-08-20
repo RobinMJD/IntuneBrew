@@ -22,5 +22,8 @@
   },
   "category": "Communication",
   "publisher": "Beeper",
-  "homebrew_cask": "beeper"
+  "homebrew_cask": "beeper",
+  "source_version": "4.3.34",
+  "source_sha256": "9ac64e0f220e351e54faa7410a471ba6766d8d86642a6a235c05eda47aa982b0",
+  "source_sha256_provenance": "homebrew"
 }

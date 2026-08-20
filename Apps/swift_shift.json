@@ -12,5 +12,8 @@
   "previous_version": "1.4.0",
   "category": "Utilities",
   "publisher": "Swift Shift",
-  "homebrew_cask": "swift-shift"
+  "homebrew_cask": "swift-shift",
+  "source_version": "1.4.0",
+  "source_sha256": "4937b01b5df0035595b0b0066eb7fd28f1db41ff861dc085c23baf35f9d8bcc3",
+  "source_sha256_provenance": "homebrew"
 }

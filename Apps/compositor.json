@@ -12,5 +12,8 @@
   "sha": "56ae0cdf83b0242e35d55fc7aaab1ecd5d08c37bfe979ba8e79e183f317c4351",
   "category": "Productivity",
   "publisher": "Compositor",
-  "homebrew_cask": "compositor"
+  "homebrew_cask": "compositor",
+  "source_version": "1.28.0",
+  "source_sha256": "45257a424636ead2fcb6fad606fbd248723b4670283767ec4431a2648a48cc95",
+  "source_sha256_provenance": "homebrew"
 }

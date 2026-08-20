@@ -12,5 +12,8 @@
   "previous_version": "2.3.0",
   "category": "Security",
   "publisher": "Objective-See",
-  "homebrew_cask": "netiquette"
+  "homebrew_cask": "netiquette",
+  "source_version": "2.3.0",
+  "source_sha256": "e204ac0c268942b9005f4f17be78b97a7b2d3b19803330d432c196021a0e8d4a",
+  "source_sha256_provenance": "homebrew"
 }

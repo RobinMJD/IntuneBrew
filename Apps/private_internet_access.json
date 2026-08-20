@@ -12,5 +12,7 @@
   "category": "Security",
   "publisher": "Private Internet Access",
   "previous_version": "3.7.2-08420",
-  "homebrew_cask": "private-internet-access"
+  "homebrew_cask": "private-internet-access",
+  "deprecated": true,
+  "deprecation_reason": "Bootstrap installer only; no directly deployable app or package artifact"
 }

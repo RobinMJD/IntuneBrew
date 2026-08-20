@@ -12,5 +12,8 @@
   "sha": "0c9f89e8a2cc2a41efceb18d589ac6f06166ab99b264113f18ad50a48d772ada",
   "category": "Security",
   "publisher": "Certum",
-  "previous_version": "2.10.22-9.4.4.0"
+  "previous_version": "2.10.22-9.4.4.0",
+  "source_version": "2.10.22-9.4.4.0,2.10.22-9.4.4",
+  "source_sha256": "0819cf87920cc1e6eb138a5b12d9a9243bb49f9b8cb3479cd25da6755b941ab6",
+  "source_sha256_provenance": "homebrew"
 }

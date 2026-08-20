@@ -12,5 +12,8 @@
   "category": "Utilities",
   "publisher": "Unclutter",
   "previous_version": "2.2.18d",
-  "homebrew_cask": "unclutter"
+  "homebrew_cask": "unclutter",
+  "source_version": "2.2.18d",
+  "source_sha256": "no_check",
+  "packaging_pending": true
 }

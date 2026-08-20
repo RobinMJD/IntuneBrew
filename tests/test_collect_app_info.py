@@ -143,6 +143,504 @@ class CollectAppInfoTests(unittest.TestCase):
 
             self.assertEqual(resolved, str(app_path))
 
+    def test_artifact_kind_uses_url_extension_not_file_description(self):
+        self.assertEqual(
+            collect_app_info.get_artifact_kind(
+                "https://example.test/download.pkg?signature=xar"
+            ),
+            "pkg",
+        )
+        self.assertEqual(
+            collect_app_info.get_artifact_kind(
+                "https://example.test/compressed.dmg?encoding=lzfse"
+            ),
+            "dmg",
+        )
+        self.assertEqual(
+            collect_app_info.get_artifact_kind("https://example.test/app.tgz"),
+            "archive",
+        )
+        self.assertEqual(
+            collect_app_info.get_archive_format("https://example.test/app.tgz"),
+            "tar.gz",
+        )
+        self.assertEqual(
+            collect_app_info.get_artifact_kind(
+                "https://example.test/TOSHIBA_ColorMFP.dmg.gz"
+            ),
+            "dmg_gzip",
+        )
+
+    def test_declared_app_wins_over_nested_helper_apps(self):
+        artifacts = collect_app_info.get_installable_artifacts(
+            {
+                "artifacts": [
+                    {"app": ["Product.app", {"target": "Renamed.app"}]},
+                    {"zap": [{"trash": "~/Library/Caches/Product"}]},
+                ]
+            }
+        )
+
+        self.assertEqual(artifacts["app"], "Product.app")
+        self.assertIsNone(artifacts["pkg"])
+
+    def test_archive_pkg_artifact_is_discoverable(self):
+        artifacts = collect_app_info.get_installable_artifacts(
+            {"artifacts": [{"pkg": ["Installer.pkg"]}]}
+        )
+
+        self.assertEqual(artifacts["pkg"], "Installer.pkg")
+
+    def test_declared_archive_app_is_automatically_queued_for_packaging(self):
+        url = "https://formulae.brew.sh/api/cask/example.json"
+        payload = {
+            "name": ["Example"],
+            "desc": "Example app",
+            "version": "1.0",
+            "url": "https://example.test/Example.zip",
+            "sha256": "a" * 64,
+            "homepage": "https://example.test/",
+            "artifacts": [{"app": ["Example.app"]}],
+        }
+
+        with patch.dict(collect_app_info.cask_cache, {url: payload}, clear=True):
+            app_info = collect_app_info.get_homebrew_app_info(url)
+
+        self.assertEqual(app_info["type"], "app")
+        self.assertEqual(app_info["artifact_app"], "Example.app")
+        self.assertEqual(app_info["sha"], "a" * 64)
+
+    def test_full_source_identity_is_persisted_without_normalization(self):
+        url = "https://formulae.brew.sh/api/cask/keybase.json"
+        payload = {
+            "name": ["Keybase"],
+            "desc": "Encrypted messaging",
+            "version": "6.6.3,20260603142618,f60f2ff97e",
+            "url": "https://example.test/Keybase.dmg",
+            "sha256": "no_check",
+            "homepage": "https://example.test/",
+            "artifacts": [{"app": ["Keybase.app"]}],
+        }
+
+        with patch.dict(collect_app_info.cask_cache, {url: payload}, clear=True):
+            app_info = collect_app_info.get_homebrew_app_info(
+                url,
+                needs_packaging=True,
+            )
+
+        self.assertEqual(app_info["version"], "6.6.3")
+        self.assertEqual(
+            app_info["source_version"],
+            "6.6.3,20260603142618,f60f2ff97e",
+        )
+        self.assertEqual(app_info["source_sha256"], "no_check")
+
+    def test_direct_hash_reuse_requires_verified_source_identity(self):
+        existing = {
+            "source_version": "1.0,100",
+            "source_sha256": "a" * 64,
+            "url": "https://example.test/app.dmg",
+            "sha": "b" * 64,
+        }
+        current = dict(existing)
+        self.assertTrue(collect_app_info.can_reuse_source_hash(existing, current))
+
+        for changed in (
+            {"source_version": "1.0,101"},
+            {"source_sha256": "no_check"},
+            {"source_sha256": ""},
+            {"url": "https://example.test/app-v2.dmg"},
+        ):
+            with self.subTest(changed=changed):
+                candidate = dict(current, **changed)
+                self.assertFalse(
+                    collect_app_info.can_reuse_source_hash(existing, candidate)
+                )
+
+    def test_direct_manifest_bootstrap_reuses_authoritative_source_hash(self):
+        source_sha = "c" * 64
+        existing = {
+            "version": "1.0",
+            "url": "https://example.test/app.dmg",
+            "sha": source_sha,
+        }
+        current = {
+            "version": "1.0",
+            "url": "https://example.test/app.dmg",
+            "source_version": "1.0,100",
+            "source_sha256": source_sha,
+        }
+        self.assertTrue(collect_app_info.can_reuse_source_hash(existing, current))
+        current["type"] = "app"
+        self.assertFalse(collect_app_info.can_reuse_source_hash(existing, current))
+
+    def test_downloaded_source_hash_mismatch_is_rejected(self):
+        app_info = {
+            "name": "Example",
+            "url": "https://example.test/app.dmg",
+            "source_sha256": "a" * 64,
+        }
+        with patch.object(
+            collect_app_info,
+            "calculate_file_hash",
+            return_value="b" * 64,
+        ):
+            with self.assertRaises(collect_app_info.SourceHashMismatchError):
+                collect_app_info.calculate_verified_source_hash(app_info)
+        self.assertNotIn("sha", app_info)
+        self.assertTrue(app_info["source_hash_mismatch"])
+        self.assertFalse(
+            collect_app_info.can_reuse_source_hash(
+                {
+                    "source_version": "1",
+                    "source_sha256": "a" * 64,
+                    "url": app_info["url"],
+                    "sha": "a" * 64,
+                },
+                dict(app_info, source_version="1"),
+            )
+        )
+
+    def test_downloaded_no_check_source_keeps_calculated_hash(self):
+        app_info = {
+            "name": "Example",
+            "url": "https://example.test/app.dmg",
+            "source_sha256": "no_check",
+        }
+        with patch.object(
+            collect_app_info,
+            "calculate_file_hash",
+            return_value="b" * 64,
+        ):
+            self.assertEqual(
+                collect_app_info.calculate_verified_source_hash(app_info),
+                "b" * 64,
+            )
+
+    def test_wireshark_declared_app_takes_precedence_over_auxiliary_pkgs(self):
+        url = "https://formulae.brew.sh/api/cask/wireshark-app.json"
+        payload = {
+            "name": ["Wireshark"],
+            "desc": "Packet analyzer",
+            "version": "4.0",
+            "url": "https://example.test/Wireshark.dmg",
+            "sha256": "f" * 64,
+            "homepage": "https://example.test/",
+            "artifacts": [
+                {"app": ["Wireshark.app"]},
+                {"pkg": ["Install ChmodBPF.pkg"]},
+            ],
+        }
+        with patch.dict(collect_app_info.cask_cache, {url: payload}, clear=True):
+            app_info = collect_app_info.get_homebrew_app_info(
+                url,
+                is_pkg_in_dmg=True,
+            )
+
+        self.assertEqual(app_info["type"], "app")
+        self.assertEqual(app_info["artifact_app"], "Wireshark.app")
+        self.assertEqual(app_info["artifact_pkg"], "Install ChmodBPF.pkg")
+
+    def test_missing_tombstone_for_unavailable_configured_cask_fails(self):
+        with tempfile.TemporaryDirectory() as directory:
+            with self.assertRaisesRegex(RuntimeError, "no manifest tombstone"):
+                collect_app_info.require_deprecation_tombstone(
+                    directory,
+                    "Bootstrap",
+                    "installer-only",
+                    "bootstrap",
+                )
+
+    def test_gzip_dmg_pkg_is_queued_for_safe_packaging(self):
+        url = "https://formulae.brew.sh/api/cask/toshiba-color-mfp.json"
+        payload = {
+            "name": ["TOSHIBA ColorMFP"],
+            "desc": "Printer driver",
+            "version": "7.119.4.0,21838",
+            "url": "https://example.test/TOSHIBA_ColorMFP.dmg.gz",
+            "sha256": "d" * 64,
+            "homepage": "https://example.test/",
+            "artifacts": [{"pkg": ["TOSHIBA ColorMFP.pkg"]}],
+        }
+
+        with patch.dict(collect_app_info.cask_cache, {url: payload}, clear=True):
+            app_info = collect_app_info.get_homebrew_app_info(url, is_pkg=True)
+
+        self.assertEqual(app_info["artifact_kind"], "dmg_gzip")
+        self.assertEqual(app_info["artifact_pkg"], "TOSHIBA ColorMFP.pkg")
+        self.assertEqual(app_info["type"], "app")
+
+    def test_bundle_id_override_fills_cask_without_detectable_id(self):
+        url = "https://formulae.brew.sh/api/cask/cmtrace-open.json"
+        payload = {
+            "name": ["CMTrace Open"],
+            "desc": "Log viewer",
+            "version": "1.5.2",
+            "url": "https://example.test/CMTrace.dmg",
+            "sha256": "b" * 64,
+            "homepage": "https://example.test/",
+            "artifacts": [{"app": ["CMTrace Open.app"]}],
+        }
+
+        with patch.dict(collect_app_info.cask_cache, {url: payload}, clear=True):
+            app_info = collect_app_info.get_homebrew_app_info(url)
+
+        self.assertEqual(app_info["bundleId"], "com.cmtrace.open")
+
+    def test_bundle_id_override_wins_over_unrelated_launchctl(self):
+        url = "https://formulae.brew.sh/api/cask/hopper-disassembler.json"
+        payload = {
+            "name": ["Hopper Disassembler"],
+            "desc": "Disassembler",
+            "version": "6.5",
+            "url": "https://example.test/Hopper.dmg",
+            "sha256": "a" * 64,
+            "homepage": "https://example.test/",
+            "artifacts": [
+                {"uninstall": [{"launchctl": "com.cryptic-apps.ExternalAPI"}]},
+                {"app": ["Hopper Disassembler.app"]},
+            ],
+        }
+        with patch.dict(collect_app_info.cask_cache, {url: payload}, clear=True):
+            app_info = collect_app_info.get_homebrew_app_info(url)
+        self.assertEqual(
+            app_info["bundleId"],
+            "com.cryptic-apps.hopper-web-4",
+        )
+
+    def test_existing_null_bundle_id_cannot_replace_fresh_override(self):
+        existing = {"bundleId": None}
+        fresh = {
+            "bundleId": "com.cmtrace.open",
+            "bundleId_source": "override",
+        }
+        collect_app_info.merge_fresh_bundle_id(existing, fresh)
+        self.assertEqual(existing["bundleId"], "com.cmtrace.open")
+
+    def test_transient_null_bundle_lookup_preserves_existing_value(self):
+        fresh = {"bundleId": None}
+        existing = {"bundleId": "com.example.valid"}
+        collect_app_info.preserve_existing_bundle_id(fresh, existing)
+        self.assertEqual(fresh["bundleId"], "com.example.valid")
+
+    def test_bundle_id_precedence_matrix(self):
+        cases = (
+            (
+                {"bundleId": "com.figma.Desktop"},
+                {"bundleId": "com.figma.agent", "bundleId_source": "heuristic"},
+                ("com.figma.Desktop", "legacy"),
+            ),
+            (
+                {"bundleId": "com.figma.Desktop"},
+                {"bundleId": "com.override", "bundleId_source": "override"},
+                ("com.override", "override"),
+            ),
+            (
+                {"bundleId": "com.example.*"},
+                {"bundleId": "com.heuristic", "bundleId_source": "heuristic"},
+                ("com.heuristic", "heuristic"),
+            ),
+            (
+                {"bundleId": "com.example.*"},
+                {"bundleId": "other.*", "bundleId_source": "heuristic"},
+                (None, "missing"),
+            ),
+        )
+        for existing, fresh, expected in cases:
+            with self.subTest(existing=existing, fresh=fresh):
+                self.assertEqual(
+                    collect_app_info.select_bundle_id(existing, fresh),
+                    expected,
+                )
+
+    def test_metadata_sync_cannot_downgrade_stored_bundle_authority(self):
+        existing = {
+            "bundleId": "com.figma.Desktop",
+            "bundleId_source": "package",
+        }
+        fresh = {
+            "bundleId": "com.figma.agent",
+            "bundleId_source": "heuristic",
+            "artifact_kind": "archive",
+        }
+        collect_app_info.sync_artifact_metadata(existing, fresh)
+        collect_app_info.merge_fresh_bundle_id(existing, fresh)
+        self.assertEqual(existing["bundleId"], "com.figma.Desktop")
+        self.assertEqual(existing["bundleId_source"], "package")
+
+    def test_generic_metadata_sync_never_touches_bundle_provenance(self):
+        existing = {
+            "bundleId": "com.example.app",
+            "bundleId_source": "stored",
+        }
+        collect_app_info.sync_artifact_metadata(
+            existing,
+            {
+                "bundleId": "com.example.helper",
+                "bundleId_source": "heuristic",
+                "artifact_kind": "dmg",
+            },
+        )
+        self.assertEqual(existing["bundleId"], "com.example.app")
+        self.assertEqual(existing["bundleId_source"], "stored")
+
+    def test_wildcard_bundle_ids_are_never_concrete(self):
+        self.assertFalse(collect_app_info.is_concrete_bundle_id("com.example.*"))
+        self.assertFalse(collect_app_info.is_concrete_bundle_id("org.r-project?"))
+        self.assertTrue(collect_app_info.is_concrete_bundle_id("com.figma.Desktop"))
+
+    def test_extensionless_archive_override_is_persisted(self):
+        url = "https://formulae.brew.sh/api/cask/postman.json"
+        payload = {
+            "name": ["Postman"],
+            "desc": "API client",
+            "version": "1.0",
+            "url": "https://example.test/download/arm64",
+            "sha256": "c" * 64,
+            "homepage": "https://example.test/",
+            "artifacts": [{"app": ["Postman.app"]}],
+        }
+
+        with patch.dict(collect_app_info.cask_cache, {url: payload}, clear=True):
+            app_info = collect_app_info.get_homebrew_app_info(url)
+
+        self.assertEqual(app_info["artifact_kind"], "archive")
+        self.assertEqual(app_info["archive_format"], "zip")
+        self.assertEqual(app_info["type"], "app")
+
+    def test_rename_source_paths_and_browser_user_agent_are_persisted(self):
+        cases = (
+            (
+                "ecamm-live",
+                [{"app": ["Ecamm/Ecamm Live.app"]}],
+                "artifact_app_source",
+                "Ecamm*/Ecamm Live.app",
+            ),
+            (
+                "loupedeck",
+                [{"pkg": ["Installer.pkg"]}],
+                "artifact_pkg_source",
+                "LoupedeckInstaller.pkg",
+            ),
+        )
+        for token, artifacts, key, expected in cases:
+            with self.subTest(token=token):
+                url = f"https://formulae.brew.sh/api/cask/{token}.json"
+                payload = {
+                    "name": [token],
+                    "desc": token,
+                    "version": "1",
+                    "url": "https://example.test/app.zip",
+                    "sha256": "a" * 64,
+                    "homepage": "https://example.test/",
+                    "artifacts": artifacts,
+                    "url_specs": {},
+                }
+                with patch.dict(
+                    collect_app_info.cask_cache,
+                    {url: payload},
+                    clear=True,
+                ):
+                    info = collect_app_info.get_homebrew_app_info(
+                        url,
+                        needs_packaging=True,
+                    )
+                self.assertEqual(info[key], expected)
+                self.assertEqual(info["download_user_agent"], "default")
+
+        url = "https://formulae.brew.sh/api/cask/ddpm.json"
+        payload["name"] = ["DDPM"]
+        payload["artifacts"] = [{"pkg": ["DDPM_Installer.pkg"]}]
+        payload["url_specs"] = {"user_agent": ":browser", "headers": {"X": "secret"}}
+        with patch.dict(collect_app_info.cask_cache, {url: payload}, clear=True):
+            info = collect_app_info.get_homebrew_app_info(url, needs_packaging=True)
+        self.assertEqual(info["download_user_agent"], "browser")
+        self.assertNotIn("headers", info)
+
+    def test_query_bearing_dmg_is_queued_for_repackaging(self):
+        url = "https://formulae.brew.sh/api/cask/raycast.json"
+        payload = {
+            "name": ["Raycast"],
+            "desc": "Launcher",
+            "version": "1.0",
+            "url": "https://example.test/download?build=arm",
+            "sha256": "c" * 64,
+            "homepage": "https://example.test/",
+            "artifacts": [{"app": ["Raycast.app"]}],
+        }
+        with patch.dict(collect_app_info.cask_cache, {url: payload}, clear=True):
+            app_info = collect_app_info.get_homebrew_app_info(url)
+        self.assertEqual(app_info["artifact_kind"], "dmg")
+        self.assertEqual(app_info["type"], "app")
+
+    def test_existing_manifest_receives_fresh_routing_metadata(self):
+        existing = {
+            "artifact_app": "Old.app",
+            "artifact_pkg": "Old.pkg",
+            "artifact_kind": "archive",
+            "archive_format": "tar.gz",
+        }
+        fresh = {
+            "artifact_app": "Postman.app",
+            "artifact_kind": "archive",
+            "archive_format": "zip",
+            "source_version": "1.0,101",
+            "source_sha256": "d" * 64,
+        }
+
+        collect_app_info.sync_artifact_metadata(existing, fresh)
+
+        self.assertEqual(existing["artifact_app"], "Postman.app")
+        self.assertEqual(existing["artifact_kind"], "archive")
+        self.assertEqual(existing["archive_format"], "zip")
+        self.assertEqual(existing["source_version"], "1.0,101")
+        self.assertEqual(existing["source_sha256"], "d" * 64)
+        self.assertNotIn("artifact_pkg", existing)
+
+    def test_existing_manifest_drops_stale_archive_format(self):
+        existing = {"artifact_kind": "archive", "archive_format": "zip"}
+
+        collect_app_info.sync_artifact_metadata(
+            existing,
+            {"artifact_kind": "dmg"},
+        )
+
+        self.assertEqual(existing["artifact_kind"], "dmg")
+        self.assertNotIn("archive_format", existing)
+
+    def test_every_existing_merge_excludes_stale_artifact_metadata(self):
+        source = (
+            ROOT / ".github/scripts/collect_app_info.py"
+        ).read_text(encoding="utf-8")
+        merge_section = source.split("# Process regular Homebrew cask URLs", 1)[1]
+        merge_section = merge_section.split("# Run custom scrapers", 1)[0]
+        self.assertEqual(
+            merge_section.count("and key not in ARTIFACT_METADATA_KEYS"),
+            4,
+        )
+        self.assertGreaterEqual(merge_section.count('"bundleId"'), 4)
+        self.assertEqual(merge_section.count('"bundleId_source"'), 4)
+
+    def test_installer_only_cask_is_rejected(self):
+        url = "https://formulae.brew.sh/api/cask/battle-net.json"
+        payload = {
+            "name": ["Battle.net"],
+            "desc": "Game launcher",
+            "version": "1.0",
+            "url": "https://example.test/installer",
+            "homepage": "https://example.test/",
+            "artifacts": [{"installer": [{"manual": "Battle.net-Setup.app"}]}],
+        }
+
+        with patch.dict(collect_app_info.cask_cache, {url: payload}, clear=True):
+            with self.assertRaises(collect_app_info.CaskUnavailableError) as context:
+                collect_app_info.get_homebrew_app_info(url, needs_packaging=True)
+
+        self.assertEqual(
+            context.exception.reason,
+            collect_app_info.INSTALLER_ONLY_DEPRECATION_REASON,
+        )
+
 
 CASK_INFO = {
     "https://formulae.brew.sh/api/cask/tailscale.json": {
@@ -395,6 +893,10 @@ TAILSCALE_PAYLOAD = {
     "version": "1.80.0",
     "url": "https://example.com/tailscale-1.80.0.dmg",
     "homepage": "https://tailscale.com/",
+    "artifacts": [
+        {"app": ["Tailscale.app"]},
+        {"uninstall": [{"quit": "io.tailscale.ipn.macos"}]},
+    ],
 }
 
 
@@ -612,6 +1114,63 @@ class CalculateFileHashTests(unittest.TestCase):
 
 
 class CatalogConsistencyTests(unittest.TestCase):
+    def test_unowned_catalog_entries_have_deterministic_disposition(self):
+        configured = (
+            collect_app_info.app_urls
+            + collect_app_info.homebrew_cask_urls
+            + collect_app_info.pkg_in_pkg_urls
+            + collect_app_info.pkg_urls
+            + collect_app_info.pkg_in_dmg_urls
+        )
+        self.assertIn(
+            "https://formulae.brew.sh/api/cask/linear.json",
+            configured,
+        )
+        self.assertIn(
+            "https://formulae.brew.sh/api/cask/rhino-app.json",
+            configured,
+        )
+        self.assertNotIn(
+            "https://formulae.brew.sh/api/cask/abstract.json",
+            configured,
+        )
+        self.assertNotIn(
+            "https://formulae.brew.sh/api/cask/ubar.json",
+            configured,
+        )
+        for filename in ("graphiql_app.json", "abstract.json", "ubar.json"):
+            with self.subTest(filename=filename):
+                app = json.loads(
+                    (ROOT / "Apps" / filename).read_text(encoding="utf-8")
+                )
+                self.assertTrue(app["deprecated"])
+                self.assertTrue(app["deprecation_reason"])
+
+    def test_formula_api_urls_are_not_configured_as_apps(self):
+        configured = (
+            collect_app_info.app_urls
+            + collect_app_info.homebrew_cask_urls
+            + collect_app_info.pkg_in_pkg_urls
+            + collect_app_info.pkg_urls
+            + collect_app_info.pkg_in_dmg_urls
+        )
+        self.assertFalse(any("/api/formula/" in url for url in configured))
+
+    def test_dmg_with_declared_pkg_routes_to_pkg_in_dmg(self):
+        url = "https://formulae.brew.sh/api/cask/example-driver.json"
+        payload = {
+            "name": ["Example Driver"],
+            "desc": "Driver",
+            "version": "1",
+            "url": "https://example.test/driver.dmg",
+            "sha256": "a" * 64,
+            "homepage": "https://example.test/",
+            "artifacts": [{"pkg": ["Driver.pkg"]}],
+        }
+        with patch.dict(collect_app_info.cask_cache, {url: payload}, clear=True):
+            info = collect_app_info.get_homebrew_app_info(url)
+        self.assertEqual(info["type"], "pkg_in_dmg")
+
     def test_codex_uses_desktop_cask_instead_of_cli_cask(self):
         desktop_url = "https://formulae.brew.sh/api/cask/codex-app.json"
         cli_url = "https://formulae.brew.sh/api/cask/codex.json"
@@ -641,8 +1200,58 @@ class CatalogConsistencyTests(unittest.TestCase):
             "https://formulae.brew.sh/api/cask/copilot-cli.json",
             configured_urls,
         )
+        for token in (
+            "1password-cli",
+            "android-commandlinetools",
+            "android-platform-tools",
+            "autodesk-fusion",
+            "expressvpn",
+            "sentinel",
+        ):
+            with self.subTest(token=token):
+                self.assertNotIn(
+                    f"https://formulae.brew.sh/api/cask/{token}.json",
+                    configured_urls,
+                )
 
-    def test_supported_catalog_matches_non_deprecated_apps(self):
+    def test_installer_only_incident_casks_are_deprecated(self):
+        expected_files = {
+            "battle-net": "blizzard_battlenet.json",
+            "blockblock": "blockblock.json",
+            "boinc": "berkeley_open_infrastructure_for_network_computing.json",
+            "logi-options+": "logitech_options.json",
+            "logitech-g-hub": "logitech_g_hub.json",
+            "oversight": "oversight.json",
+            "private-internet-access": "private_internet_access.json",
+        }
+        supported = json.loads(
+            (ROOT / "supported_apps.json").read_text(encoding="utf-8")
+        )
+
+        for token, filename in expected_files.items():
+            with self.subTest(token=token):
+                app = json.loads(
+                    (ROOT / "Apps" / filename).read_text(encoding="utf-8")
+                )
+                self.assertEqual(app["homebrew_cask"], token)
+                self.assertTrue(app["deprecated"])
+                self.assertEqual(
+                    app["deprecation_reason"],
+                    collect_app_info.INSTALLER_ONLY_DEPRECATION_REASON,
+                )
+                self.assertNotIn(Path(filename).stem, supported)
+
+    def test_mitmproxy_binary_tombstone_is_preserved(self):
+        app = json.loads(
+            (ROOT / "Apps/mitmproxy.json").read_text(encoding="utf-8")
+        )
+        supported = json.loads(
+            (ROOT / "supported_apps.json").read_text(encoding="utf-8")
+        )
+        self.assertTrue(app["deprecated"])
+        self.assertNotIn("mitmproxy", supported)
+
+    def test_supported_catalog_matches_valid_apps(self):
         apps = {
             path.stem: json.loads(path.read_text(encoding="utf-8"))
             for path in (ROOT / "Apps").glob("*.json")
@@ -650,10 +1259,16 @@ class CatalogConsistencyTests(unittest.TestCase):
         supported = json.loads(
             (ROOT / "supported_apps.json").read_text(encoding="utf-8")
         )
+        generator_spec = importlib.util.spec_from_file_location(
+            "generate_supported_apps",
+            ROOT / ".github/scripts/generate_supported_apps.py",
+        )
+        generator = importlib.util.module_from_spec(generator_spec)
+        generator_spec.loader.exec_module(generator)
         expected = {
             name
             for name, app_data in apps.items()
-            if not app_data.get("deprecated")
+            if generator.is_publishable(app_data)
         }
 
         self.assertEqual(set(supported), expected)

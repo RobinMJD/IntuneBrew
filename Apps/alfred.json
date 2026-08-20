@@ -23,5 +23,8 @@
   },
   "category": "Productivity",
   "publisher": "Running with Crayons Ltd.",
-  "homebrew_cask": "alfred"
+  "homebrew_cask": "alfred",
+  "source_version": "5.7.3,2320",
+  "source_sha256": "34060c6390175f36a53270d17d6be290d06c9079bd5251240ea72753bd9498cd",
+  "source_sha256_provenance": "homebrew"
 }

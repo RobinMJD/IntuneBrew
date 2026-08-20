@@ -12,5 +12,8 @@
   "category": "Developer Tools",
   "publisher": "Bezel",
   "previous_version": "4.7.0",
-  "homebrew_cask": "bezel"
+  "homebrew_cask": "bezel",
+  "source_version": "4.7.0",
+  "source_sha256": "db0cf532162db8308d9d286db107f92d8e3595414cd0265ebd1f2b00f5323b1a",
+  "source_sha256_provenance": "homebrew"
 }

@@ -22,5 +22,8 @@
   },
   "category": "Productivity",
   "publisher": "Basecamp, LLC",
-  "homebrew_cask": "basecamp"
+  "homebrew_cask": "basecamp",
+  "source_version": "5.1.5",
+  "source_sha256": "aa319d36950f5470fda77d62b5b6e91f61faf34ce41c5707e31b2a51a0ae08b7",
+  "source_sha256_provenance": "homebrew"
 }

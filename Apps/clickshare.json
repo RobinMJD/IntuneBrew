@@ -12,5 +12,8 @@
   "category": "Communication",
   "publisher": "Barco NV",
   "previous_version": "4.51.0",
-  "homebrew_cask": "clickshare"
+  "homebrew_cask": "clickshare",
+  "source_version": "4.51.0,7",
+  "source_sha256": "aa52fe1338b821a8fc56432c8a8d599d3264f1b715734908e33a3fa5290892bf",
+  "source_sha256_provenance": "homebrew"
 }

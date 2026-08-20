@@ -12,5 +12,8 @@
   "previous_version": "2026.87",
   "category": "Developer Tools",
   "publisher": "Hankin Software",
-  "homebrew_cask": "sqlpro-for-postgres"
+  "homebrew_cask": "sqlpro-for-postgres",
+  "source_version": "2026.87",
+  "source_sha256": "7ff27ebd25497da5015249f6d3ceb0b84b2369fda513781b857d54786f4c562a",
+  "source_sha256_provenance": "homebrew"
 }

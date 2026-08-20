@@ -12,5 +12,8 @@
   "category": "Utilities",
   "publisher": "SmoothScroll",
   "previous_version": "1.7.6",
-  "homebrew_cask": "smoothscroll"
+  "homebrew_cask": "smoothscroll",
+  "source_version": "1.7.6",
+  "source_sha256": "no_check",
+  "packaging_pending": true
 }

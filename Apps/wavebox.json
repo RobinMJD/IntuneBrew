@@ -12,5 +12,8 @@
   "category": "Browsers",
   "publisher": "Wavebox Ltd",
   "previous_version": "151.2.154.2",
-  "homebrew_cask": "wavebox"
+  "homebrew_cask": "wavebox",
+  "source_version": "151.2.154.2",
+  "source_sha256": "13e670070481e9d4f4ac5d73d6af3276f40879f5d8cba37e4297e25d8bec1591",
+  "source_sha256_provenance": "homebrew"
 }

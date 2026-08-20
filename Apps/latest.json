@@ -12,5 +12,8 @@
   "category": "Utilities",
   "publisher": "Max Codes",
   "previous_version": "0.11",
-  "homebrew_cask": "latest"
+  "homebrew_cask": "latest",
+  "source_version": "0.11",
+  "source_sha256": "b372cde029f1f81c6465b1920a7c5a392a7791243cd30ebf39dab172ec82cbf5",
+  "source_sha256_provenance": "homebrew"
 }

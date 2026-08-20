@@ -12,5 +12,8 @@
   "sha": "4e8e2157ce610b1d0690b150d17710421cba19aab5102f9bd5ade35e1ab8ae12",
   "category": "Design",
   "publisher": "RightFont, Inc.",
-  "homebrew_cask": "rightfont"
+  "homebrew_cask": "rightfont",
+  "source_version": "10.1.1",
+  "source_sha256": "no_check",
+  "packaging_pending": true
 }

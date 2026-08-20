@@ -13,6 +13,172 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from urllib.parse import urlparse, unquote
 
 
+ARCHIVE_EXTENSIONS = (".zip", ".tar.gz", ".tgz", ".tar.xz", ".tar.bz2", ".tbz")
+ARTIFACT_KIND_OVERRIDES = {
+    "expandrive": ("dmg", None),
+    "postman": ("archive", "zip"),
+    "raycast": ("dmg", None),
+    "tenable-nessus-agent": ("dmg", None),
+    "visual-studio-code": ("archive", "zip"),
+    "whatsapp": ("archive", "zip"),
+}
+ARTIFACT_SOURCE_OVERRIDES = {
+    "ecamm-live": {"app": "Ecamm*/Ecamm Live.app"},
+    "loupedeck": {"pkg": "LoupedeckInstaller.pkg"},
+    "rode-central": {"pkg": "RØDE Central*.pkg"},
+    "rode-connect": {"pkg": "RØDE Connect*.pkg"},
+}
+ARTIFACT_METADATA_KEYS = {
+    "artifact_app",
+    "artifact_pkg",
+    "artifact_kind",
+    "archive_format",
+    "artifact_app_source",
+    "artifact_pkg_source",
+    "download_user_agent",
+    "source_version",
+    "source_sha256",
+    "source_sha256_provenance",
+}
+INSTALLER_ONLY_DEPRECATION_REASON = (
+    "Bootstrap installer only; no directly deployable app or package artifact"
+)
+NO_DEPLOYABLE_PAYLOAD_REASON = (
+    "No directly deployable app or package artifact"
+)
+
+
+def get_artifact_kind(url):
+    """Classify an artifact from its authoritative URL path."""
+    parsed = urlparse(url)
+    path = unquote(parsed.path).lower()
+    query = unquote(parsed.query).lower()
+    values = (path, query)
+    if any(value.endswith(".dmg.gz") or ".dmg.gz&" in value for value in values):
+        return "dmg_gzip"
+    if any(value.endswith(".pkg") or ".pkg&" in value for value in values):
+        return "pkg"
+    if any(value.endswith(".dmg") or ".dmg&" in value for value in values):
+        return "dmg"
+    if any(value.endswith(ARCHIVE_EXTENSIONS) for value in values):
+        return "archive"
+    return "unknown"
+
+
+def get_archive_format(url):
+    parsed = urlparse(url)
+    path = unquote(parsed.path).lower()
+    query = parsed.query.lower()
+    if path.endswith(".zip") or "extension=zip" in query:
+        return "zip"
+    if path.endswith((".tar.gz", ".tgz")):
+        return "tar.gz"
+    if path.endswith(".tar.xz"):
+        return "tar.xz"
+    if path.endswith((".tar.bz2", ".tbz")):
+        return "tar.bz2"
+    return None
+
+
+def get_installable_artifacts(data):
+    """Return the Homebrew-declared top-level app and package payload names."""
+    result = {"app": None, "pkg": None}
+    for artifact in data.get("artifacts", []):
+        if not isinstance(artifact, dict):
+            continue
+        for kind in result:
+            value = artifact.get(kind)
+            if not value:
+                continue
+            if isinstance(value, str):
+                result[kind] = value
+            elif isinstance(value, list) and value and isinstance(value[0], str):
+                result[kind] = value[0]
+    return result
+
+
+def has_installer_artifact(data):
+    return any(
+        isinstance(artifact, dict) and artifact.get("installer")
+        for artifact in data.get("artifacts", [])
+    )
+
+
+def sync_artifact_metadata(existing_data, app_info):
+    for key in ARTIFACT_METADATA_KEYS:
+        if app_info.get(key):
+            existing_data[key] = app_info[key]
+        else:
+            existing_data.pop(key, None)
+
+
+def merge_fresh_bundle_id(existing_data, app_info):
+    value, source = select_bundle_id(existing_data, app_info)
+    existing_data["bundleId"] = value
+    existing_data["bundleId_source"] = source
+
+
+def preserve_existing_bundle_id(app_info, existing_data):
+    value, source = select_bundle_id(existing_data, app_info)
+    app_info["bundleId"] = value
+    app_info["bundleId_source"] = source
+
+
+def is_concrete_bundle_id(value):
+    return bool(
+        isinstance(value, str)
+        and re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._-]*", value)
+        and not any(char in value for char in "*?[]")
+    )
+
+
+def select_bundle_id(existing_data, app_info):
+    if (
+        app_info.get("bundleId_source") == "override"
+        and is_concrete_bundle_id(app_info.get("bundleId"))
+    ):
+        return app_info["bundleId"], "override"
+    if is_concrete_bundle_id(existing_data.get("bundleId")):
+        source = existing_data.get("bundleId_source")
+        if source in {"override", "package", "stored"}:
+            return existing_data["bundleId"], source
+        return existing_data["bundleId"], "legacy"
+    if is_concrete_bundle_id(app_info.get("bundleId")):
+        return app_info["bundleId"], "heuristic"
+    return None, "missing"
+
+
+def can_reuse_source_hash(existing_data, app_info):
+    if app_info.get("source_hash_mismatch"):
+        return False
+    source_sha = app_info.get("source_sha256", "")
+    verified_identity = (
+        bool(app_info.get("source_version"))
+        and existing_data.get("source_version") == app_info["source_version"]
+        and bool(re.fullmatch(r"[0-9a-fA-F]{64}", source_sha))
+        and existing_data.get("source_sha256") == source_sha
+        and existing_data.get("url") == app_info.get("url")
+        and bool(existing_data.get("sha"))
+    )
+    bootstrap_direct = (
+        app_info.get("type") not in {"app", "pkg_in_dmg", "pkg_in_pkg"}
+        and existing_data.get("version") == app_info.get("version")
+        and existing_data.get("url") == app_info.get("url")
+        and bool(re.fullmatch(r"[0-9a-fA-F]{64}", source_sha))
+        and existing_data.get("sha") == source_sha
+    )
+    return verified_identity or bootstrap_direct
+
+
+def get_bundle_id_override(cask_token):
+    override_path = Path(__file__).resolve().parents[1] / "data" / "bundle-id-overrides.json"
+    try:
+        with override_path.open(encoding="utf-8") as handle:
+            return json.load(handle).get("overrides", {}).get(cask_token)
+    except (OSError, ValueError):
+        return None
+
+
 def get_filename_from_url(url, app_name=None, version=None, default_ext=".dmg"):
     """
     Extract a proper filename from a URL, handling query parameters and edge cases.
@@ -34,14 +200,14 @@ def get_filename_from_url(url, app_name=None, version=None, default_ext=".dmg"):
     filename = os.path.basename(path)
 
     # Check if the filename has a valid extension
-    valid_extensions = ['.dmg', '.pkg', '.zip', '.app', '.tar.gz', '.tar.xz', '.tar.bz2', '.tbz']
+    valid_extensions = ['.dmg.gz', '.dmg', '.pkg', '.zip', '.app', '.tar.gz', '.tgz', '.tar.xz', '.tar.bz2', '.tbz']
     has_valid_ext = any(filename.lower().endswith(ext) for ext in valid_extensions)
 
     # If no valid extension found, try to construct a proper filename
     if not has_valid_ext or not filename or filename in ['download', 'latest']:
         if app_name:
             # Construct filename from app name and version
-            safe_name = app_name.replace(' ', '-')
+            safe_name = re.sub(r'[\\/:*?"<>|]+', '-', app_name.replace(' ', '-'))
             if version:
                 filename = f"{safe_name}-{version}{default_ext}"
             else:
@@ -99,7 +265,6 @@ app_urls = [
     "https://formulae.brew.sh/api/cask/screenfocus.json",
     "https://formulae.brew.sh/api/cask/teacode.json",
     "https://formulae.brew.sh/api/cask/alcove.json",
-    "https://formulae.brew.sh/api/cask/abstract.json",
     "https://formulae.brew.sh/api/cask/macpass.json",
     "https://formulae.brew.sh/api/cask/marsedit.json",
     "https://formulae.brew.sh/api/cask/neofinder.json",
@@ -166,7 +331,6 @@ app_urls = [
     "https://formulae.brew.sh/api/cask/gitkraken.json",
     "https://formulae.brew.sh/api/cask/godot.json",
     "https://formulae.brew.sh/api/cask/hp-easy-admin.json",
-    "https://formulae.brew.sh/api/formula/vim.json",
     "https://formulae.brew.sh/api/cask/notion-calendar.json",
     "https://formulae.brew.sh/api/cask/ollama-app.json",
     "https://formulae.brew.sh/api/cask/pdf-expert.json",
@@ -183,7 +347,6 @@ app_urls = [
     "https://formulae.brew.sh/api/cask/mountain-duck.json",
     "https://formulae.brew.sh/api/cask/acorn.json",
     "https://formulae.brew.sh/api/cask/menubar-stats.json",
-    "https://formulae.brew.sh/api/formula/neovim.json",
     "https://formulae.brew.sh/api/cask/sketch.json",
     "https://formulae.brew.sh/api/cask/jumpcut.json",
     "https://formulae.brew.sh/api/cask/daisydisk.json",
@@ -216,7 +379,6 @@ app_urls = [
     "https://formulae.brew.sh/api/cask/jumpshare.json",
     "https://formulae.brew.sh/api/cask/keybase.json",
     "https://formulae.brew.sh/api/cask/keyclu.json",
-    "https://formulae.brew.sh/api/formula/antigen.json",
     "https://formulae.brew.sh/api/cask/nucleo.json",
     "https://formulae.brew.sh/api/cask/spline.json",
     "https://formulae.brew.sh/api/cask/mac-mouse-fix.json",
@@ -283,7 +445,6 @@ app_urls = [
     "https://formulae.brew.sh/api/cask/superhuman.json",
     "https://formulae.brew.sh/api/cask/tabby.json",
     "https://formulae.brew.sh/api/cask/tidal.json",
-    "https://formulae.brew.sh/api/cask/ubar.json",
     "https://formulae.brew.sh/api/cask/unclutter.json",
     "https://formulae.brew.sh/api/cask/unite.json",
     "https://formulae.brew.sh/api/cask/wezterm.json",
@@ -295,8 +456,6 @@ app_urls = [
     "https://formulae.brew.sh/api/cask/altserver.json",
     "https://formulae.brew.sh/api/cask/amadeus-pro.json",
     "https://formulae.brew.sh/api/cask/amie.json",
-    "https://formulae.brew.sh/api/cask/android-commandlinetools.json",
-    "https://formulae.brew.sh/api/cask/android-platform-tools.json",
     "https://formulae.brew.sh/api/cask/appgrid.json",
     "https://formulae.brew.sh/api/cask/apptivate.json",
     "https://formulae.brew.sh/api/cask/aurora-hdr.json",
@@ -321,7 +480,6 @@ app_urls = [
     "https://formulae.brew.sh/api/cask/envkey.json",
     "https://formulae.brew.sh/api/cask/evkey.json",
     "https://formulae.brew.sh/api/cask/filebot.json",
-    "https://formulae.brew.sh/api/cask/1password-cli.json",
     "https://formulae.brew.sh/api/cask/activedock.json",
     "https://formulae.brew.sh/api/cask/amethyst.json",
     "https://formulae.brew.sh/api/cask/antigravity.json",
@@ -417,7 +575,6 @@ app_urls = [
     "https://formulae.brew.sh/api/cask/screenflick.json",
     "https://formulae.brew.sh/api/cask/secretive.json",
     "https://formulae.brew.sh/api/cask/selfcontrol.json",
-    "https://formulae.brew.sh/api/cask/sentinel.json",
     "https://formulae.brew.sh/api/cask/setapp.json",
     "https://formulae.brew.sh/api/cask/shifty.json",
     "https://formulae.brew.sh/api/cask/sidenotes.json",
@@ -1189,6 +1346,8 @@ homebrew_cask_urls = [
     "https://formulae.brew.sh/api/cask/yacreader.json",
     "https://formulae.brew.sh/api/cask/yed.json",
     "https://formulae.brew.sh/api/cask/yubico-authenticator.json",
+    "https://formulae.brew.sh/api/cask/linear.json",
+    "https://formulae.brew.sh/api/cask/rhino-app.json",
     "https://formulae.brew.sh/api/cask/zappy.json",
     "https://formulae.brew.sh/api/cask/zotero.json",
     "https://formulae.brew.sh/api/cask/zwift.json",
@@ -1225,7 +1384,6 @@ homebrew_cask_urls = [
 pkg_in_dmg_urls = [
     "https://formulae.brew.sh/api/cask/jabra-direct.json",
     "https://formulae.brew.sh/api/cask/tableau.json",
-    "https://formulae.brew.sh/api/cask/autodesk-fusion.json",
     "https://formulae.brew.sh/api/cask/nomachine.json",
     "https://formulae.brew.sh/api/cask/adobe-acrobat-reader.json",
     "https://formulae.brew.sh/api/cask/adobe-acrobat-pro.json",
@@ -1311,7 +1469,6 @@ pkg_urls = [
     "https://formulae.brew.sh/api/cask/bricklink-studio.json",
     "https://formulae.brew.sh/api/cask/digikam.json",
     "https://formulae.brew.sh/api/cask/dymo-connect.json",
-    "https://formulae.brew.sh/api/cask/expressvpn.json",
     "https://formulae.brew.sh/api/cask/fuse-t.json",
     "https://formulae.brew.sh/api/cask/gog-galaxy.json",
     "https://formulae.brew.sh/api/cask/ibm-aspera-connect.json",
@@ -1467,6 +1624,8 @@ def calculate_file_hash(url):
                 except _OversizedDownload as e:
                     print(str(e))
                     return None
+                except SourceHashMismatchError:
+                    raise
                 except Exception as e:
                     print(f"❌ Error calculating hash: {str(e)}")
                     continue
@@ -1485,8 +1644,31 @@ def calculate_file_hash(url):
             # Clean up the temporary file
             try:
                 os.unlink(temp_file.name)
+            except SourceHashMismatchError:
+                raise
             except Exception as e:
                 print(f"Warning: Could not delete temporary file: {str(e)}")
+
+
+class SourceHashMismatchError(ValueError):
+    pass
+
+
+def calculate_verified_source_hash(app_info):
+    digest = calculate_file_hash(app_info["url"])
+    expected = app_info.get("source_sha256", "")
+    if (
+        digest
+        and re.fullmatch(r"[0-9a-fA-F]{64}", expected)
+        and digest.lower() != expected.lower()
+    ):
+        app_info.pop("sha", None)
+        app_info["source_hash_mismatch"] = True
+        raise SourceHashMismatchError(
+            f"Source SHA256 mismatch for {app_info['name']}: "
+            f"expected {expected}, got {digest}"
+        )
+    return digest
 
 def find_bundle_id(json_string):
     regex_patterns = {
@@ -1636,6 +1818,21 @@ def mark_app_deprecated(apps_folder, display_name, reason, cask_token=None):
     return True
 
 
+def require_deprecation_tombstone(
+    apps_folder, display_name, reason, cask_token=None
+):
+    if not mark_app_deprecated(
+        apps_folder,
+        display_name,
+        reason,
+        cask_token,
+    ):
+        identifier = cask_token or display_name or "unknown cask"
+        raise RuntimeError(
+            f"Configured cask {identifier} is unavailable but has no manifest tombstone"
+        )
+
+
 # Cask JSON is a few kilobytes: 10s to connect, 30s to read is generous, and a
 # stalled endpoint must not hold a worker for the whole run.
 CASK_TIMEOUT = (10, 30)
@@ -1740,10 +1937,25 @@ def get_homebrew_app_info(json_url, needs_packaging=False, is_pkg_in_dmg=False, 
 
     json_string = json.dumps(data)
 
-    bundle_id = find_bundle_id(json_string)
+    override_bundle_id = get_bundle_id_override(cask_token)
+    bundle_id = override_bundle_id or find_bundle_id(json_string)
+    if not is_concrete_bundle_id(bundle_id):
+        bundle_id = None
+    installable_artifacts = get_installable_artifacts(data)
+    if not any(installable_artifacts.values()):
+        raise CaskUnavailableError(
+            (
+                INSTALLER_ONLY_DEPRECATION_REASON
+                if has_installer_artifact(data)
+                else NO_DEPLOYABLE_PAYLOAD_REASON
+            ),
+            display_name=data["name"][0],
+            cask_token=cask_token,
+        )
 
     # Clean up version string by removing anything after the comma or underscore
-    version = data["version"]
+    source_version = data["version"]
+    version = source_version
     if ',' in version:
         version = version.split(',')[0]
     if '_' in version:
@@ -1758,6 +1970,10 @@ def get_homebrew_app_info(json_url, needs_packaging=False, is_pkg_in_dmg=False, 
         url = f"https://releases.warp.dev/stable/v{version}/Warp.dmg"
 
     vendor_url = url
+    artifact_kind = get_artifact_kind(url)
+    archive_format = get_archive_format(url)
+    if cask_token in ARTIFACT_KIND_OVERRIDES:
+        artifact_kind, archive_format = ARTIFACT_KIND_OVERRIDES[cask_token]
 
     app_info = {
         "name": data["name"][0],
@@ -1766,6 +1982,7 @@ def get_homebrew_app_info(json_url, needs_packaging=False, is_pkg_in_dmg=False, 
         "url": url,
         "vendor_url": vendor_url,
         "bundleId": bundle_id,
+        "bundleId_source": "override" if override_bundle_id else "heuristic",
         "homepage": data["homepage"],
         "homebrew_cask": cask_token,
         # Direct PKG apps must never fall back to a .dmg filename: the uploader derives
@@ -1773,15 +1990,69 @@ def get_homebrew_app_info(json_url, needs_packaging=False, is_pkg_in_dmg=False, 
         # extensionless URL would be deployed as a DMG and fail to mount (Issue #107)
         "fileName": get_filename_from_url(url, app_name=data["name"][0], version=version, default_ext=".pkg" if is_pkg else ".dmg")
     }
+    app_info["source_version"] = source_version
+    app_info["source_sha256"] = data.get("sha256") or ""
+    app_info["source_sha256_provenance"] = (
+        "unverified-no_check"
+        if app_info["source_sha256"] == "no_check"
+        else "homebrew"
+    )
+    app_info["artifact_kind"] = artifact_kind
+    if archive_format:
+        app_info["archive_format"] = archive_format
+    if data.get("sha256"):
+        app_info["sha"] = data["sha256"]
+    if installable_artifacts["app"]:
+        app_info["artifact_app"] = installable_artifacts["app"]
+    if installable_artifacts["pkg"]:
+        app_info["artifact_pkg"] = installable_artifacts["pkg"]
+    source_paths = ARTIFACT_SOURCE_OVERRIDES.get(cask_token, {})
+    if source_paths.get("app"):
+        app_info["artifact_app_source"] = source_paths["app"]
+    if source_paths.get("pkg"):
+        app_info["artifact_pkg_source"] = source_paths["pkg"]
+    user_agent = (data.get("url_specs") or {}).get("user_agent")
+    app_info["download_user_agent"] = (
+        "browser" if user_agent == ":browser" else "default"
+    )
 
     if needs_packaging:
         app_info["type"] = "app"
     elif is_pkg_in_dmg:
-        app_info["type"] = "pkg_in_dmg"
+        app_info["type"] = (
+            "app" if installable_artifacts["app"] else "pkg_in_dmg"
+        )
     elif is_pkg_in_pkg:
         app_info["type"] = "pkg_in_pkg"
     elif is_pkg:
-        app_info["type"] = "pkg"
+        app_info["type"] = (
+            "app"
+            if (
+                (
+                    artifact_kind in ("archive", "dmg_gzip")
+                    or not is_concrete_bundle_id(bundle_id)
+                    or urlparse(url).query
+                    or urlparse(url).fragment
+                )
+                and any(installable_artifacts.values())
+            )
+            else "pkg"
+        )
+    elif (
+        artifact_kind == "dmg"
+        and installable_artifacts["pkg"]
+        and not installable_artifacts["app"]
+    ):
+        app_info["type"] = "pkg_in_dmg"
+    elif (
+        (
+            artifact_kind == "archive"
+            or urlparse(url).query
+            or urlparse(url).fragment
+        )
+        and any(installable_artifacts.values())
+    ):
+        app_info["type"] = "app"
 
     return app_info
 
@@ -1832,6 +2103,8 @@ def update_readme_apps(apps_list):
                     'version': data['version'],
                     'logo': logo_file
                 })
+            except SourceHashMismatchError:
+                raise
             except Exception as e:
                 print(f"Error reading {app_json}: {e}")
 
@@ -1920,6 +2193,8 @@ def update_readme_with_latest_changes(apps_info):
                         'old_version': current_data['previous_version'],
                         'new_version': current_data['version']
                     })
+        except SourceHashMismatchError:
+            raise
         except Exception as e:
             print(f"Error checking version history for {app['name']}: {e}")
 
@@ -1972,6 +2247,7 @@ def main():
     
     supported_apps = []
     apps_info = []
+    collection_errors = []
 
     prefetch_cask_data(
         app_urls + homebrew_cask_urls + pkg_in_pkg_urls + pkg_urls + pkg_in_dmg_urls
@@ -2032,16 +2308,20 @@ def main():
                     # if it saw the refreshed value.
                     existing_data["type"] = "app"
                     existing_data["vendor_url"] = app_info["vendor_url"]
+                    sync_artifact_metadata(existing_data, app_info)
+                    merge_fresh_bundle_id(existing_data, app_info)
 
                     # Calculate new hash if version changed
                     if version_changed:
                         print(f"🔍 Version changed, calculating new SHA256 hash for {display_name}...")
-                        file_hash = calculate_file_hash(app_info["url"])
+                        file_hash = calculate_verified_source_hash(app_info)
                         if file_hash:
                             existing_data["sha"] = file_hash
                             print(f"✅ New SHA256 hash calculated: {file_hash}")
                         else:
-                            print(f"⚠️ Could not calculate SHA256 hash for {display_name}")
+                            raise RuntimeError(
+                                f"Could not verify source SHA256 for {display_name}"
+                            )
                     
                     # Update app_info with all existing data
                     app_info = existing_data
@@ -2053,10 +2333,11 @@ def main():
             apps_info.append(app_info)
             print(f"Saved app information for {display_name} to {file_path}")
         except CaskUnavailableError as e:
-            mark_app_deprecated(apps_folder, e.display_name, e.reason, e.cask_token)
+            require_deprecation_tombstone(apps_folder, e.display_name, e.reason, e.cask_token)
+        except SourceHashMismatchError:
+            raise
         except Exception as e:
-            print(f"Error processing special app {url}: {str(e)}")
-            print(f"Full error details: ", e)
+            collection_errors.append(f"{url}: {e}")
 
     # Process regular Homebrew cask URLs
     for url in homebrew_cask_urls:
@@ -2080,21 +2361,22 @@ def main():
                     # syntax strip the build number above, so a build-only bump
                     # leaves the version equal while the URL (and the file
                     # behind it) changes.
-                    if ("sha" in existing_data and
-                        existing_data.get("version") == app_info["version"] and
-                        existing_data.get("url") == app_info["url"]):
+                    if can_reuse_source_hash(existing_data, app_info):
                         needs_hash = False
                         app_info["sha"] = existing_data["sha"]
                         print(f"ℹ️ Using existing hash for {display_name}")
 
             if needs_hash:
                 print(f"🔍 Calculating SHA256 hash for {display_name}...")
-                file_hash = calculate_file_hash(app_info["url"])
+                app_info.pop("sha", None)
+                file_hash = calculate_verified_source_hash(app_info)
                 if file_hash:
                     app_info["sha"] = file_hash
                     print(f"✅ SHA256 hash calculated: {file_hash}")
                 else:
-                    print(f"⚠️ Could not calculate SHA256 hash for {display_name}")
+                    raise RuntimeError(
+                        f"Could not verify source SHA256 for {display_name}"
+                    )
 
             # For existing files, preserve existing data and update necessary fields
             if os.path.exists(file_path):
@@ -2105,14 +2387,16 @@ def main():
                     new_url = app_info["url"]
                     new_sha = app_info.get("sha")
                     previous_version = existing_data.get("version")
+                    preserve_existing_bundle_id(app_info, existing_data)
                     
                     # Preserve all existing data except version, url, sha, and previous_version.
                     # type, homebrew_cask and vendor_url are owned by the list being
                     # processed: these casks are vendor-served DMGs, so the fresh app_info
                     # carries no type key at all and a stale repackaging type is dropped.
                     for key in existing_data:
-                        if key not in ["version", "url", "sha", "previous_version", "deprecated", "deprecation_reason",
-                                       "type", "homebrew_cask", "vendor_url"]:
+                        if (key not in ["version", "url", "sha", "previous_version", "deprecated", "deprecation_reason",
+                                        "type", "homebrew_cask", "vendor_url", "bundleId", "bundleId_source"]
+                                and key not in ARTIFACT_METADATA_KEYS):
                             app_info[key] = existing_data[key]
                     
                     # Update version, url, sha and previous_version
@@ -2136,9 +2420,11 @@ def main():
             apps_info.append(app_info)
             print(f"Saved app information for {display_name} to {file_path}")
         except CaskUnavailableError as e:
-            mark_app_deprecated(apps_folder, e.display_name, e.reason, e.cask_token)
+            require_deprecation_tombstone(apps_folder, e.display_name, e.reason, e.cask_token)
+        except SourceHashMismatchError:
+            raise
         except Exception as e:
-            print(f"Error processing {url}: {str(e)}")
+            collection_errors.append(f"{url}: {e}")
 
     # Process pkg_in_pkg apps
     for url in pkg_in_pkg_urls:
@@ -2161,13 +2447,15 @@ def main():
                     new_version = app_info["version"]
                     new_url = app_info["url"]
                     previous_version = existing_data.get("version")
+                    preserve_existing_bundle_id(app_info, existing_data)
                     
                     # Preserve all existing data except version, url and previous_version.
                     # type, homebrew_cask and vendor_url are owned by the list being
                     # processed, so the fresh "pkg_in_pkg" values win over whatever is on disk.
                     for key in existing_data:
-                        if key not in ["version", "url", "previous_version", "deprecated", "deprecation_reason",
-                                       "type", "homebrew_cask", "vendor_url"]:
+                        if (key not in ["version", "url", "previous_version", "deprecated", "deprecation_reason",
+                                        "type", "homebrew_cask", "vendor_url", "bundleId", "bundleId_source"]
+                                and key not in ARTIFACT_METADATA_KEYS):
                             app_info[key] = existing_data[key]
                     
                     # Update version, url and previous_version
@@ -2190,9 +2478,9 @@ def main():
             apps_info.append(app_info)
             print(f"Saved app information for {display_name} to {file_path}")
         except CaskUnavailableError as e:
-            mark_app_deprecated(apps_folder, e.display_name, e.reason, e.cask_token)
+            require_deprecation_tombstone(apps_folder, e.display_name, e.reason, e.cask_token)
         except Exception as e:
-            print(f"Error processing PKG in PKG app {url}: {str(e)}")
+            collection_errors.append(f"{url}: {e}")
 
     # Process direct pkg apps
     for url in pkg_urls:
@@ -2215,21 +2503,22 @@ def main():
                     # Reuse the stored hash only while both the version and the
                     # download URL are unchanged, so build-only bumps behind an
                     # equal version string still refresh the hash.
-                    if ("sha" in existing_data and
-                        existing_data.get("version") == app_info["version"] and
-                        existing_data.get("url") == app_info["url"]):
+                    if can_reuse_source_hash(existing_data, app_info):
                         needs_hash = False
                         app_info["sha"] = existing_data["sha"]
                         print(f"ℹ️ Using existing hash for {display_name}")
 
             if needs_hash:
                 print(f"🔍 Calculating SHA256 hash for {display_name}...")
-                file_hash = calculate_file_hash(app_info["url"])
+                app_info.pop("sha", None)
+                file_hash = calculate_verified_source_hash(app_info)
                 if file_hash:
                     app_info["sha"] = file_hash
                     print(f"✅ SHA256 hash calculated: {file_hash}")
                 else:
-                    print(f"⚠️ Could not calculate SHA256 hash for {display_name}")
+                    raise RuntimeError(
+                        f"Could not verify source SHA256 for {display_name}"
+                    )
 
             # For existing files, preserve existing data and update necessary fields
             if os.path.exists(file_path):
@@ -2240,13 +2529,15 @@ def main():
                     new_url = app_info["url"]
                     new_sha = app_info.get("sha")
                     previous_version = existing_data.get("version")
+                    preserve_existing_bundle_id(app_info, existing_data)
                     
                     # Preserve all existing data except version, url, sha and previous_version.
                     # type, homebrew_cask and vendor_url are owned by the list being
                     # processed, so the fresh "pkg" values win over whatever is on disk.
                     for key in existing_data:
-                        if key not in ["version", "url", "sha", "previous_version", "deprecated", "deprecation_reason",
-                                       "type", "homebrew_cask", "vendor_url"]:
+                        if (key not in ["version", "url", "sha", "previous_version", "deprecated", "deprecation_reason",
+                                        "type", "homebrew_cask", "vendor_url", "bundleId", "bundleId_source"]
+                                and key not in ARTIFACT_METADATA_KEYS):
                             app_info[key] = existing_data[key]
                     
                     # Update version, url, sha and previous_version
@@ -2272,9 +2563,11 @@ def main():
             apps_info.append(app_info)
             print(f"Saved app information for {display_name} to {file_path}")
         except CaskUnavailableError as e:
-            mark_app_deprecated(apps_folder, e.display_name, e.reason, e.cask_token)
+            require_deprecation_tombstone(apps_folder, e.display_name, e.reason, e.cask_token)
+        except SourceHashMismatchError:
+            raise
         except Exception as e:
-            print(f"Error processing direct PKG app {url}: {str(e)}")
+            collection_errors.append(f"{url}: {e}")
 
     # Process pkg_in_dmg apps
     for url in pkg_in_dmg_urls:
@@ -2297,13 +2590,15 @@ def main():
                     new_version = app_info["version"]
                     new_url = app_info["url"]
                     previous_version = existing_data.get("version")
+                    preserve_existing_bundle_id(app_info, existing_data)
                     
                     # Preserve all existing data except version, url and previous_version.
                     # type, homebrew_cask and vendor_url are owned by the list being
                     # processed, so the fresh "pkg_in_dmg" values win over whatever is on disk.
                     for key in existing_data:
-                        if key not in ["version", "url", "previous_version", "deprecated", "deprecation_reason",
-                                       "type", "homebrew_cask", "vendor_url"]:
+                        if (key not in ["version", "url", "previous_version", "deprecated", "deprecation_reason",
+                                        "type", "homebrew_cask", "vendor_url", "bundleId", "bundleId_source"]
+                                and key not in ARTIFACT_METADATA_KEYS):
                             app_info[key] = existing_data[key]
                     
                     # Update version, url and previous_version
@@ -2325,22 +2620,19 @@ def main():
             apps_info.append(app_info)
             print(f"Saved app information for {display_name} to {file_path}")
         except CaskUnavailableError as e:
-            mark_app_deprecated(apps_folder, e.display_name, e.reason, e.cask_token)
+            require_deprecation_tombstone(apps_folder, e.display_name, e.reason, e.cask_token)
         except Exception as e:
-            print(f"Error processing PKG in DMG app {url}: {str(e)}")
+            collection_errors.append(f"{url}: {e}")
 
     # Run custom scrapers and update apps_info accordingly
     for scraper in custom_scrapers:
-        try:
-            subprocess.run([scraper], check=True)
-            # Get the app name from the JSON file created by the scraper
-            json_file = os.path.join(apps_folder, os.path.basename(scraper).replace('.sh', '.json'))
-            if os.path.exists(json_file):
-                with open(json_file, 'r') as f:
-                    app_data = json.load(f)
-                    supported_apps.append(app_data['name'])
-        except Exception as e:
-            print(f"Error running scraper {scraper}: {str(e)}")
+        subprocess.run([scraper], check=True)
+        json_file = os.path.join(apps_folder, os.path.basename(scraper).replace('.sh', '.json'))
+        if not os.path.exists(json_file):
+            raise RuntimeError(f"Scraper {scraper} produced no manifest")
+        with open(json_file, 'r') as f:
+            app_data = json.load(f)
+            supported_apps.append(app_data['name'])
 
     # After custom scrapers run, calculate hashes for direct downloads
     print("\n📊 Checking custom scraper outputs for missing hashes...")
@@ -2356,7 +2648,7 @@ def main():
                 (app_data['url'].endswith('.dmg') or app_data['url'].endswith('.pkg'))):
                 
                 print(f"🔍 Calculating SHA256 hash for {app_data['name']}...")
-                file_hash = calculate_file_hash(app_data['url'])
+                file_hash = calculate_verified_source_hash(app_data)
                 if file_hash:
                     app_data['sha'] = file_hash
                     # Write back the updated JSON
@@ -2374,6 +2666,13 @@ def main():
     # so the run must go red before anything is committed.
     if report_filename_collisions():
         sys.exit(1)
+    if collection_errors:
+        print("COLLECTION FAILURES:", file=sys.stderr)
+        for error in collection_errors:
+            print(f"- {error}", file=sys.stderr)
+        raise RuntimeError(
+            f"{len(collection_errors)} configured apps failed collection"
+        )
 
 if __name__ == "__main__":
     main()

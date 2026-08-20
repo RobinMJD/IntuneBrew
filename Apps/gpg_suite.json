@@ -12,5 +12,8 @@
   "sha": "ab1ea62077b62033c4d73c1940f619f890df68ddc4cebea3032b6e841ddc2fea",
   "category": "Security",
   "publisher": "GPGTools",
-  "previous_version": "2023.3"
+  "previous_version": "2023.3",
+  "source_version": "2023.3",
+  "source_sha256": "57468a4adc55d954ead4fe1f88b07eac1b70ada40fcbc810765fd521ef21eef1",
+  "source_sha256_provenance": "homebrew"
 }

@@ -12,5 +12,8 @@
   "category": "Productivity",
   "publisher": "BZG Apps",
   "previous_version": "5.1.3",
-  "homebrew_cask": "coherence-x"
+  "homebrew_cask": "coherence-x",
+  "source_version": "5.1.3",
+  "source_sha256": "4bb10dced56d9a7828ae25a25e4f4b2446fe5e87e8128d295a73782e2f4c2bcd",
+  "source_sha256_provenance": "homebrew"
 }

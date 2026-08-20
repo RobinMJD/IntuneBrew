@@ -22,5 +22,8 @@
   },
   "category": "Utilities",
   "publisher": "AltTab",
-  "homebrew_cask": "alt-tab"
+  "homebrew_cask": "alt-tab",
+  "source_version": "11.5.0",
+  "source_sha256": "e85da60eb7e57714cee6357ba2e51bcde9393a4d64d3f6b507e71e6579ea7366",
+  "source_sha256_provenance": "homebrew"
 }

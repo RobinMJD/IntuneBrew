@@ -12,5 +12,8 @@
   "previous_version": "5.4.3",
   "category": "Utilities",
   "publisher": "Itsalin",
-  "homebrew_cask": "pearcleaner"
+  "homebrew_cask": "pearcleaner",
+  "source_version": "5.4.3",
+  "source_sha256": "f4554e69e1179cfcd908873018423f2d7e2b588d3556cbecdd78788866d97aab",
+  "source_sha256_provenance": "homebrew"
 }

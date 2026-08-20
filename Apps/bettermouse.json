@@ -22,5 +22,8 @@
   },
   "category": "Utilities",
   "publisher": "BetterMouse",
-  "homebrew_cask": "bettermouse"
+  "homebrew_cask": "bettermouse",
+  "source_version": "1.6,8905",
+  "source_sha256": "de723ae004bf2f5e32ed2b30cf33f1c76123e969af9496b03df7b654ff562fab",
+  "source_sha256_provenance": "homebrew"
 }

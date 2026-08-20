@@ -12,5 +12,8 @@
   "previous_version": "2.16.1",
   "category": "Developer Tools",
   "publisher": "qishibo",
-  "homebrew_cask": "medis"
+  "homebrew_cask": "medis",
+  "source_version": "2.16.1",
+  "source_sha256": "f9cef8fb4637d9a0f5a101246a20830c081452f49dfc7006b992bb6b4c561943",
+  "source_sha256_provenance": "homebrew"
 }

@@ -13,5 +13,8 @@
   "sha": "d3b42edabcf2c1dfab32458b11fb555df0cc90c5a359c8aa8aa2b7403606351f",
   "category": "Utilities",
   "publisher": "NoMachine",
-  "previous_version": "9.8.2"
+  "previous_version": "9.8.2",
+  "source_version": "9.8.2_1",
+  "source_sha256": "08d67260ec02f4bd68b2c4c8868187ebe94d0da7109d55dbdcb68bd92cd978f6",
+  "source_sha256_provenance": "homebrew"
 }

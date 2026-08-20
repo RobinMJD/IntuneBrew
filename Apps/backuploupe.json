@@ -12,5 +12,8 @@
   "sha": "4706ce33b81b41b2ebdcdb65918e932d97a9f25ad01a0b2160f2d1c8d55005b2",
   "category": "Utilities",
   "publisher": "Soma Zone",
-  "homebrew_cask": "backuploupe"
+  "homebrew_cask": "backuploupe",
+  "source_version": "3.15.1",
+  "source_sha256": "c12454d6271c0855cfb807476ffb7b8dd98fcf43e26b0546e6f4925be55153c0",
+  "source_sha256_provenance": "homebrew"
 }

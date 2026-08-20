@@ -12,5 +12,8 @@
   "category": "Utilities",
   "publisher": "Jizoh",
   "previous_version": "8.6.1",
-  "homebrew_cask": "simpledemviewer"
+  "homebrew_cask": "simpledemviewer",
+  "source_version": "8.6.1",
+  "source_sha256": "cca95230db8e0758a6c6a68b39554b69db3849991974e0d77346dcb085b03834",
+  "source_sha256_provenance": "homebrew"
 }

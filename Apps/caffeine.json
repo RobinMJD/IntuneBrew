@@ -23,5 +23,8 @@
   },
   "category": "Utilities",
   "publisher": "Lighthead Software",
-  "previous_version": "1.6.4"
+  "previous_version": "1.6.4",
+  "source_version": "1.6.4",
+  "source_sha256": "792cf299c193b6e82d12877129844b05df8f21d4165655d4567e60291c6bd5e7",
+  "source_sha256_provenance": "homebrew"
 }

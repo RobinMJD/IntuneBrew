@@ -12,5 +12,8 @@
   "category": "Productivity",
   "publisher": "Aptonic",
   "previous_version": "4.80.76",
-  "homebrew_cask": "dropzone"
+  "homebrew_cask": "dropzone",
+  "source_version": "4.80.76",
+  "source_sha256": "fd663d10572781e54ef394fbea34df26f434e69a085867205182ee2842a1c08a",
+  "source_sha256_provenance": "homebrew"
 }

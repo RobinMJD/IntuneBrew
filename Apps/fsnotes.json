@@ -12,5 +12,8 @@
   "sha": "bb46393b0e9f6634b1388c1b7435ffe20d2912d43c8a23cd20c5c9aefb0120c8",
   "category": "Productivity",
   "publisher": "FSNotes",
-  "homebrew_cask": "fsnotes"
+  "homebrew_cask": "fsnotes",
+  "source_version": "7.3.2",
+  "source_sha256": "42e8f83adf178695f2d3f4148a5f9b377666f0b4468889d02d3c11372a6825ff",
+  "source_sha256_provenance": "homebrew"
 }

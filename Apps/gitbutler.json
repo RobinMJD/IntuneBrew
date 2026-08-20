@@ -12,5 +12,8 @@
   "sha": "5ee5ebe860aab2c6f3961c6ebba827bf527fcfe46c8cbbc181d58907aa646511",
   "category": "Developer Tools",
   "publisher": "GitButler",
-  "homebrew_cask": "gitbutler"
+  "homebrew_cask": "gitbutler",
+  "source_version": "0.22.0,3180",
+  "source_sha256": "542c2235521cbf2b85c6e5d4cd37c97dd2c3749aec5ebffa560e5e754aef7ad8",
+  "source_sha256_provenance": "homebrew"
 }

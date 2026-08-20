@@ -12,5 +12,8 @@
   "category": "Design",
   "publisher": "Zeplin Ltd",
   "previous_version": "10.32.0",
-  "homebrew_cask": "zeplin"
+  "homebrew_cask": "zeplin",
+  "source_version": "10.32.0",
+  "source_sha256": "no_check",
+  "packaging_pending": true
 }

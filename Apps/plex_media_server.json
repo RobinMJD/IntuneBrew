@@ -12,5 +12,8 @@
   "category": "Media",
   "publisher": "Plex, Inc.",
   "previous_version": "1.43.3.10896",
-  "homebrew_cask": "plex-media-server"
+  "homebrew_cask": "plex-media-server",
+  "source_version": "1.43.3.10896,cb3ebc72d",
+  "source_sha256": "185963b4043898a734db7b3d2b2845bc389492681544989550744edccb1a0e7b",
+  "source_sha256_provenance": "homebrew"
 }

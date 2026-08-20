@@ -13,5 +13,8 @@
   "previous_version": "12.24.2",
   "category": "Developer Tools",
   "publisher": "Postman, Inc.",
-  "homebrew_cask": "postman"
+  "homebrew_cask": "postman",
+  "source_version": "12.24.2",
+  "source_sha256": "1f7dca58b1f773d13c7bf7cdfa944d6db5d4343300165b4d0d9993b8573c84b5",
+  "source_sha256_provenance": "homebrew"
 }

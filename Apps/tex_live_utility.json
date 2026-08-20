@@ -12,5 +12,8 @@
   "previous_version": "1.57",
   "category": "Utilities",
   "publisher": "Adam Maxwell",
-  "homebrew_cask": "tex-live-utility"
+  "homebrew_cask": "tex-live-utility",
+  "source_version": "1.57",
+  "source_sha256": "e738c49250a1b62568bdf9d8333e6cfbd57b08185659073f2ab7a6103881dce4",
+  "source_sha256_provenance": "homebrew"
 }

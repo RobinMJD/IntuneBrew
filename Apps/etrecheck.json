@@ -12,5 +12,8 @@
   "category": "Utilities",
   "publisher": "EtreCheck",
   "previous_version": "6.8.16",
-  "homebrew_cask": "etrecheckpro"
+  "homebrew_cask": "etrecheckpro",
+  "source_version": "6.8.16",
+  "source_sha256": "no_check",
+  "packaging_pending": true
 }

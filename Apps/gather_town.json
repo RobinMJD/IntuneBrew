@@ -22,5 +22,8 @@
   },
   "category": "Communication",
   "publisher": "Gather Town, Inc.",
-  "homebrew_cask": "gather"
+  "homebrew_cask": "gather",
+  "source_version": "1.39.2",
+  "source_sha256": "292a6f5d7f20a865218055fd3de75f2facc4ce07ca8a35854e348ec069b7cd2f",
+  "source_sha256_provenance": "homebrew"
 }

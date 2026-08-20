@@ -12,5 +12,8 @@
   "sha": "b3457ec3c6ebb0fd88cb09714b5e392559a3b03c6ea42431e71103f6f64090b5",
   "category": "Utilities",
   "publisher": "Wacom Co., Ltd.",
-  "previous_version": "6.4.13-4"
+  "previous_version": "6.4.13-4",
+  "source_version": "6.4.13-4",
+  "source_sha256": "9790dc62a49e27f1a4b03f47133cbc47ae0d4975523ad387120048ad2776a17f",
+  "source_sha256_provenance": "homebrew"
 }

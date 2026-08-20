@@ -12,5 +12,8 @@
   "category": "Media",
   "publisher": "Melodics",
   "previous_version": "5.0.1001",
-  "homebrew_cask": "melodics"
+  "homebrew_cask": "melodics",
+  "source_version": "5.0.1001,CA99927E-3E83-4860-B595-3E78A340F227",
+  "source_sha256": "2d95db885a69880dc24fd7ddd033be1123b20fe4647b2628c218063319e798b3",
+  "source_sha256_provenance": "homebrew"
 }

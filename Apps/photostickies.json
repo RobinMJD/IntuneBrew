@@ -12,5 +12,8 @@
   "category": "Utilities",
   "publisher": "DEVONtechnologies",
   "previous_version": "6.0.1",
-  "homebrew_cask": "photostickies"
+  "homebrew_cask": "photostickies",
+  "source_version": "6.0.1",
+  "source_sha256": "8b653653c51bea69e0b46f177da770fdee8dc3a41e01a18a68165f226a618236",
+  "source_sha256_provenance": "homebrew"
 }

@@ -12,5 +12,8 @@
   "previous_version": "1.46.0",
   "category": "Developer Tools",
   "publisher": "Block, Inc.",
-  "homebrew_cask": "block-goose"
+  "homebrew_cask": "block-goose",
+  "source_version": "1.46.0",
+  "source_sha256": "25561627578b865e237d64c068d9befce661779b891bc76cdea82ae023ee6f83",
+  "source_sha256_provenance": "homebrew"
 }

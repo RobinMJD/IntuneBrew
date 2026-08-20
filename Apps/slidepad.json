@@ -12,5 +12,8 @@
   "category": "Utilities",
   "publisher": "Slidepad",
   "previous_version": "1.6.2",
-  "homebrew_cask": "slidepad"
+  "homebrew_cask": "slidepad",
+  "source_version": "1.6.2",
+  "source_sha256": "6d7e7999bd505e67debb810be67bd88593916dc263d1bdc4992bb59c13041904",
+  "source_sha256_provenance": "homebrew"
 }

@@ -12,5 +12,8 @@
   "category": "Media",
   "publisher": "Screen Studio",
   "previous_version": "3.7.5-4595",
-  "homebrew_cask": "screen-studio"
+  "homebrew_cask": "screen-studio",
+  "source_version": "3.7.5-4595",
+  "source_sha256": "287530005db8ca3f505101cbc1bb386986b3bfbe351b6cb158222279a48cc6ef",
+  "source_sha256_provenance": "homebrew"
 }

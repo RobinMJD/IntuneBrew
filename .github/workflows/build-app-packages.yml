@@ -2,6 +2,11 @@ name: Build App Packages and Collect App Information
 
 on:
   workflow_dispatch:
+    inputs:
+      max_packages:
+        description: Maximum package builds in this run
+        required: false
+        default: "25"
   push:
     branches: [main]
     paths:
@@ -119,6 +124,7 @@ jobs:
   build:
     needs: collect
     runs-on: macos-latest
+    timeout-minutes: 180
     environment: catalog-storage
 
     # The job-scoped token is sufficient for catalog commits and issue comments.
@@ -165,6 +171,11 @@ jobs:
               exit 1
               ;;
           esac
+          expected_host="https://${AZURE_STORAGE_ACCOUNT}.blob.core.windows.net/${AZURE_STORAGE_CONTAINER}"
+          if [ "${AZURE_STORAGE_BASE_URL%/}" != "$expected_host" ]; then
+            echo "::error::AZURE_STORAGE_BASE_URL does not match configured account/container"
+            exit 1
+          fi
 
           case "$AZURE_STORAGE_BASE_URL" in
             *\?*|*\#*)
@@ -201,6 +212,8 @@ jobs:
         env:
           BUILD_SCOPE: ${{ needs.collect.outputs.scope }}
           SCOPE_TOKENS: ${{ needs.collect.outputs.tokens }}
+          MAX_PACKAGES: ${{ inputs.max_packages || '25' }}
+          AZURE_STORAGE_BASE_URL: ${{ vars.AZURE_STORAGE_BASE_URL }}
         run: |
           echo "Finding apps that need special packaging..."
           all_apps=()
@@ -237,25 +250,19 @@ jobs:
             [ "$in_scope" = true ] && scoped_apps+=("$entry")
           done
 
-          apps_to_build=("${all_apps[@]}")
           if [ "$BUILD_SCOPE" = "partial" ]; then
-            if [ ${#scoped_apps[@]} -gt 0 ]; then
-              apps_to_build=("${scoped_apps[@]}")
-              echo "Scoped build: packaging ${#scoped_apps[@]} of ${#all_apps[@]} apps, skipping the rest"
-            elif [ "$scoped_files_seen" -gt 0 ]; then
-              # The added apps exist but need no repackaging, so there is
-              # genuinely nothing to build.
-              apps_to_build=()
-              echo "Scoped build: added apps need no packaging, nothing to build"
-            else
-              # The added cask produced no app file at all, usually a display
-              # name collision. Build everything rather than silently skipping.
-              echo "No app file matched the added casks ($SCOPE_TOKENS), falling back to a full build"
+            if [ "$scoped_files_seen" -eq 0 ]; then
+              echo "::error::No manifest matched requested partial casks: $SCOPE_TOKENS"
+              exit 1
             fi
           fi
 
-          echo "APPS_TO_BUILD=${apps_to_build[*]}" >> $GITHUB_ENV
-          echo "Found apps: ${apps_to_build[*]}"
+          python .github/scripts/package_candidates.py \
+            --max-packages "$MAX_PACKAGES" \
+            --storage-base-url "${AZURE_STORAGE_BASE_URL%/}" \
+            --scope "$BUILD_SCOPE" \
+            --tokens "$SCOPE_TOKENS"
+          cat package-candidates.json
 
       - name: Log in to Azure with GitHub OIDC
         id: azure-login
@@ -263,64 +270,11 @@ jobs:
         uses: azure/login@v3
         env:
           AZURE_LOGIN_PRE_CLEANUP: true
-          AZURE_LOGIN_POST_CLEANUP: true
+          AZURE_LOGIN_POST_CLEANUP: false
         with:
           client-id: ${{ vars.AZURE_CLIENT_ID }}
           tenant-id: ${{ vars.AZURE_TENANT_ID }}
           subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
-
-      - name: Create supported_apps.json
-        run: |
-          python - <<EOF
-          import json
-          import os
-          import re
-
-          apps_folder = "Apps"
-          supported_apps = {}
-
-          for filename in os.listdir(apps_folder):
-              if filename.endswith(".json"):
-                  # Deprecated apps stay in Apps/ for history but must not be
-                  # offered for upload, their download URLs no longer work
-                  try:
-                      with open(os.path.join(apps_folder, filename)) as f:
-                          app_data = json.load(f)
-                  except ValueError:
-                      app_data = {}
-                  if app_data.get("deprecated"):
-                      print(f"Excluding deprecated app: {filename}")
-                      continue
-                  app_name = os.path.splitext(filename)[0]
-                  supported_apps[app_name] = f"https://raw.githubusercontent.com/ugurkocde/IntuneBrew/main/Apps/{filename}"
-
-          # Sort the dictionary alphabetically by keys
-          supported_apps = dict(sorted(supported_apps.items()))
-
-          with open("supported_apps.json", "w") as f:
-              json.dump(supported_apps, f, indent=4)
-
-          # Update README with total number of apps
-          total_apps = len(supported_apps)
-          with open("README.md", "r") as f:
-              readme_content = f.read()
-
-          # Create a badge-style apps count
-          apps_count_pattern = r'<p>\s*<a href="#-supported-applications">\s*<img src="https://img\.shields\.io/badge/Apps_Available-\d+-2ea44f\?style=flat"[^>]*>\s*</a>\s*</p>'
-          new_apps_badge = f'  <p>\n    <a href="#-supported-applications">\n      <img src="https://img.shields.io/badge/Apps_Available-{total_apps}-2ea44f?style=flat" alt="TotalApps"/>\n    </a>\n  </p>'
-
-          # Replace the existing badge with the new one, or add if not found
-          if re.search(apps_count_pattern, readme_content):
-              readme_content = re.sub(apps_count_pattern, new_apps_badge, readme_content)
-          else:
-              # If no badge exists, add after the first paragraph in the centered div
-              readme_content = re.sub(r'(  </p>)\n</div>', f'\\1\n{new_apps_badge}\n</div>', readme_content)
-
-          with open("README.md", "w") as f:
-              f.write(readme_content)
-
-          print(f"Updated README.md with {total_apps} apps badge")
-          EOF
 
       - name: Process apps
         id: process-apps
@@ -355,24 +309,38 @@ jobs:
 
           extract_bundle_id_from_pkg() {
             local pkg_path="$1"
+            local declared_app="${2:-}"
+            local source_app="${3:-}"
             local expand_dir=""
-            local plist=""
-            if ! expand_dir=$(mktemp -d 2>/dev/null); then
+            local expected_id=""
+            local selected_id=""
+            if [ -z "${app_temp_dir:-}" ] \
+              || ! expand_dir=$(mktemp -d "$app_temp_dir/pkg-expand.XXXXXX" 2>/dev/null); then
               echo "Could not create a temporary directory to inspect $pkg_path, bundleId left unchanged" >&2
               return 0
             fi
             # --expand-full also unpacks Payload, so .app bundles end up as real
             # directories. Packages without an .app payload (system extensions,
             # drivers) legitimately yield nothing here.
-            if pkgutil --expand-full "$pkg_path" "$expand_dir/payload" >/dev/null 2>&1; then
-              # Shortest path wins so a nested helper bundle inside Frameworks
-              # cannot shadow the top level app.
-              plist=$(find "$expand_dir/payload" -type f -path "*.app/Contents/Info.plist" -print 2>/dev/null | awk '{ print length, $0 }' | sort -n | head -1 | cut -d" " -f2-)
-              if [ -n "$plist" ]; then
-                extract_bundle_id_from_plist "$plist"
-              else
-                echo "No .app payload inside $pkg_path, bundleId left unchanged" >&2
+            if pkgutil --expand-full "$pkg_path" "$expand_dir/payload" >/dev/null 2>&1 \
+              && require_extracted_quota "$expand_dir"; then
+              expected_id=$(jq -r '.bundleId // empty' "$WORKSPACE_DIR/Apps/${app_name}.json")
+              if [ -f "$expand_dir/payload/Contents/Info.plist" ]; then
+                selected_id=$(extract_bundle_id_from_plist "$expand_dir/payload/Contents/Info.plist")
               fi
+              if [ -z "$selected_id" ] && [ -n "$source_app" ]; then
+                primary_app=$(find_source_payload "$expand_dir/payload" "$source_app" app)
+                [ -z "$primary_app" ] || selected_id=$(extract_bundle_id_from_plist "$primary_app/Contents/Info.plist")
+              fi
+              if [ -z "$selected_id" ] && [ -n "$declared_app" ]; then
+                primary_app=$(find_declared_payload "$expand_dir/payload" "$declared_app" app)
+                [ -z "$primary_app" ] || selected_id=$(extract_bundle_id_from_plist "$primary_app/Contents/Info.plist")
+              fi
+              if [ -z "$selected_id" ]; then
+                selected_id=$(python "$WORKSPACE_DIR/.github/scripts/select_package_identity.py" \
+                  --root "$expand_dir/payload" --expected "$expected_id" 2>/dev/null || true)
+              fi
+              [ -z "$selected_id" ] || echo "$selected_id"
             else
               echo "Could not expand $pkg_path, bundleId left unchanged" >&2
             fi
@@ -380,51 +348,437 @@ jobs:
             return 0
           }
 
-          log_bundle_id_change() {
+          require_bundle_id_match() {
             local json_path="$1"
-            local new_id="$2"
-            local current_id=""
-            [ -n "$new_id" ] || return 0
-            current_id=$(jq -r '.bundleId // empty' "$json_path" 2>/dev/null) || current_id=""
-            if [ "$current_id" != "$new_id" ]; then
-              echo "bundleId changed in $json_path: ${current_id:-none} -> $new_id"
+            local actual_id="$2"
+            local expected_id=""
+            local expected_source=""
+            expected_id=$(jq -r '.bundleId // empty' "$json_path")
+            expected_source=$(jq -r '.bundleId_source // "stored"' "$json_path")
+            if [ -z "$actual_id" ] || [[ "$actual_id" == *[\*\?\[\]]* ]]; then
+              echo "Bundle ID validation failed: expected ${expected_id:-missing}, got ${actual_id:-missing}" >&2
+              return 1
             fi
-            return 0
+            if [ "$expected_source" = "override" ] \
+              || [ "$expected_source" = "stored" ] \
+              || [ "$expected_source" = "package" ]; then
+              if [ -z "$expected_id" ] || [ "$actual_id" != "$expected_id" ]; then
+                echo "Bundle ID validation failed: expected ${expected_id:-missing}, got $actual_id" >&2
+                return 1
+              fi
+              return 0
+            fi
+            if ! jq --arg bundleid "$actual_id" \
+              '.bundleId = $bundleid | .bundleId_source = "package"' \
+              "$json_path" > "$json_path.bundle.tmp" \
+              || ! mv "$json_path.bundle.tmp" "$json_path"; then
+              echo "Could not persist package-validated bundle ID: $actual_id" >&2
+              return 1
+            fi
           }
 
-          # Superseded packages of one app are removed from the pkg container so
-          # old versions do not accumulate there forever. Constraints:
-          #   - callers must invoke this only after the new blob upload was
-          #     confirmed successful, never on a failure path and never in the
-          #     "already exists in Azure" shortcut, otherwise a transient Azure
-          #     failure would delete the last working package and leave the
-          #     catalog pointing at nothing.
-          #   - the blob list is passed in rather than read from the loop, so
-          #     the caller decides which listing is authoritative.
-          #   - a failed delete is logged and ignored: a leftover blob costs
-          #     storage, a non-zero return here would fail the whole step under
-          #     errexit and lose an app that was already uploaded.
-          delete_superseded_blobs() {
-            local cleanup_app="$1"
-            local cleanup_version="$2"
-            local cleanup_blobs="$3"
-            local blob_name=""
-            [ -n "$cleanup_blobs" ] || return 0
-            echo "Cleaning up older versions of $cleanup_app..."
-            # Here-string instead of a pipe: the loop stays in this shell, so no
-            # subshell can swallow the exit status of the function.
-            while IFS= read -r blob_name; do
-              if [ -n "$blob_name" ] && [ "$blob_name" != "${cleanup_app}_${cleanup_version}.pkg" ]; then
-                echo "Deleting old version: $blob_name"
-                az storage blob delete \
-                  --account-name "$AZURE_STORAGE_ACCOUNT" \
-                  --container-name "$AZURE_STORAGE_CONTAINER" \
-                  --auth-mode login \
-                  --name "$blob_name" \
-                  || echo "Could not delete $blob_name, leaving it in the container"
+          is_storage_package_url() {
+            case "$1" in
+              "$STORAGE_BASE_URL"/*) return 0 ;;
+              https://intunebrew.blob.core.windows.net/*) return 0 ;;
+              *) return 1 ;;
+            esac
+          }
+
+          artifact_kind() {
+            local path="${1%%\?*}"
+            path="${path%%\#*}"
+            path=$(printf '%s' "$path" | tr '[:upper:]' '[:lower:]')
+            case "$path" in
+              *.pkg) echo "pkg" ;;
+              *.dmg.gz) echo "dmg_gzip" ;;
+              *.dmg) echo "dmg" ;;
+              *.zip|*.tar.gz|*.tgz|*.tar.xz|*.tar.bz2|*.tbz) echo "archive" ;;
+              *) echo "unknown" ;;
+            esac
+          }
+
+          safe_artifact_relative_path() {
+            local value=""
+            local component=""
+            value=$(printf '%s' "$1" | tr '\\' '/')
+            case "$value" in
+              ""|"."|/*|[A-Za-z]:*|*[$'\n\r\t']*) return 1 ;;
+            esac
+            IFS='/' read -r -a components <<< "$value"
+            for component in "${components[@]}"; do
+              case "$component" in
+                ""|"."|".."|*"*"*|*"?"*|*"["*|*"]"*) return 1 ;;
+              esac
+            done
+            printf '%s\n' "$value"
+          }
+
+          resolved_payload_path() {
+            local root="$1"
+            local candidate="$2"
+            python -c 'import pathlib, sys; root=pathlib.Path(sys.argv[1]).resolve(strict=True); candidate=pathlib.Path(sys.argv[2]).resolve(strict=True); candidate.relative_to(root); print(candidate)' \
+              "$root" "$candidate" 2>/dev/null
+          }
+
+          find_declared_payload() {
+            local root="$1"
+            local expected="$2"
+            local payload_type="$3"
+            local normalized=""
+            local candidate=""
+            local resolved=""
+            local matches=()
+            normalized=$(safe_artifact_relative_path "$expected") || {
+              echo "Rejected unsafe Homebrew artifact path: $expected" >&2
+              return 0
+            }
+
+            candidate="$root/$normalized"
+            if { [ "$payload_type" = "app" ] && [ -d "$candidate" ]; } \
+              || { [ "$payload_type" = "pkg" ] && [ -f "$candidate" ]; }; then
+              resolved=$(resolved_payload_path "$root" "$candidate") || return 0
+              printf '%s\n' "$resolved"
+              return 0
+            fi
+
+            # Homebrew archives sometimes add one release-directory wrapper.
+            # Accept it only when exactly one immediate wrapper resolves.
+            for wrapper in "$root"/*; do
+              [ -d "$wrapper" ] || continue
+              candidate="$wrapper/$normalized"
+              if { [ "$payload_type" = "app" ] && [ -d "$candidate" ]; } \
+                || { [ "$payload_type" = "pkg" ] && [ -f "$candidate" ]; }; then
+                resolved=$(resolved_payload_path "$root" "$candidate") || continue
+                matches+=("$resolved")
               fi
-            done <<< "$cleanup_blobs"
-            return 0
+            done
+            if [ ${#matches[@]} -eq 1 ]; then
+              printf '%s\n' "${matches[0]}"
+            elif [ ${#matches[@]} -gt 1 ]; then
+              echo "Ambiguous Homebrew artifact path under $root: $expected" >&2
+            fi
+          }
+
+          find_source_payload() {
+            local root="$1"
+            local pattern="$2"
+            local payload_type="$3"
+            local result=""
+            result=$(python -c 'import glob,pathlib,sys; root=pathlib.Path(sys.argv[1]).resolve(strict=True); pattern=sys.argv[2].replace("\\","/"); parts=pattern.split("/"); assert all(part not in ("",".","..") for part in parts); candidates=[pathlib.Path(value).resolve(strict=True) for value in glob.glob(str(root / pattern))]; matches=[str(candidate) for candidate in candidates if root in candidate.parents and ((sys.argv[3]=="app" and candidate.is_dir()) or (sys.argv[3]=="pkg" and candidate.is_file()))]; assert len(matches)<=1; print(matches[0] if matches else "")' "$root" "$pattern" "$payload_type" 2>/dev/null) || return 0
+            [ -z "$result" ] || printf '%s\n' "$result"
+          }
+
+          find_app_payload() {
+            local root="$1"
+            local expected="$2"
+            local source_expected="${3:-}"
+            local result=""
+            if [ -n "$source_expected" ]; then
+              result=$(find_source_payload "$root" "$source_expected" app)
+            fi
+            if [ -z "$result" ] && [ -n "$expected" ]; then
+              result=$(find_declared_payload "$root" "$expected" app)
+            fi
+            if [ -z "$result" ] && [ -z "$source_expected" ] && [ -z "$expected" ]; then
+              result=$(find -P "$root" -type d -name "*.app" ! -path "*/__MACOSX/*" \
+                -prune -print 2>/dev/null | awk '{ print length, $0 }' | sort -n | head -1 | cut -d" " -f2-)
+              [ -z "$result" ] || result=$(resolved_payload_path "$root" "$result" 2>/dev/null || true)
+            fi
+            if [ -n "$result" ] && [ -f "$result/Contents/Info.plist" ]; then
+              printf '%s\n' "$result"
+            fi
+          }
+
+          find_pkg_payload() {
+            local root="$1"
+            local expected="$2"
+            local source_expected="${3:-}"
+            local result=""
+            if [ -n "$source_expected" ]; then
+              result=$(find_source_payload "$root" "$source_expected" pkg)
+            fi
+            if [ -z "$result" ] && [ -n "$expected" ]; then
+              result=$(find_declared_payload "$root" "$expected" pkg)
+            fi
+            if [ -z "$result" ] && [ -z "$source_expected" ] && [ -z "$expected" ]; then
+              result=$(find -P "$root" -type f -name "*.pkg" ! -path "*/__MACOSX/*" -print 2>/dev/null)
+              [ "$(printf '%s\n' "$result" | sed '/^$/d' | wc -l | tr -d ' ')" = "1" ] || result=""
+            fi
+            [ -z "$result" ] || printf '%s\n' "$result"
+          }
+
+          safe_blob_leaf() {
+            [[ "$1" =~ ^[A-Za-z0-9._@+=-]+\.pkg$ ]] && [[ "$1" != .* ]]
+          }
+
+          verified_source_identity_matches() {
+            local prior_version="$1"
+            local current_version="$2"
+            local prior_sha="$3"
+            local current_sha="$4"
+            [ -n "$current_version" ] \
+              && [ "$prior_version" = "$current_version" ] \
+              && [[ "$current_sha" =~ ^[0-9a-fA-F]{64}$ ]] \
+              && [ "$prior_sha" = "$current_sha" ]
+          }
+
+          verify_source_file() {
+            local source_path="$1"
+            local expected_sha="$2"
+            local actual_sha=""
+            if [ "$expected_sha" = "no_check" ]; then
+              return 0
+            fi
+            [[ "$expected_sha" =~ ^[0-9a-fA-F]{64}$ ]] || return 1
+            actual_sha=$(shasum -a 256 "$source_path" | awk '{print $1}')
+            [ "$actual_sha" = "$(printf '%s' "$expected_sha" | tr 'A-F' 'a-f')" ]
+          }
+
+          # GitHub macOS has about 14 GiB available. One app may temporarily
+          # need source + expanded payload + output package, so cap source at
+          # 3 GiB, expanded payload at 6 GiB, and retain 2 GiB headroom.
+          MAX_SOURCE_BYTES=3221225472
+          MAX_EXPANDED_BYTES=6442450944
+          MAX_ARCHIVE_MEMBERS=100000
+          MIN_FREE_KB=2097152
+          HOST_WORKSPACE_KB=10485760
+          WORKSPACE_CAPACITY=10g
+
+          require_free_disk() {
+            local path="$1"
+            local free_kb=""
+            free_kb=$(df -Pk "$path" | awk 'NR==2 {print $4}')
+            [ "${free_kb:-0}" -ge "$MIN_FREE_KB" ]
+          }
+
+          require_host_workspace_capacity() {
+            local backing_path="${RUNNER_TEMP:-${TMPDIR:-/tmp}}"
+            local free_kb=""
+            free_kb=$(df -Pk "$backing_path" | awk 'NR==2 {print $4}')
+            [ "${free_kb:-0}" -ge $((HOST_WORKSPACE_KB + MIN_FREE_KB)) ]
+          }
+
+          destroy_app_workspace() {
+            if [ "${app_attached:-false}" = true ] \
+              && [ -z "${app_device:-}" ] \
+              && [ -n "${app_sparse_image:-}" ]; then
+              app_device=$(hdiutil info -plist 2>/dev/null \
+                | plutil -convert json -o - -- - 2>/dev/null \
+                | python -c 'import json,pathlib,re,sys; target=pathlib.Path(sys.argv[1]).resolve(); data=json.load(sys.stdin); devices=[item.get("dev-entry") for image in data.get("images",[]) if image.get("image-path") and pathlib.Path(image["image-path"]).resolve()==target for item in image.get("system-entities",[]) if item.get("mount-point")]; valid=sorted({value for value in devices if isinstance(value,str) and re.fullmatch(r"/dev/disk[0-9]+(?:s[0-9]+)*",value)}); assert len(valid)==1; print(valid[0])' "$app_sparse_image" 2>/dev/null || true)
+            fi
+            if [ "${app_attached:-false}" = true ] && [ -z "${app_device:-}" ]; then
+              echo "Bounded workspace is attached but its device is unresolved; refusing destructive cleanup" >&2
+              return 1
+            fi
+            if [ -n "${app_device:-}" ]; then
+              if ! hdiutil detach "$app_device" -force >/dev/null 2>&1; then
+                echo "Could not detach bounded workspace device $app_device" >&2
+                return 1
+              fi
+              app_attached=false
+            fi
+            [ -z "${app_mount_dir:-}" ] || rm -rf "$app_mount_dir" || return 1
+            [ -z "${app_sparse_image:-}" ] || rm -f "$app_sparse_image" || return 1
+            app_temp_dir=""
+            app_mount_dir=""
+            app_sparse_image=""
+            app_device=""
+            app_attached=false
+          }
+
+          create_app_workspace() {
+            local safe_app=""
+            local attach_plist=""
+            local devices=""
+            local image_base=""
+            require_host_workspace_capacity || return 1
+            safe_app=$(printf '%s' "$app_name" | tr -cd 'A-Za-z0-9._-')
+            image_base=$(mktemp -u "${RUNNER_TEMP:-${TMPDIR:-/tmp}}/intunebrew-${safe_app}.XXXXXX")
+            app_sparse_image="${image_base}.sparseimage"
+            app_mount_dir=$(mktemp -d "${RUNNER_TEMP:-${TMPDIR:-/tmp}}/intunebrew-mount-${safe_app}.XXXXXX")
+            hdiutil create -quiet -size "$WORKSPACE_CAPACITY" -fs APFS \
+              -type SPARSE -volname "IntuneBrew-$safe_app" "$app_sparse_image" \
+              || { destroy_app_workspace; return 1; }
+            attach_plist=$(hdiutil attach "$app_sparse_image" \
+              -mountpoint "$app_mount_dir" -nobrowse -plist) \
+              || { destroy_app_workspace; return 1; }
+            app_attached=true
+            devices=$(printf '%s' "$attach_plist" \
+              | plutil -convert json -o - -- - 2>/dev/null \
+              | python -c 'import json,re,sys; data=json.load(sys.stdin); values={item.get("dev-entry") for item in data.get("system-entities",[]) if item.get("mount-point")}; valid=sorted(value for value in values if isinstance(value,str) and re.fullmatch(r"/dev/disk[0-9]+(?:s[0-9]+)*",value)); assert len(valid)==1; print(valid[0])') \
+              || { destroy_app_workspace; return 1; }
+            app_device="$devices"
+            app_temp_dir="$app_mount_dir"
+            require_free_disk "$app_temp_dir" \
+              || { destroy_app_workspace; return 1; }
+          }
+
+          trap destroy_app_workspace EXIT
+
+          download_source() {
+            local destination="$1"
+            local source_url="$2"
+            require_free_disk "$app_temp_dir" || return 1
+            local user_agent_args=()
+            if [ "${download_user_agent:-default}" = "browser" ]; then
+              user_agent_args=(-A "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 Chrome/124 Safari/537.36")
+            fi
+            curl -fLsS "${user_agent_args[@]}" \
+              --connect-timeout 30 --max-time 300 --retry 3 \
+              --retry-all-errors --retry-max-time 300 \
+              --max-filesize "$MAX_SOURCE_BYTES" \
+              -o "$destination" "$source_url"
+          }
+
+          require_archive_quota() {
+            local archive="$1"
+            local format="$2"
+            local expanded=0
+            local members=0
+            local probe=""
+            probe=$(python "$WORKSPACE_DIR/.github/scripts/archive_quota.py" archive \
+              --file "$archive" \
+              --format "$format" \
+              --max-bytes "$MAX_EXPANDED_BYTES" \
+              --max-members "$MAX_ARCHIVE_MEMBERS")
+            probe_status=$?
+            [ "${probe_status:-1}" -eq 0 ] || return 1
+            read -r expanded members <<< "$probe"
+            [[ "$expanded" =~ ^[0-9]+$ ]] || return 1
+            [[ "$members" =~ ^[0-9]+$ ]] || return 1
+            [ "$expanded" -le "$MAX_EXPANDED_BYTES" ] \
+              && [ "$members" -le "$MAX_ARCHIVE_MEMBERS" ] \
+              && require_free_disk "$app_temp_dir"
+          }
+
+          require_gzip_quota() {
+            python "$WORKSPACE_DIR/.github/scripts/archive_quota.py" gzip \
+              --file "$1" --max-bytes "$MAX_EXPANDED_BYTES" \
+              && require_free_disk "$app_temp_dir"
+          }
+
+          require_extracted_quota() {
+            local directory="$1"
+            local actual_kb=""
+            actual_kb=$(du -sk "$directory" | awk '{print $1}')
+            [[ "$actual_kb" =~ ^[0-9]+$ ]] \
+              && [ $((actual_kb * 1024)) -le "$MAX_EXPANDED_BYTES" ] \
+              && require_free_disk "$app_temp_dir"
+          }
+
+          record_observed_source_digest() {
+            local source_path="$1"
+            local json_path="$2"
+            local observed=""
+            [ "$source_sha" = "no_check" ] || return 0
+            observed=$(shasum -a 256 "$source_path" | awk '{print $1}')
+            jq --arg digest "$observed" \
+              '.source_observed_sha256 = $digest | .source_sha256_provenance = "observed-no_check"' \
+              "$json_path" > "$json_path.source.tmp" \
+              && mv "$json_path.source.tmp" "$json_path"
+          }
+
+          configured_blob_leaf() {
+            local blob_url="$1"
+            local leaf=""
+            case "$blob_url" in
+              "$STORAGE_BASE_URL"/*) leaf="${blob_url#"$STORAGE_BASE_URL"/}" ;;
+              *) return 1 ;;
+            esac
+            safe_blob_leaf "$leaf" || return 1
+            printf '%s\n' "$leaf"
+          }
+
+          reusable_blob_leaf() {
+            local blob_url="$1"
+            local leaf=""
+            case "$blob_url" in
+              "$STORAGE_BASE_URL"/*) leaf="${blob_url#"$STORAGE_BASE_URL"/}" ;;
+              https://*.blob.core.windows.net/"$AZURE_STORAGE_CONTAINER"/*)
+                leaf="${blob_url##*/}"
+                ;;
+              *) return 1 ;;
+            esac
+            safe_blob_leaf "$leaf" || return 1
+            printf '%s\n' "$leaf"
+          }
+
+          immutable_blob_exists() {
+            [ "$(az storage blob exists \
+              --account-name "$AZURE_STORAGE_ACCOUNT" \
+              --container-name "$AZURE_STORAGE_CONTAINER" \
+              --auth-mode login \
+              --name "$1" \
+              --query exists \
+              -o tsv)" = "true" ]
+          }
+
+          verify_blob_sha() {
+            local blob_name="$1"
+            local expected_sha="$2"
+            local actual_sha=""
+            local expected_lower=""
+            local token=""
+            [[ "$expected_sha" =~ ^[0-9a-fA-F]{64}$ ]] || return 1
+            expected_lower=$(printf '%s' "$expected_sha" | tr 'A-F' 'a-f')
+            token=$(az account get-access-token \
+              --resource https://storage.azure.com/ \
+              --query accessToken -o tsv) || return 1
+            actual_sha=$(curl -fLsS --connect-timeout 30 --max-time 300 \
+              --retry 3 --retry-max-time 300 \
+              --max-filesize "$MAX_SOURCE_BYTES" \
+              -H "Authorization: Bearer $token" \
+              -H "x-ms-version: 2023-11-03" \
+              "$STORAGE_BASE_URL/$blob_name" \
+              | shasum -a 256 | awk '{print $1}') || return 1
+            [ "$actual_sha" = "$expected_lower" ]
+          }
+
+          prior_blob_sha_matches() {
+            local prior_is_configured="$1"
+            local blob_name="$2"
+            local expected_sha="$3"
+            local expected_lower=""
+            expected_lower=$(printf '%s' "$expected_sha" | tr 'A-F' 'a-f')
+            if [ "$prior_is_configured" = true ] \
+              && [ "$blob_name" = "${blob_name%_"$expected_lower".pkg}_${expected_lower}.pkg" ]; then
+              return 0
+            fi
+            verify_blob_sha "$blob_name" "$expected_lower"
+          }
+
+          upload_immutable_blob() {
+            local package_path="$1"
+            local blob_name="$2"
+            local expected_sha="$3"
+            local package_bytes=""
+            [ -f "$package_path" ] || return 1
+            package_bytes=$(stat -f %z "$package_path") || return 1
+            [ "$package_bytes" -le "$MAX_EXPANDED_BYTES" ] || return 1
+            require_free_disk "$package_path" || return 1
+            safe_blob_leaf "$blob_name" || {
+              echo "Unsafe immutable blob name: $blob_name" >&2
+              return 1
+            }
+            if immutable_blob_exists "$blob_name"; then
+              echo "Immutable blob already exists: $blob_name"
+              verify_blob_sha "$blob_name" "$expected_sha"
+              return
+            fi
+            if az storage blob upload \
+              --account-name "$AZURE_STORAGE_ACCOUNT" \
+              --container-name "$AZURE_STORAGE_CONTAINER" \
+              --auth-mode login \
+              --file "$package_path" \
+              --name "$blob_name" \
+              --overwrite false; then
+              verify_blob_sha "$blob_name" "$expected_sha"
+              return
+            fi
+            # A concurrent run may have created the same content-addressed blob.
+            immutable_blob_exists "$blob_name" \
+              && verify_blob_sha "$blob_name" "$expected_sha"
           }
 
           ERROR_LOG=()  # Track errors for summary
@@ -432,7 +786,15 @@ jobs:
           SUCCESSFUL_APPS=()  # Track successful apps
           
           for app_info in $APPS_TO_BUILD; do
-            IFS=':' read -r app_name url <<< "$app_info"
+            IFS=':' read -r app_name ignored_url <<< "$app_info"
+            destroy_app_workspace
+            if ! create_app_workspace; then
+              FAILED_APPS+=("$app_name")
+              ERROR_LOG+=("$app_name: Could not create bounded APFS workspace")
+              continue
+            fi
+            download_path="$app_temp_dir/source"
+            package_path="$app_temp_dir/output.pkg"
             
             echo "🔄 Processing $app_name..."
             
@@ -451,15 +813,38 @@ jobs:
               }
           EOF
               sed -i '' "s/APP_NAME/$app_name/g" "$WORKSPACE_DIR/Apps/${app_name}.json"
-              sed -i '' "s|URL|$url|g" "$WORKSPACE_DIR/Apps/${app_name}.json"
+              sed -i '' "s|URL|$ignored_url|g" "$WORKSPACE_DIR/Apps/${app_name}.json"
               echo "✅ Created new JSON file for $app_name"
             else
               echo "📄 Using existing JSON file for $app_name"
             fi
+
+            prior_manifest=$(git -C "$WORKSPACE_DIR" show "HEAD:Apps/${app_name}.json" 2>/dev/null || true)
+            prior_catalog_url=$(printf '%s' "$prior_manifest" | jq -r '.url // empty' 2>/dev/null || true)
+            prior_vendor_url=$(printf '%s' "$prior_manifest" | jq -r '.vendor_url // empty' 2>/dev/null || true)
+            prior_version=$(printf '%s' "$prior_manifest" | jq -r '.version // empty' 2>/dev/null || true)
+            prior_sha=$(printf '%s' "$prior_manifest" | jq -r '.sha // empty' 2>/dev/null || true)
+            prior_source_version=$(printf '%s' "$prior_manifest" | jq -r '.source_version // empty' 2>/dev/null || true)
+            prior_source_sha=$(printf '%s' "$prior_manifest" | jq -r '.source_sha256 // empty' 2>/dev/null || true)
+            prior_blob=$(reusable_blob_leaf "$prior_catalog_url" 2>/dev/null || true)
+            cleanup_prior_blob=$(configured_blob_leaf "$prior_catalog_url" 2>/dev/null || true)
+            prior_is_configured=false
+            [ -z "$cleanup_prior_blob" ] || prior_is_configured=true
+
+            catalog_url=$(jq -r '.url // empty' "$WORKSPACE_DIR/Apps/${app_name}.json")
+            vendor_url=$(jq -r '.vendor_url // empty' "$WORKSPACE_DIR/Apps/${app_name}.json")
+            if [ -n "$vendor_url" ] && ! is_storage_package_url "$vendor_url"; then
+              url="$vendor_url"
+            else
+              url="$catalog_url"
+            fi
             
             # Get version and type from JSON file
             version=$(jq -r '.version' "$WORKSPACE_DIR/Apps/${app_name}.json")
+            source_version=$(jq -r '.source_version // empty' "$WORKSPACE_DIR/Apps/${app_name}.json")
+            source_sha=$(jq -r '.source_sha256 // empty' "$WORKSPACE_DIR/Apps/${app_name}.json")
             app_type=$(jq -r '.type' "$WORKSPACE_DIR/Apps/${app_name}.json")
+            download_user_agent=$(jq -r '.download_user_agent // "default"' "$WORKSPACE_DIR/Apps/${app_name}.json")
             echo "📦 Version: $version"
             echo "🏷️ Type: $app_type"
             
@@ -469,122 +854,40 @@ jobs:
               continue
             fi
             
-            # List existing versions of this app in Azure storage
-            existing_versions=$(az storage blob list \
-              --account-name "$AZURE_STORAGE_ACCOUNT" \
-              --container-name "$AZURE_STORAGE_CONTAINER" \
-              --auth-mode login \
-              --prefix "${app_name}_" \
-              --query "[].name" \
-              -o tsv)
-            
-            # Check if the exact version already exists
             reuse_existing_blob=false
-            if echo "$existing_versions" | grep -q "^${app_name}_${version}.pkg$"; then
-              reuse_existing_blob=true
+            if [ "$prior_version" = "$version" ] \
+              && verified_source_identity_matches \
+                "$prior_source_version" "$source_version" \
+                "$prior_source_sha" "$source_sha" \
+              && [[ "$prior_sha" =~ ^[0-9a-fA-F]{64}$ ]] \
+              && [ -n "$prior_blob" ] \
+              && immutable_blob_exists "$prior_blob"; then
+              if prior_blob_sha_matches "$prior_is_configured" "$prior_blob" "$prior_sha"; then
+                reuse_existing_blob=true
+              else
+                echo "Exact prior blob failed SHA verification; rebuilding $app_name"
+              fi
             fi
 
-            # The blob name carries the version only, and collect_app_info.py
-            # strips the build component of casks using "version,build" syntax.
-            # A build-only bump therefore leaves ${app_name}_${version}.pkg
-            # unchanged while the vendor artifact behind it moves, and reusing
-            # the blob would serve the superseded package forever. The two
-            # vendor artifacts are compared explicitly to catch that.
-            #
-            # Where each side comes from at this point in the run:
-            #   $url             the .url the collector refreshed with this run's
-            #                    vendor artifact, carried here through
-            #                    APPS_TO_BUILD by "Find apps needing packaging".
-            #   HEAD .vendor_url the vendor artifact the blob in Azure was built
-            #                    from, stashed by the run that built it and
-            #                    committed at the end of that run. The working
-            #                    tree copy cannot serve as that memory: the
-            #                    collector overwrites both url and vendor_url
-            #                    with the fresh artifact for every repackaged
-            #                    type, and nothing is committed before this step.
-            built_from_url=""
             if [ "$reuse_existing_blob" = true ]; then
-              # cwd moves around inside this loop, so the repo is addressed
-              # explicitly. A file that is new or unreadable in HEAD yields an
-              # empty value, which keeps the pre-existing behavior.
-              built_from_url=$(git -C "$WORKSPACE_DIR" show "HEAD:Apps/${app_name}.json" 2>/dev/null | jq -r '.vendor_url // empty' 2>/dev/null) || built_from_url=""
+              if is_storage_package_url "$url"; then
+                prior_vendor_url=""
+              fi
 
-              # Both sides must be vendor URLs. An app the collector skipped this
-              # run still carries the Azure URL in .url, and comparing that
-              # against a vendor URL would repackage every night for nothing.
-              case "$url" in
-                "$STORAGE_BASE_URL"/*) built_from_url="" ;;
-              esac
-
-              if [ -n "$built_from_url" ] && [ -n "$url" ] && [ "$built_from_url" != "$url" ]; then
-                echo "Rebuilding ${app_name}_${version}.pkg: vendor artifact changed from $built_from_url to $url"
+              if [ -n "$prior_vendor_url" ] && [ -n "$url" ] && [ "$prior_vendor_url" != "$url" ]; then
+                echo "Rebuilding $app_name: vendor artifact changed from $prior_vendor_url to $url"
                 reuse_existing_blob=false
               fi
             fi
 
             if [ "$reuse_existing_blob" = true ]; then
-              echo "Package ${app_name}_${version}.pkg already exists in Azure storage."
-              
-              # Check if SHA already exists in JSON
-              existing_sha=$(jq -r '.sha // empty' "$WORKSPACE_DIR/Apps/${app_name}.json")
-              
-              if [ -n "$existing_sha" ]; then
-                echo "✅ SHA already exists in JSON file: $existing_sha"
-                # Update only URL and version without downloading
-                azure_url="${STORAGE_BASE_URL}/${app_name}_${version}.pkg"
-                current_version=$(jq -r '.version' "$WORKSPACE_DIR/Apps/${app_name}.json")
-                if jq --arg url "$azure_url" --arg version "$version" --arg prev_version "$current_version" --arg filename "${app_name}_${version}.pkg" '(if has("vendor_url") then .vendor_url else .url end) as $vurl | .url = $url | .vendor_url = $vurl | .version = $version | .previous_version = $prev_version | .fileName = $filename' "$WORKSPACE_DIR/Apps/${app_name}.json" > temp.json && mv temp.json "$WORKSPACE_DIR/Apps/${app_name}.json"; then
-                  echo "✅ JSON file updated (SHA preserved)"
-                else
-                  echo "Failed to update JSON file for $app_name, it keeps its previous contents"
-                  FAILED_APPS+=("$app_name")
-                  ERROR_LOG+=("$app_name: Failed to update catalog JSON for existing package")
-                fi
-              else
-                echo "⚠️ SHA missing in JSON file, downloading to calculate..."
-                # Download the file to calculate SHA256
-                temp_pkg="${app_name}_${version}_temp.pkg"
-                # A failed download must not abort the step: the -f test below is
-                # what decides, and it owns the "could not download" arm.
-                az storage blob download \
-                  --account-name "$AZURE_STORAGE_ACCOUNT" \
-                  --container-name "$AZURE_STORAGE_CONTAINER" \
-                  --auth-mode login \
-                  --name "${app_name}_${version}.pkg" \
-                  --file "$temp_pkg" \
-                  --no-progress || true
-                
-                if [ -f "$temp_pkg" ]; then
-                  # Calculate SHA256 hash
-                  echo "🔐 Calculating SHA256 hash..."
-                  file_hash=$(shasum -a 256 "$temp_pkg" | awk '{print $1}')
-                  echo "📝 SHA256: $file_hash"
-                  rm -f "$temp_pkg"
-                  
-                  # Update JSON with SHA
-                  azure_url="${STORAGE_BASE_URL}/${app_name}_${version}.pkg"
-                  current_version=$(jq -r '.version' "$WORKSPACE_DIR/Apps/${app_name}.json")
-                  if jq --arg url "$azure_url" --arg version "$version" --arg prev_version "$current_version" --arg sha "$file_hash" --arg filename "${app_name}_${version}.pkg" '(if has("vendor_url") then .vendor_url else .url end) as $vurl | .url = $url | .vendor_url = $vurl | .version = $version | .previous_version = $prev_version | .sha = $sha | .fileName = $filename' "$WORKSPACE_DIR/Apps/${app_name}.json" > temp.json && mv temp.json "$WORKSPACE_DIR/Apps/${app_name}.json"; then
-                    echo "✅ JSON file updated with SHA256"
-                  else
-                    echo "Failed to update JSON file for $app_name, it keeps its previous contents"
-                    FAILED_APPS+=("$app_name")
-                    ERROR_LOG+=("$app_name: Failed to add SHA to catalog JSON")
-                  fi
-                else
-                  echo "❌ Could not download file to calculate SHA256"
-                  azure_url="${STORAGE_BASE_URL}/${app_name}_${version}.pkg"
-                  current_version=$(jq -r '.version' "$WORKSPACE_DIR/Apps/${app_name}.json")
-                  if jq --arg url "$azure_url" --arg version "$version" --arg prev_version "$current_version" --arg filename "${app_name}_${version}.pkg" '(if has("vendor_url") then .vendor_url else .url end) as $vurl | .url = $url | .vendor_url = $vurl | .version = $version | .previous_version = $prev_version | .fileName = $filename' "$WORKSPACE_DIR/Apps/${app_name}.json" > temp.json && mv temp.json "$WORKSPACE_DIR/Apps/${app_name}.json"; then
-                    echo "⚠️ JSON file updated without SHA256"
-                  else
-                    echo "Failed to update JSON file for $app_name, it keeps its previous contents"
-                  fi
-                  FAILED_APPS+=("$app_name")
-                  ERROR_LOG+=("$app_name: Could not verify SHA for existing package")
-                fi
+              echo "Reusing exact manifest blob: $prior_blob"
+              azure_url="${STORAGE_BASE_URL}/${prior_blob}"
+              if ! jq --arg url "$azure_url" --arg version "$version" --arg prev_version "$prior_version" --arg sha "$prior_sha" --arg filename "$prior_blob" '(if has("vendor_url") then .vendor_url else .url end) as $vurl | .url = $url | .vendor_url = $vurl | .version = $version | .previous_version = $prev_version | .sha = $sha | .fileName = $filename | del(.packaging_pending)' "$WORKSPACE_DIR/Apps/${app_name}.json" > temp.json || ! mv temp.json "$WORKSPACE_DIR/Apps/${app_name}.json"; then
+                FAILED_APPS+=("$app_name")
+                ERROR_LOG+=("$app_name: Failed to update catalog JSON for exact existing package")
               fi
-              
+              destroy_app_workspace
               continue
             fi
             
@@ -593,7 +896,6 @@ jobs:
               echo "Downloading from: $url"
 
               # Set download path
-              download_path="$HOME/Desktop/${app_name}"
               outer_pkg_path="${download_path}.pkg"
 
               # Check if URL is a ZIP file. Both branches record whether the
@@ -602,20 +904,30 @@ jobs:
               outer_pkg_ready=false
               if [[ "$url" == *".zip" ]]; then
                 echo "URL is a ZIP file, downloading and extracting first..."
-                if ! curl -f -L -o "${download_path}.zip" "$url"; then
+                if ! download_source "${download_path}.zip" "$url"; then
                   echo "Failed to download ZIP file"
                   FAILED_APPS+=("$app_name")
                   ERROR_LOG+=("$app_name: Failed to download ZIP from $url")
                   continue
                 fi
+                if ! verify_source_file "${download_path}.zip" "$source_sha"; then
+                  FAILED_APPS+=("$app_name")
+                  ERROR_LOG+=("$app_name: Source ZIP SHA256 mismatch")
+                  continue
+                fi
+                record_observed_source_digest "${download_path}.zip" "$WORKSPACE_DIR/Apps/${app_name}.json"
 
                 # Extract ZIP to find the PKG inside
                 zip_extract_dir="${download_path}_zip_extracted"
                 rm -rf "$zip_extract_dir"
                 mkdir -p "$zip_extract_dir"
-                # A corrupt archive must not abort the step: the found_pkg test
-                # below owns that failure and reports it per app.
-                unzip -q "${download_path}.zip" -d "$zip_extract_dir" || true
+                if ! require_archive_quota "${download_path}.zip" zip \
+                  || ! unzip -q "${download_path}.zip" -d "$zip_extract_dir" \
+                  || ! require_extracted_quota "$zip_extract_dir"; then
+                  FAILED_APPS+=("$app_name")
+                  ERROR_LOG+=("$app_name: PKG ZIP extraction failed resource checks")
+                  continue
+                fi
 
                 # Find the PKG file inside the ZIP
                 found_pkg=$(find "$zip_extract_dir" -name "*.pkg" -type f -print -quit)
@@ -634,8 +946,13 @@ jobs:
                 rm -rf "$zip_extract_dir" "${download_path}.zip"
               else
                 # Direct PKG download
-                if curl -f -L -o "$outer_pkg_path" "$url"; then
-                  outer_pkg_ready=true
+                if download_source "$outer_pkg_path" "$url"; then
+                  if verify_source_file "$outer_pkg_path" "$source_sha"; then
+                    record_observed_source_digest "$outer_pkg_path" "$WORKSPACE_DIR/Apps/${app_name}.json"
+                    outer_pkg_ready=true
+                  else
+                    ERROR_LOG+=("$app_name: Source PKG SHA256 mismatch")
+                  fi
                 fi
               fi
 
@@ -655,6 +972,12 @@ jobs:
                 # Extract PKG (pkgutil will create the directory)
                 echo "Extracting outer PKG..."
                 if pkgutil --expand "$outer_pkg_path" "$temp_dir" 2>/dev/null; then
+                  if ! require_extracted_quota "$temp_dir"; then
+                    rm -rf "$temp_dir"
+                    FAILED_APPS+=("$app_name")
+                    ERROR_LOG+=("$app_name: Expanded outer PKG exceeds quota or disk headroom")
+                    continue
+                  fi
                   echo "✅ PKG extraction successful"
                   echo "📁 Extracted contents:"
                   ls -R "$temp_dir"
@@ -672,7 +995,7 @@ jobs:
                     echo "📋 Copying inner PKG file to ${app_name}_${version}.pkg"
                     # A failed copy leaves no package to upload, which the Azure
                     # upload arm below already reports for this app.
-                    cp "$inner_pkg" "${app_name}_${version}.pkg" || true
+                    cp "$inner_pkg" "$package_path" || true
                   else
                     # Check if there's a .pkg directory (flat package)
                     inner_pkg_dir=$(find "$temp_dir" -name "*.pkg" -type d -print -quit)
@@ -681,7 +1004,7 @@ jobs:
                       echo "📦 Flattening package to ${app_name}_${version}.pkg"
                       
                       # Use pkgutil to flatten the package
-                      if ! pkgutil --flatten "$inner_pkg_dir" "${app_name}_${version}.pkg"; then
+                      if ! pkgutil --flatten "$inner_pkg_dir" "$package_path"; then
                         echo "❌ Failed to flatten package"
                         rm -rf "$temp_dir"
                         rm -f "${download_path}.pkg"
@@ -699,32 +1022,28 @@ jobs:
                     fi
                   fi
                   
-                  extracted_bundle_id=$(extract_bundle_id_from_pkg "${app_name}_${version}.pkg")
-                  log_bundle_id_change "$WORKSPACE_DIR/Apps/${app_name}.json" "$extracted_bundle_id"
+                  extracted_bundle_id=$(extract_bundle_id_from_pkg "$package_path")
+                  if ! require_bundle_id_match "$WORKSPACE_DIR/Apps/${app_name}.json" "$extracted_bundle_id"; then
+                    rm -f "${download_path}.pkg" "$package_path"
+                    rm -rf "$temp_dir"
+                    FAILED_APPS+=("$app_name")
+                    ERROR_LOG+=("$app_name: Inner package bundle ID mismatch")
+                    continue
+                  fi
 
                   # Calculate SHA256 hash
                   echo "🔐 Calculating SHA256 hash..."
-                  file_hash=$(shasum -a 256 "${app_name}_${version}.pkg" | awk '{print $1}')
+                  file_hash=$(shasum -a 256 "$package_path" | awk '{print $1}')
                   echo "📝 SHA256: $file_hash"
+                  new_blob_name="${app_name}_${version}_${file_hash}.pkg"
+                  azure_url="${STORAGE_BASE_URL}/${new_blob_name}"
 
-                  # Upload to Azure
-                  echo "☁️ Uploading to Azure Blob Storage..."
-                  if az storage blob upload \
-                    --account-name "$AZURE_STORAGE_ACCOUNT" \
-                    --container-name "$AZURE_STORAGE_CONTAINER" \
-                    --auth-mode login \
-                    --file "${app_name}_${version}.pkg" \
-                    --name "${app_name}_${version}.pkg" \
-                    --overwrite true; then
+                  if upload_immutable_blob "$package_path" "$new_blob_name" "$file_hash"; then
                     echo "✅ Upload successful"
-
-                    # Only reached with the new blob confirmed in the container.
-                    delete_superseded_blobs "$app_name" "$version" "$existing_versions"
 
                     # Update JSON with Azure URL and SHA256
                     echo "📝 Updating JSON file with new Azure URL and SHA256..."
-                    azure_url="${STORAGE_BASE_URL}/${app_name}_${version}.pkg"
-                    if jq --arg url "$azure_url" --arg filename "${app_name}_${version}.pkg" --arg sha "$file_hash" --arg bundleid "$extracted_bundle_id" '(if has("vendor_url") then .vendor_url else .url end) as $vurl | .url = $url | .vendor_url = $vurl | .fileName = $filename | .sha = $sha | (if $bundleid == "" then . else .bundleId = $bundleid end)' "$WORKSPACE_DIR/Apps/${app_name}.json" > temp.json && mv temp.json "$WORKSPACE_DIR/Apps/${app_name}.json"; then
+                    if jq --arg url "$azure_url" --arg filename "$new_blob_name" --arg sha "$file_hash" --arg bundleid "$extracted_bundle_id" '(if has("vendor_url") then .vendor_url else .url end) as $vurl | .url = $url | .vendor_url = $vurl | .fileName = $filename | .sha = $sha | (if $bundleid == "" then . else .bundleId = $bundleid end) | del(.packaging_pending)' "$WORKSPACE_DIR/Apps/${app_name}.json" > temp.json && mv temp.json "$WORKSPACE_DIR/Apps/${app_name}.json"; then
                       echo "✅ JSON file updated successfully"
                       echo "🔗 New URL: $azure_url"
                     else
@@ -740,7 +1059,7 @@ jobs:
                     rm -f "${download_path}.pkg"
                     rm -rf "$temp_dir"
                     FAILED_APPS+=("$app_name")
-                    ERROR_LOG+=("$app_name: Azure upload failed for ${app_name}_${version}.pkg")
+                    ERROR_LOG+=("$app_name: Immutable Azure upload failed for $new_blob_name")
                     continue
                   fi
                 else
@@ -771,10 +1090,8 @@ jobs:
               echo "📥 Downloading DMG from: $url"
               
               # Set download path
-              download_path="$HOME/Desktop/${app_name}"
-              
               # Download DMG
-              if curl -f -L -o "${download_path}.dmg" "$url"; then
+              if download_source "${download_path}.dmg" "$url"; then
                 echo "✅ DMG download successful"
                 ls -lh "${download_path}.dmg"
               else
@@ -784,6 +1101,13 @@ jobs:
                 ERROR_LOG+=("$app_name: Failed to download DMG from $url")
                 continue
               fi
+              if ! verify_source_file "${download_path}.dmg" "$source_sha"; then
+                FAILED_APPS+=("$app_name")
+                ERROR_LOG+=("$app_name: Source DMG SHA256 mismatch")
+                rm -f "${download_path}.dmg"
+                continue
+              fi
+              record_observed_source_digest "${download_path}.dmg" "$WORKSPACE_DIR/Apps/${app_name}.json"
               
               # Create mount point
               echo "📂 Creating mount point at ${download_path}_mount"
@@ -811,14 +1135,25 @@ jobs:
                 continue
               fi
               
-              # Find PKG file
-              echo "🔍 Searching for PKG file..."
-              pkg_file=$(find "${download_path}_mount" -name "*.pkg" -print -quit)
+              declared_app=$(jq -r '.artifact_app // empty' "$WORKSPACE_DIR/Apps/${app_name}.json")
+              declared_pkg=$(jq -r '.artifact_pkg // empty' "$WORKSPACE_DIR/Apps/${app_name}.json")
+              source_app=$(jq -r '.artifact_app_source // empty' "$WORKSPACE_DIR/Apps/${app_name}.json")
+              source_pkg=$(jq -r '.artifact_pkg_source // empty' "$WORKSPACE_DIR/Apps/${app_name}.json")
+              app_file=$(find_app_payload "${download_path}_mount" "$declared_app" "$source_app")
+              pkg_file=""
+              [ -n "$app_file" ] || pkg_file=$(find_pkg_payload "${download_path}_mount" "$declared_pkg" "$source_pkg")
 
               # The DMG must be unmounted whether this succeeds or not, so
               # failures set a flag here and are recorded after the cleanup.
               pkg_in_dmg_error=""
-              if [ -n "$pkg_file" ]; then
+              if [ -n "$app_file" ]; then
+                extracted_bundle_id=$(extract_bundle_id_from_plist "$app_file/Contents/Info.plist")
+                if ! require_bundle_id_match "$WORKSPACE_DIR/Apps/${app_name}.json" "$extracted_bundle_id"; then
+                  pkg_in_dmg_error="Declared app bundle ID mismatch"
+                elif ! pkgbuild --install-location /Applications --component "$app_file" "$package_path" 2>/dev/null; then
+                  pkg_in_dmg_error="Failed to build PKG from declared app"
+                fi
+              elif [ -n "$pkg_file" ]; then
                 echo "✅ Found PKG file: $pkg_file"
                 echo "📦 Package size: $(ls -lh "$pkg_file" | awk '{print $5}')"
                 
@@ -826,34 +1161,31 @@ jobs:
                 echo "📋 Copying PKG file to ${app_name}_${version}.pkg"
                 # A failed copy leaves no package to upload, which the Azure
                 # upload arm below already reports for this app.
-                cp "$pkg_file" "${app_name}_${version}.pkg" || true
+                cp "$pkg_file" "$package_path" || true
 
-                extracted_bundle_id=$(extract_bundle_id_from_pkg "${app_name}_${version}.pkg")
-                log_bundle_id_change "$WORKSPACE_DIR/Apps/${app_name}.json" "$extracted_bundle_id"
+                extracted_bundle_id=$(extract_bundle_id_from_pkg "$package_path" "$declared_app" "$source_app")
+                if ! require_bundle_id_match "$WORKSPACE_DIR/Apps/${app_name}.json" "$extracted_bundle_id"; then
+                  pkg_in_dmg_error="Declared package bundle ID mismatch"
+                fi
+              else
+                pkg_in_dmg_error="No declared app or package found inside DMG from $url"
+              fi
+
+              if [ -z "$pkg_in_dmg_error" ] && [ -f "$package_path" ]; then
                 
                 # Calculate SHA256 hash
                 echo "🔐 Calculating SHA256 hash..."
-                file_hash=$(shasum -a 256 "${app_name}_${version}.pkg" | awk '{print $1}')
+                file_hash=$(shasum -a 256 "$package_path" | awk '{print $1}')
                 echo "📝 SHA256: $file_hash"
+                new_blob_name="${app_name}_${version}_${file_hash}.pkg"
+                azure_url="${STORAGE_BASE_URL}/${new_blob_name}"
 
-                # Upload to Azure
-                echo "☁️ Uploading to Azure Blob Storage..."
-                if az storage blob upload \
-                  --account-name "$AZURE_STORAGE_ACCOUNT" \
-                  --container-name "$AZURE_STORAGE_CONTAINER" \
-                  --auth-mode login \
-                  --file "${app_name}_${version}.pkg" \
-                  --name "${app_name}_${version}.pkg" \
-                  --overwrite true; then
+                if upload_immutable_blob "$package_path" "$new_blob_name" "$file_hash"; then
                   echo "✅ Upload successful"
-
-                  # Only reached with the new blob confirmed in the container.
-                  delete_superseded_blobs "$app_name" "$version" "$existing_versions"
 
                   # Update JSON with Azure URL and SHA256
                   echo "📝 Updating JSON file with new Azure URL and SHA256..."
-                  azure_url="${STORAGE_BASE_URL}/${app_name}_${version}.pkg"
-                  if jq --arg url "$azure_url" --arg filename "${app_name}_${version}.pkg" --arg sha "$file_hash" --arg bundleid "$extracted_bundle_id" '(if has("vendor_url") then .vendor_url else .url end) as $vurl | .url = $url | .vendor_url = $vurl | .fileName = $filename | .sha = $sha | (if $bundleid == "" then . else .bundleId = $bundleid end)' "$WORKSPACE_DIR/Apps/${app_name}.json" > temp.json && mv temp.json "$WORKSPACE_DIR/Apps/${app_name}.json"; then
+                  if jq --arg url "$azure_url" --arg filename "$new_blob_name" --arg sha "$file_hash" --arg bundleid "$extracted_bundle_id" '(if has("vendor_url") then .vendor_url else .url end) as $vurl | .url = $url | .vendor_url = $vurl | .fileName = $filename | .sha = $sha | (if $bundleid == "" then . else .bundleId = $bundleid end) | del(.packaging_pending)' "$WORKSPACE_DIR/Apps/${app_name}.json" > temp.json && mv temp.json "$WORKSPACE_DIR/Apps/${app_name}.json"; then
                     echo "✅ JSON file updated successfully"
                     echo "🔗 New URL: $azure_url"
                   else
@@ -862,13 +1194,8 @@ jobs:
                   fi
                 else
                   echo "❌ Failed to upload to Azure"
-                  pkg_in_dmg_error="Azure upload failed for ${app_name}_${version}.pkg"
+                  pkg_in_dmg_error="Immutable Azure upload failed for $new_blob_name"
                 fi
-              else
-                echo "❌ No PKG file found in DMG for $app_name"
-                echo "📁 Contents of mount point:"
-                ls -R "${download_path}_mount"
-                pkg_in_dmg_error="No PKG found inside DMG from $url"
               fi
 
               # Cleanup
@@ -889,245 +1216,196 @@ jobs:
             else
               # Download app
               echo "Downloading $app_name..."
-              download_path="$HOME/Desktop/${app_name}"
-              if [[ "$url" == *".zip" ]]; then
-                # Download file first
-                if ! curl -f -L -o "${download_path}.download" "$url"; then
-                  echo "❌ Failed to download $app_name from $url"
-                  FAILED_APPS+=("$app_name")
-                  ERROR_LOG+=("$app_name: Failed to download from $url")
-                  continue
-                fi
-                cd "$HOME/Desktop"
-                
-                # Detect actual file type
-                FILE_TYPE=$(file -b "${download_path}.download" | cut -d' ' -f1-2)
-                echo "🔍 Detected file type: $FILE_TYPE"
-                
-                # Remove extraction directory if it exists
-                if [ -d "${app_name}_extracted" ]; then
-                  echo "🧹 Removing existing directory: ${app_name}_extracted"
-                  rm -rf "${app_name}_extracted"
-                fi
-                
-                # Handle based on actual file type
-                if [[ "$FILE_TYPE" == "gzip compressed" ]]; then
-                  echo "📦 File is actually gzip compressed, not a zip file"
-                  mv "${download_path}.download" "${download_path}.tar.gz"
-                  mkdir -p "${app_name}_extracted"
-                  echo "🔓 Extracting gzip archive..."
-                  if tar -xzf "${download_path}.tar.gz" -C "${app_name}_extracted" 2>/dev/null; then
-                    echo "✅ Gzip extraction successful"
-                  else
-                    echo "⚠️ Failed to extract as tar.gz, trying gunzip..."
-                    gunzip -c "${download_path}.tar.gz" > "${download_path}.tar" 2>/dev/null && \
-                    tar -xf "${download_path}.tar" -C "${app_name}_extracted" 2>/dev/null || {
-                      echo "❌ Failed to extract gzip file"
-                      rm -f "${download_path}.tar.gz" "${download_path}.tar"
-                      rm -rf "${app_name}_extracted"
+              extract_dir="$app_temp_dir/extracted"
+              mount_dir="$app_temp_dir/mount"
+              rm -rf "$extract_dir" "$mount_dir"
+              mkdir -p "$extract_dir"
+              declared_app=$(jq -r '.artifact_app // empty' "$WORKSPACE_DIR/Apps/${app_name}.json")
+              declared_pkg=$(jq -r '.artifact_pkg // empty' "$WORKSPACE_DIR/Apps/${app_name}.json")
+              source_app=$(jq -r '.artifact_app_source // empty' "$WORKSPACE_DIR/Apps/${app_name}.json")
+              source_pkg=$(jq -r '.artifact_pkg_source // empty' "$WORKSPACE_DIR/Apps/${app_name}.json")
+              kind=$(jq -r '.artifact_kind // empty' "$WORKSPACE_DIR/Apps/${app_name}.json")
+              archive_format=$(jq -r '.archive_format // empty' "$WORKSPACE_DIR/Apps/${app_name}.json")
+              [ -n "$kind" ] || kind=$(artifact_kind "$url")
+              direct_pkg_file=""
+
+              case "$kind" in
+                pkg)
+                  source_path="$app_temp_dir/source.pkg"
+                  if ! download_source "$source_path" "$url"; then
+                    FAILED_APPS+=("$app_name")
+                    ERROR_LOG+=("$app_name: Failed to download direct PKG from $url")
+                    rm -rf "$extract_dir"
+                    continue
+                  fi
+                  if ! verify_source_file "$source_path" "$source_sha"; then
+                    FAILED_APPS+=("$app_name")
+                    ERROR_LOG+=("$app_name: Direct source PKG SHA256 mismatch")
+                    continue
+                  fi
+                  record_observed_source_digest "$source_path" "$WORKSPACE_DIR/Apps/${app_name}.json"
+                  cp "$source_path" "$extract_dir/payload.pkg"
+                  direct_pkg_file="$extract_dir/payload.pkg"
+                  ;;
+                dmg|dmg_gzip)
+                  if [ "$kind" = "dmg_gzip" ]; then
+                    if ! download_source "${download_path}.dmg.gz" "$url"; then
                       FAILED_APPS+=("$app_name")
-                      ERROR_LOG+=("$app_name: Failed to extract gzip file from $url")
+                      ERROR_LOG+=("$app_name: Failed to download gzip-compressed DMG from $url")
+                      rm -rf "$extract_dir"
                       continue
-                    }
-                    rm -f "${download_path}.tar"
-                  fi
-                  rm -f "${download_path}.tar.gz"
-                elif [[ "$FILE_TYPE" == "Zip archive" ]] || [[ "$FILE_TYPE" == "ZIP archive" ]]; then
-                  echo "📦 File is a valid zip archive"
-                  mv "${download_path}.download" "${download_path}.zip"
-                  # Extract zip while excluding __MACOSX directory
-                  if unzip -q -d "${app_name}_extracted" "${download_path}.zip" 2>/dev/null; then
-                    echo "✅ Zip extraction successful"
-                  else
-                    echo "❌ Failed to extract zip file"
-                    rm -f "${download_path}.zip"
-                    rm -rf "${app_name}_extracted"
+                    fi
+                    if ! verify_source_file "${download_path}.dmg.gz" "$source_sha"; then
+                      FAILED_APPS+=("$app_name")
+                      ERROR_LOG+=("$app_name: Source DMG.GZ SHA256 mismatch")
+                      rm -f "${download_path}.dmg.gz"
+                      continue
+                    fi
+                    record_observed_source_digest "${download_path}.dmg.gz" "$WORKSPACE_DIR/Apps/${app_name}.json"
+                    if ! require_gzip_quota "${download_path}.dmg.gz"; then
+                      FAILED_APPS+=("$app_name")
+                      ERROR_LOG+=("$app_name: DMG.GZ exceeds expansion quota or disk headroom")
+                      rm -f "${download_path}.dmg.gz"
+                      continue
+                    fi
+                    if ! gunzip -c "${download_path}.dmg.gz" > "${download_path}.dmg"; then
+                      FAILED_APPS+=("$app_name")
+                      ERROR_LOG+=("$app_name: Failed to decompress DMG from $url")
+                      rm -rf "$extract_dir"
+                      rm -f "${download_path}.dmg.gz" "${download_path}.dmg"
+                      continue
+                    fi
+                    rm -f "${download_path}.dmg.gz"
+                  elif ! download_source "${download_path}.dmg" "$url"; then
                     FAILED_APPS+=("$app_name")
-                    ERROR_LOG+=("$app_name: Failed to extract zip file from $url")
+                    ERROR_LOG+=("$app_name: Failed to download DMG from $url")
+                    rm -rf "$extract_dir"
                     continue
                   fi
-                  rm "${download_path}.zip"
-                else
-                  echo "⚠️ Unknown file type, attempting zip extraction anyway..."
-                  mv "${download_path}.download" "${download_path}.zip"
-                  if unzip -q -d "${app_name}_extracted" "${download_path}.zip" 2>/dev/null; then
-                    echo "✅ Zip extraction successful"
-                  else
-                    echo "❌ Failed to extract file"
-                    rm -f "${download_path}.zip"
-                    rm -rf "${app_name}_extracted"
+                  if [ "$kind" = "dmg" ] && ! verify_source_file "${download_path}.dmg" "$source_sha"; then
                     FAILED_APPS+=("$app_name")
-                    ERROR_LOG+=("$app_name: Failed to extract file (detected as: $FILE_TYPE) from $url")
+                    ERROR_LOG+=("$app_name: Source DMG SHA256 mismatch")
+                    rm -f "${download_path}.dmg"
                     continue
                   fi
-                  rm "${download_path}.zip"
-                fi
-              elif [[ "$url" == *".tar.xz" ]]; then
-                echo "📦 Processing tar.xz archive for $app_name..."
-                if ! curl -f -L -o "${download_path}.tar.xz" "$url"; then
-                  echo "❌ Failed to download $app_name from $url"
+                  [ "$kind" != "dmg" ] || record_observed_source_digest "${download_path}.dmg" "$WORKSPACE_DIR/Apps/${app_name}.json"
+                  mkdir -p "$mount_dir"
+                  if ! hdiutil attach "${download_path}.dmg" -mountpoint "$mount_dir" -nobrowse >/dev/null; then
+                    FAILED_APPS+=("$app_name")
+                    ERROR_LOG+=("$app_name: Could not mount DMG from $url")
+                    rm -rf "$extract_dir" "$mount_dir"
+                    rm -f "${download_path}.dmg"
+                    continue
+                  fi
+                  mounted_app=$(find_app_payload "$mount_dir" "$declared_app" "$source_app")
+                  mounted_pkg=$(find_pkg_payload "$mount_dir" "$declared_pkg" "$source_pkg")
+                  if [ -n "$mounted_app" ]; then
+                    ditto "$mounted_app" "$extract_dir/$(basename "$mounted_app")"
+                  elif [ -n "$mounted_pkg" ]; then
+                    cp "$mounted_pkg" "$extract_dir/$(basename "$mounted_pkg")"
+                  fi
+                  hdiutil detach "$mount_dir" >/dev/null 2>&1 || true
+                  rm -rf "$mount_dir"
+                  rm -f "${download_path}.dmg"
+                  ;;
+                archive)
+                  archive_path="${download_path}.archive"
+                  if ! download_source "$archive_path" "$url"; then
+                    FAILED_APPS+=("$app_name")
+                    ERROR_LOG+=("$app_name: Failed to download archive from $url")
+                    rm -rf "$extract_dir"
+                    continue
+                  fi
+                  if ! verify_source_file "$archive_path" "$source_sha"; then
+                    FAILED_APPS+=("$app_name")
+                    ERROR_LOG+=("$app_name: Source archive SHA256 mismatch")
+                    rm -f "$archive_path"
+                    continue
+                  fi
+                  record_observed_source_digest "$archive_path" "$WORKSPACE_DIR/Apps/${app_name}.json"
+                  if [ -z "$archive_format" ]; then
+                    url_path="${url%%\?*}"
+                    url_path=$(printf '%s' "$url_path" | tr '[:upper:]' '[:lower:]')
+                    case "$url_path" in
+                      *.zip) archive_format="zip" ;;
+                      *.tar.gz|*.tgz) archive_format="tar.gz" ;;
+                      *.tar.xz) archive_format="tar.xz" ;;
+                      *.tar.bz2|*.tbz) archive_format="tar.bz2" ;;
+                    esac
+                  fi
+                  if ! require_archive_quota "$archive_path" "$archive_format"; then
+                    FAILED_APPS+=("$app_name")
+                    ERROR_LOG+=("$app_name: Archive exceeds extraction quota or disk headroom")
+                    rm -f "$archive_path"
+                    continue
+                  fi
+                  case "$archive_format" in
+                    zip)
+                      extraction_ok=false
+                      ditto -x -k "$archive_path" "$extract_dir" && extraction_ok=true
+                      ;;
+                    tar.gz)
+                      extraction_ok=false
+                      tar -xzf "$archive_path" -C "$extract_dir" && extraction_ok=true
+                      ;;
+                    tar.xz)
+                      extraction_ok=false
+                      tar -xJf "$archive_path" -C "$extract_dir" && extraction_ok=true
+                      ;;
+                    tar.bz2)
+                      extraction_ok=false
+                      tar -xjf "$archive_path" -C "$extract_dir" && extraction_ok=true
+                      ;;
+                  esac
+                  rm -f "$archive_path"
+                  if [ "${extraction_ok:-false}" != "true" ]; then
+                    FAILED_APPS+=("$app_name")
+                    ERROR_LOG+=("$app_name: Failed to extract archive from $url")
+                    rm -rf "$extract_dir"
+                    continue
+                  fi
+                  if ! require_extracted_quota "$extract_dir"; then
+                    FAILED_APPS+=("$app_name")
+                    ERROR_LOG+=("$app_name: Extracted archive exceeds quota or disk headroom")
+                    rm -rf "$extract_dir"
+                    continue
+                  fi
+
+                  app_file=$(find_app_payload "$extract_dir" "$declared_app" "$source_app")
+                  pkg_file=$(find_pkg_payload "$extract_dir" "$declared_pkg" "$source_pkg")
+                  if [ -z "$app_file" ] && [ -z "$pkg_file" ]; then
+                    nested_dmg=$(find "$extract_dir" -type f -name "*.dmg" -print -quit)
+                    if [ -n "$nested_dmg" ]; then
+                      mkdir -p "$mount_dir"
+                      if hdiutil attach "$nested_dmg" -mountpoint "$mount_dir" -nobrowse >/dev/null; then
+                        mounted_app=$(find_app_payload "$mount_dir" "$declared_app" "$source_app")
+                        mounted_pkg=$(find_pkg_payload "$mount_dir" "$declared_pkg" "$source_pkg")
+                        if [ -n "$mounted_app" ]; then
+                          ditto "$mounted_app" "$extract_dir/$(basename "$mounted_app")"
+                        elif [ -n "$mounted_pkg" ]; then
+                          cp "$mounted_pkg" "$extract_dir/$(basename "$mounted_pkg")"
+                        fi
+                        hdiutil detach "$mount_dir" >/dev/null 2>&1 || true
+                      fi
+                      rm -rf "$mount_dir"
+                    fi
+                  fi
+                  ;;
+                *)
                   FAILED_APPS+=("$app_name")
-                  ERROR_LOG+=("$app_name: Failed to download tar.xz from $url")
+                  ERROR_LOG+=("$app_name: Unsupported artifact URL: $url")
+                  rm -rf "$extract_dir"
                   continue
-                fi
-                cd "$HOME/Desktop"
-                # Extract tar.xz
-                echo "📂 Creating extraction directory..."
-                mkdir -p "${app_name}_extracted"
-                echo "🔓 Extracting tar.xz archive..."
-                # A corrupt archive must not abort the step: the .app/.pkg
-                # search below owns that failure and reports it per app.
-                tar -xf "${download_path}.tar.xz" -C "${app_name}_extracted" || true
-                echo "🗑️ Cleaning up downloaded archive..."
-                rm "${download_path}.tar.xz"
-                echo "📁 Extracted contents:"
-                ls -R "${app_name}_extracted"
-              elif [[ "$url" == *".tar.bz2" ]] || [[ "$url" == *".tbz" ]]; then
-                echo "📦 Processing tar.bz2/tbz archive for $app_name..."
-                if [[ "$url" == *".tar.bz2" ]]; then
-                  if ! curl -f -L -o "${download_path}.tar.bz2" "$url"; then
-                    echo "❌ Failed to download $app_name from $url"
-                    FAILED_APPS+=("$app_name")
-                    ERROR_LOG+=("$app_name: Failed to download tar.bz2 from $url")
-                    continue
-                  fi
-                  archive_path="${download_path}.tar.bz2"
-                else
-                  if ! curl -f -L -o "${download_path}.tbz" "$url"; then
-                    echo "❌ Failed to download $app_name from $url"
-                    FAILED_APPS+=("$app_name")
-                    ERROR_LOG+=("$app_name: Failed to download tbz from $url")
-                    continue
-                  fi
-                  archive_path="${download_path}.tbz"
-                fi
-                cd "$HOME/Desktop"
-                # Extract tar.bz2/tbz
-                echo "📂 Creating extraction directory..."
-                # Remove directory if it exists
-                if [ -d "${app_name}_extracted" ]; then
-                  echo "🧹 Removing existing directory: ${app_name}_extracted"
-                  rm -rf "${app_name}_extracted"
-                fi
-                mkdir -p "${app_name}_extracted"
-                echo "🔓 Extracting bzip2 compressed archive..."
-                # A corrupt archive must not abort the step: the .app/.pkg
-                # search below owns that failure and reports it per app.
-                tar -xjf "$archive_path" -C "${app_name}_extracted" || true
-                echo "🗑️ Cleaning up downloaded archive..."
-                rm "$archive_path"
-                
-                # Check if we need to handle nested tar archives
-                tar_file=$(find "${app_name}_extracted" -name "*.tar" -print -quit)
-                if [ -n "$tar_file" ]; then
-                  echo "🔍 Found nested tar archive: $tar_file"
-                  echo "📂 Creating nested extraction directory..."
-                  # Remove directory if it exists
-                  if [ -d "${app_name}_nested_extracted" ]; then
-                    echo "🧹 Removing existing directory: ${app_name}_nested_extracted"
-                    rm -rf "${app_name}_nested_extracted"
-                  fi
-                  mkdir -p "${app_name}_nested_extracted"
-                  echo "🔓 Extracting nested tar archive..."
-                  # Neither the nested extraction nor the copy back may abort the
-                  # step: an empty nested directory makes the glob unmatched and
-                  # cp fail, and the .app/.pkg search below owns that failure.
-                  tar -xf "$tar_file" -C "${app_name}_nested_extracted" || true
-                  # Move contents from nested extraction to main extraction directory
-                  echo "📦 Moving nested contents to main extraction directory..."
-                  cp -R "${app_name}_nested_extracted/"* "${app_name}_extracted/" || true
-                  rm -rf "${app_name}_nested_extracted"
-                fi
-                
-                echo "📁 Extracted contents:"
-                ls -R "${app_name}_extracted"
-              elif [[ "$url" == *".tar.gz" ]]; then
-                echo "📦 Processing tar.gz archive for $app_name..."
-                if ! curl -f -L -o "${download_path}.tar.gz" "$url"; then
-                  echo "❌ Failed to download $app_name from $url"
-                  FAILED_APPS+=("$app_name")
-                  ERROR_LOG+=("$app_name: Failed to download tar.gz from $url")
-                  continue
-                fi
-                cd "$HOME/Desktop"
-                # Extract tar.gz
-                echo "📂 Creating extraction directory..."
-                # Remove directory if it exists
-                if [ -d "${app_name}_extracted" ]; then
-                  echo "🧹 Removing existing directory: ${app_name}_extracted"
-                  rm -rf "${app_name}_extracted"
-                fi
-                mkdir -p "${app_name}_extracted"
-                echo "🔓 Extracting tar.gz archive..."
-                # A corrupt archive must not abort the step: the .app/.pkg
-                # search below owns that failure and reports it per app.
-                tar -xzf "${download_path}.tar.gz" -C "${app_name}_extracted" || true
-                echo "🗑️ Cleaning up downloaded archive..."
-                rm "${download_path}.tar.gz"
-                echo "📁 Extracted contents:"
-                ls -R "${app_name}_extracted"
-              else
-                # Download file first and detect type
-                if ! curl -f -L -o "${download_path}.download" "$url"; then
-                  echo "❌ Failed to download $app_name from $url"
-                  FAILED_APPS+=("$app_name")
-                  ERROR_LOG+=("$app_name: Failed to download from $url")
-                  continue
-                fi
-                cd "$HOME/Desktop"
-                
-                # Detect actual file type
-                FILE_TYPE=$(file -b "${download_path}.download" | cut -d' ' -f1-2)
-                echo "🔍 Detected file type: $FILE_TYPE"
-                
-                # Remove extraction directory if it exists
-                if [ -d "${app_name}_extracted" ]; then
-                  echo "🧹 Removing existing directory: ${app_name}_extracted"
-                  rm -rf "${app_name}_extracted"
-                fi
-                
-                # Handle based on actual file type
-                if [[ "$FILE_TYPE" == "gzip compressed" ]]; then
-                  echo "📦 File is gzip compressed"
-                  mv "${download_path}.download" "${download_path}.tar.gz"
-                  mkdir -p "${app_name}_extracted"
-                  echo "🔓 Extracting gzip archive..."
-                  if tar -xzf "${download_path}.tar.gz" -C "${app_name}_extracted" 2>/dev/null; then
-                    echo "✅ Gzip extraction successful"
-                  else
-                    echo "❌ Failed to extract gzip file"
-                    rm -f "${download_path}.tar.gz"
-                    rm -rf "${app_name}_extracted"
-                    FAILED_APPS+=("$app_name")
-                    ERROR_LOG+=("$app_name: Failed to extract gzip file from $url")
-                    continue
-                  fi
-                  rm -f "${download_path}.tar.gz"
-                else
-                  # Default to zip extraction
-                  echo "📦 Attempting zip extraction for file type: $FILE_TYPE"
-                  mv "${download_path}.download" "${download_path}.zip"
-                  if unzip -q -d "${app_name}_extracted" "${download_path}.zip" 2>/dev/null; then
-                    echo "✅ Zip extraction successful"
-                  else
-                    echo "❌ Failed to extract file"
-                    rm -f "${download_path}.zip"
-                    rm -rf "${app_name}_extracted"
-                    FAILED_APPS+=("$app_name")
-                    ERROR_LOG+=("$app_name: Failed to extract file (type: $FILE_TYPE) from $url")
-                    continue
-                  fi
-                  rm "${download_path}.zip"
-                fi
-              fi
-              
-              # First try to find .app file recursively, excluding __MACOSX directory
-              echo "🔍 Searching for .app file recursively..."
-              app_file=$(find "${app_name}_extracted" -type d -name "*.app" ! -path "*/__MACOSX/*" -print -quit)
+                  ;;
+              esac
+
+              echo "🔍 Searching for declared app payload..."
+              app_file=$(find_app_payload "$extract_dir" "$declared_app" "$source_app")
               
               if [ -z "$app_file" ]; then
                 echo "❌ No .app file found, searching for .pkg file..."
-                pkg_file=$(find "${app_name}_extracted" -type f -name "*.pkg" ! -path "*/__MACOSX/*" -print -quit)
+                pkg_file="$direct_pkg_file"
+                [ -n "$pkg_file" ] || pkg_file=$(find_pkg_payload "$extract_dir" "$declared_pkg" "$source_pkg")
                 
                 if [ -n "$pkg_file" ]; then
                   echo "✅ Found .pkg file: $pkg_file"
@@ -1137,42 +1415,37 @@ jobs:
                   echo "📋 Copying PKG file to ${app_name}_${version}.pkg"
                   # A failed copy leaves no package to upload, which the Azure
                   # upload arm below already reports for this app.
-                  cp "$pkg_file" "${app_name}_${version}.pkg" || true
+                  cp "$pkg_file" "$package_path" || true
 
-                  extracted_bundle_id=$(extract_bundle_id_from_pkg "${app_name}_${version}.pkg")
-                  log_bundle_id_change "$WORKSPACE_DIR/Apps/${app_name}.json" "$extracted_bundle_id"
+                  extracted_bundle_id=$(extract_bundle_id_from_pkg "$package_path" "$declared_app" "$source_app")
+                  if ! require_bundle_id_match "$WORKSPACE_DIR/Apps/${app_name}.json" "$extracted_bundle_id"; then
+                    cd "$WORKSPACE_DIR"
+                    rm -rf "$extract_dir"
+                    rm -f "$package_path"
+                    FAILED_APPS+=("$app_name")
+                    ERROR_LOG+=("$app_name: Extracted package bundle ID mismatch")
+                    continue
+                  fi
                   
                   # Calculate SHA256 hash
                   echo "🔐 Calculating SHA256 hash..."
-                  file_hash=$(shasum -a 256 "${app_name}_${version}.pkg" | awk '{print $1}')
+                  file_hash=$(shasum -a 256 "$package_path" | awk '{print $1}')
                   echo "📝 SHA256: $file_hash"
+                  new_blob_name="${app_name}_${version}_${file_hash}.pkg"
+                  azure_url="${STORAGE_BASE_URL}/${new_blob_name}"
 
-                  # Upload to Azure
-                  echo "☁️ Uploading to Azure Blob Storage..."
-                  if az storage blob upload \
-                    --account-name "$AZURE_STORAGE_ACCOUNT" \
-                    --container-name "$AZURE_STORAGE_CONTAINER" \
-                    --auth-mode login \
-                    --file "${app_name}_${version}.pkg" \
-                    --name "${app_name}_${version}.pkg" \
-                    --overwrite true; then
+                  if upload_immutable_blob "$package_path" "$new_blob_name" "$file_hash"; then
                     echo "✅ Upload successful"
-
-                    # Only reached with the new blob confirmed in the container.
-                    # $existing_versions is the same loop-local listing the .app
-                    # path uses; this fallback runs in the same iteration.
-                    delete_superseded_blobs "$app_name" "$version" "$existing_versions"
 
                     # Update JSON with Azure URL and SHA256
                     echo "📝 Updating JSON file with new Azure URL and SHA256..."
-                    azure_url="${STORAGE_BASE_URL}/${app_name}_${version}.pkg"
-                    if jq --arg url "$azure_url" --arg filename "${app_name}_${version}.pkg" --arg sha "$file_hash" --arg bundleid "$extracted_bundle_id" '(if has("vendor_url") then .vendor_url else .url end) as $vurl | .url = $url | .vendor_url = $vurl | .fileName = $filename | .sha = $sha | (if $bundleid == "" then . else .bundleId = $bundleid end)' "$WORKSPACE_DIR/Apps/${app_name}.json" > temp.json && mv temp.json "$WORKSPACE_DIR/Apps/${app_name}.json"; then
+                    if jq --arg url "$azure_url" --arg filename "$new_blob_name" --arg sha "$file_hash" --arg bundleid "$extracted_bundle_id" '(if has("vendor_url") then .vendor_url else .url end) as $vurl | .url = $url | .vendor_url = $vurl | .fileName = $filename | .sha = $sha | (if $bundleid == "" then . else .bundleId = $bundleid end) | del(.packaging_pending)' "$WORKSPACE_DIR/Apps/${app_name}.json" > temp.json && mv temp.json "$WORKSPACE_DIR/Apps/${app_name}.json"; then
                       echo "✅ JSON file updated successfully"
                       echo "🔗 New URL: $azure_url"
                     else
                       echo "❌ Failed to update JSON file"
                       cd "$WORKSPACE_DIR"
-                      rm -rf "${app_name}_extracted"
+                      rm -rf "$extract_dir"
                       FAILED_APPS+=("$app_name")
                       ERROR_LOG+=("$app_name: Failed to update catalog JSON after Azure upload")
                       continue
@@ -1180,9 +1453,9 @@ jobs:
                   else
                     echo "❌ Failed to upload to Azure"
                     cd "$WORKSPACE_DIR"
-                    rm -rf "${app_name}_extracted"
+                    rm -rf "$extract_dir"
                     FAILED_APPS+=("$app_name")
-                    ERROR_LOG+=("$app_name: Azure upload failed for ${app_name}_${version}.pkg")
+                    ERROR_LOG+=("$app_name: Immutable Azure upload failed for $new_blob_name")
                     continue
                   fi
 
@@ -1190,16 +1463,17 @@ jobs:
                   # shared success counter at the end of the loop, so it counts
                   # itself.
                   cd "$WORKSPACE_DIR"
-                  rm -rf "${app_name}_extracted"
+                  rm -rf "$extract_dir"
                   SUCCESSFUL_APPS+=("$app_name")
                   echo "✅ Completed processing $app_name"
+                  destroy_app_workspace
                   continue
                 else
                   echo "❌ No .app or .pkg file found for $app_name"
                   echo " Extracted contents:"
-                  ls -R "${app_name}_extracted"
+                  ls -R "$extract_dir" || true
                   cd "$WORKSPACE_DIR"
-                  rm -rf "${app_name}_extracted"
+                  rm -rf "$extract_dir"
                   FAILED_APPS+=("$app_name")
                   ERROR_LOG+=("$app_name: No .app or .pkg found inside archive from $url")
                   continue
@@ -1208,13 +1482,18 @@ jobs:
               echo "✅ Found .app file: $app_file"
               
               extracted_bundle_id=$(extract_bundle_id_from_plist "$app_file/Contents/Info.plist")
-              log_bundle_id_change "$WORKSPACE_DIR/Apps/${app_name}.json" "$extracted_bundle_id"
+              if ! require_bundle_id_match "$WORKSPACE_DIR/Apps/${app_name}.json" "$extracted_bundle_id"; then
+                rm -rf "$extract_dir"
+                FAILED_APPS+=("$app_name")
+                ERROR_LOG+=("$app_name: Extracted app bundle ID mismatch")
+                continue
+              fi
 
               # Build PKG with version in filename
               echo "Building PKG for $app_name version $version..."
-              if ! pkgbuild --install-location /Applications --component "$app_file" "${app_name}_${version}.pkg" 2>/dev/null; then
+              if ! pkgbuild --install-location /Applications --component "$app_file" "$package_path" 2>/dev/null; then
                 echo "❌ Failed to build PKG for $app_name"
-                rm -rf "${app_name}_extracted"
+                rm -rf "$extract_dir"
                 FAILED_APPS+=("$app_name")
                 ERROR_LOG+=("$app_name: Failed to build PKG from .app file")
                 continue
@@ -1222,54 +1501,70 @@ jobs:
               
               # Calculate SHA256 hash
               echo "🔐 Calculating SHA256 hash..."
-              file_hash=$(shasum -a 256 "${app_name}_${version}.pkg" | awk '{print $1}')
+              file_hash=$(shasum -a 256 "$package_path" | awk '{print $1}')
               echo "📝 SHA256: $file_hash"
+              new_blob_name="${app_name}_${version}_${file_hash}.pkg"
+              azure_url="${STORAGE_BASE_URL}/${new_blob_name}"
 
               # Upload to Azure with version in filename. The old versions are
               # only deleted and the JSON only rewritten after a confirmed
               # upload, otherwise a transient Azure failure would remove the
               # last working package and leave the catalog pointing at nothing.
               echo "Uploading $app_name version $version to Azure Blob Storage..."
-              if ! az storage blob upload \
-                --account-name "$AZURE_STORAGE_ACCOUNT" \
-                --container-name "$AZURE_STORAGE_CONTAINER" \
-                --auth-mode login \
-                --file "${app_name}_${version}.pkg" \
-                --name "${app_name}_${version}.pkg" \
-                --overwrite true; then
-                echo "❌ Failed to upload ${app_name}_${version}.pkg to Azure"
-                sudo rm -rf "${app_name}_extracted"
-                rm -f "${app_name}_${version}.pkg"
+              if ! upload_immutable_blob "$package_path" "$new_blob_name" "$file_hash"; then
+                echo "❌ Failed to upload $new_blob_name to Azure"
+                rm -rf "$extract_dir"
+                rm -f "$package_path"
                 FAILED_APPS+=("$app_name")
-                ERROR_LOG+=("$app_name: Azure upload failed for ${app_name}_${version}.pkg")
+                ERROR_LOG+=("$app_name: Immutable Azure upload failed for $new_blob_name")
                 continue
               fi
 
-              # Delete older versions of this app from Azure storage
-              delete_superseded_blobs "$app_name" "$version" "$existing_versions"
 
               # Update the JSON file with Azure URL, filename and SHA256
-              azure_url="${STORAGE_BASE_URL}/${app_name}_${version}.pkg"
               # The package is already uploaded at this point, so a failed
               # rewrite must leave the JSON alone and let the loop continue
               # rather than take the remaining apps down with it.
               # Braces keep the negation on the whole list: "!" alone would bind
               # to jq and turn mv into the failure branch.
-              if ! { jq --arg url "$azure_url" --arg filename "${app_name}_${version}.pkg" --arg sha "$file_hash" --arg bundleid "$extracted_bundle_id" '(if has("vendor_url") then .vendor_url else .url end) as $vurl | .url = $url | .vendor_url = $vurl | .fileName = $filename | .sha = $sha | (if $bundleid == "" then . else .bundleId = $bundleid end)' "$WORKSPACE_DIR/Apps/${app_name}.json" > temp.json && mv temp.json "$WORKSPACE_DIR/Apps/${app_name}.json"; }; then
+              if ! { jq --arg url "$azure_url" --arg filename "$new_blob_name" --arg sha "$file_hash" --arg bundleid "$extracted_bundle_id" '(if has("vendor_url") then .vendor_url else .url end) as $vurl | .url = $url | .vendor_url = $vurl | .fileName = $filename | .sha = $sha | (if $bundleid == "" then . else .bundleId = $bundleid end) | del(.packaging_pending)' "$WORKSPACE_DIR/Apps/${app_name}.json" > temp.json && mv temp.json "$WORKSPACE_DIR/Apps/${app_name}.json"; }; then
                 echo "❌ Failed to update JSON file"
-                sudo rm -rf "${app_name}_extracted"
+                rm -rf "$extract_dir"
                 FAILED_APPS+=("$app_name")
                 ERROR_LOG+=("$app_name: Failed to update catalog JSON after Azure upload")
                 continue
               fi
 
               # Cleanup
-              sudo rm -rf "${app_name}_extracted"
+              rm -rf "$extract_dir"
             fi
 
             SUCCESSFUL_APPS+=("$app_name")
+            destroy_app_workspace
             echo "✅ Completed processing $app_name"
             echo "------------------------------------------------"
+          done
+          destroy_app_workspace
+
+          # Never publish the collector's vendor URL or source-archive SHA for a
+          # package that failed. Keep the last committed manifest until a build
+          # produces and verifies a replacement.
+          for failed_app in "${FAILED_APPS[@]}"; do
+            if git -C "$WORKSPACE_DIR" cat-file -e "HEAD:Apps/${failed_app}.json" 2>/dev/null; then
+              git -C "$WORKSPACE_DIR" checkout HEAD -- "Apps/${failed_app}.json"
+            else
+              rm -f "$WORKSPACE_DIR/Apps/${failed_app}.json"
+            fi
+          done
+
+          checked_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+          for successful_app in "${SUCCESSFUL_APPS[@]}"; do
+            json_path="$WORKSPACE_DIR/Apps/${successful_app}.json"
+            [ -f "$json_path" ] || continue
+            jq --arg checked_at "$checked_at" \
+              '.source_checked_at = $checked_at' "$json_path" \
+              > "$json_path.checked.tmp" \
+              && mv "$json_path.checked.tmp" "$json_path"
           done
           
           # Display summary
@@ -1351,6 +1646,40 @@ jobs:
             fi
           } > "$WORKSPACE_DIR/packaging-failures.md"
 
+      - name: Revert unselected package candidates
+        run: |
+          while IFS= read -r file; do
+            [ -n "$file" ] || continue
+            [ "$(jq -r '.deprecated // false' "$file" 2>/dev/null)" != "true" ] || continue
+            type=$(jq -r '.type // empty' "$file" 2>/dev/null || true)
+            case "$type" in
+              app|pkg_in_dmg|pkg_in_pkg) ;;
+              *) continue ;;
+            esac
+            app=$(basename "$file" .json)
+            if ! grep -Fxq "$app" selected-packages.txt 2>/dev/null; then
+              if git cat-file -e "HEAD:$file" 2>/dev/null; then
+                git checkout HEAD -- "$file"
+              else
+                rm -f "$file"
+              fi
+            fi
+          done < <(git diff --name-only -- 'Apps/*.json')
+
+          while IFS= read -r file; do
+            [ -n "$file" ] || continue
+            [ "$(jq -r '.deprecated // false' "$file" 2>/dev/null)" != "true" ] || continue
+            type=$(jq -r '.type // empty' "$file" 2>/dev/null || true)
+            case "$type" in
+              app|pkg_in_dmg|pkg_in_pkg) ;;
+              *) continue ;;
+            esac
+            app=$(basename "$file" .json)
+            if ! grep -Fxq "$app" selected-packages.txt 2>/dev/null; then
+              rm -f "$file"
+            fi
+          done < <(git ls-files --others --exclude-standard -- 'Apps/*.json')
+
       # The collector rewrites every app's url to the vendor URL, and Process
       # apps restores the Azure URL only for the apps it packaged. On a scoped
       # build the unprocessed apps would therefore be committed pointing at
@@ -1365,6 +1694,7 @@ jobs:
           reverted=0
           while IFS= read -r f; do
             [ -n "$f" ] || continue
+            [ "$(jq -r '.deprecated // false' "$f" 2>/dev/null)" != "true" ] || continue
             cask=$(jq -r '.homebrew_cask // empty' "$f" 2>/dev/null || true)
             if [ -z "$cask" ] || [[ " $SCOPE_TOKENS " != *" $cask "* ]]; then
               git checkout -- "$f"
@@ -1374,6 +1704,7 @@ jobs:
 
           while IFS= read -r f; do
             [ -n "$f" ] || continue
+            [ "$(jq -r '.deprecated // false' "$f" 2>/dev/null)" != "true" ] || continue
             cask=$(jq -r '.homebrew_cask // empty' "$f" 2>/dev/null || true)
             if [ -z "$cask" ] || [[ " $SCOPE_TOKENS " != *" $cask "* ]]; then
               rm -f "$f"
@@ -1386,6 +1717,17 @@ jobs:
           git checkout -- README.md 2>/dev/null || true
 
           echo "Reverted $reverted out-of-scope app files"
+
+      - name: Finalize catalog readiness
+        id: catalog-ready
+        run: |
+          if python .github/scripts/generate_supported_apps.py; then
+            echo "ready=true" >> "$GITHUB_OUTPUT"
+          else
+            python .github/scripts/generate_supported_apps.py --exclude-invalid
+            echo "ready=false" >> "$GITHUB_OUTPUT"
+            echo "Catalog progress committed without publication marker"
+          fi
 
       - name: Commit and push changes
         id: catalog-snapshot
@@ -1461,133 +1803,28 @@ jobs:
           echo "::error::Catalog publication blocked because ${FAILED_COUNT:-unknown} apps failed packaging"
           exit 1
 
-      # Apps are only downloadable once the steps above have published them, so
-      # this is the first point at which a requester can be told their app is live.
-      - name: Resolve pending app requests
-        id: pending
-        run: python .github/scripts/pending_requests.py resolve
+      - name: Create publication provenance
+        if: steps.catalog-ready.outputs.ready == 'true'
+        run: |
+          python - <<'PY'
+          import json, os
+          data = {
+              "catalogCommit": "${{ steps.catalog-snapshot.outputs.catalog_commit }}",
+              "repository": os.environ["GITHUB_REPOSITORY"],
+              "runId": int(os.environ["GITHUB_RUN_ID"]),
+              "workflowName": "Build App Packages and Collect App Information",
+              "workflowPath": ".github/workflows/build-app-packages.yml",
+          }
+          with open("catalog-publication.json", "w", encoding="utf-8") as handle:
+              json.dump(data, handle, indent=2, sort_keys=True)
+              handle.write("\n")
+          PY
 
-      - name: Notify requesters
-        if: steps.pending.outputs.notify_count != '0'
-        uses: actions/github-script@v7
+      - name: Upload publication provenance
+        if: steps.catalog-ready.outputs.ready == 'true'
+        uses: actions/upload-artifact@v4
         with:
-          script: |
-            const fs = require('fs');
-            const notifications = JSON.parse(fs.readFileSync('pending-notifications.json', 'utf8'));
-
-            for (const item of notifications) {
-              let body = `## Now live\n\n`;
-              body += `The app you requested has been packaged and is available in the catalog.\n\n`;
-              body += `| App | Version |\n|-----|---------|\n`;
-              for (const app of item.apps) {
-                body += `| ${app.name} | \`${app.version}\` |\n`;
-              }
-              body += `\nIt will appear in IntuneBrew on the next run, and updates are `;
-              body += `picked up automatically from Homebrew from here on.`;
-
-              try {
-                await github.rest.issues.createComment({
-                  owner: context.repo.owner,
-                  repo: context.repo.repo,
-                  issue_number: item.issue,
-                  body: body
-                });
-                console.log(`Commented on #${item.issue}`);
-              } catch (e) {
-                // A deleted or locked issue must not fail the build.
-                console.log(`Could not comment on #${item.issue}: ${e.message}`);
-              }
-            }
-
-      - name: Commit resolved requests
-        run: |
-          git config --local user.email "action@github.com"
-          git config --local user.name "GitHub Action"
-          git add .github/pending-requests.json
-
-          if git diff --staged --quiet; then
-            echo "No pending request changes to commit"
-            exit 0
-          fi
-
-          git commit -m "Clear resolved app requests [skip ci]"
-          if ! git push origin HEAD:main; then
-            echo "::error::main changed before pending requests could be committed"
-            exit 1
-          fi
-
-      - name: Publish catalog state
-        if: success() && steps.process-apps.outputs.packaging_succeeded == 'true'
-        env:
-          PUBLISHED_CATALOG_COMMIT: ${{ steps.catalog-snapshot.outputs.catalog_commit }}
-          PACKAGE_STORAGE_BASE_URL: ${{ vars.AZURE_STORAGE_BASE_URL }}
-          RUN_ID: ${{ github.run_id }}
-          WORKFLOW_NAME: Build App Packages and Collect App Information
-          WORKFLOW_PATH: .github/workflows/build-app-packages.yml
-        run: |
-          # Do not rebase the marker. It is valid only when this checkout is still
-          # the exact tip of main; a normal push also closes the remaining race.
-          git fetch origin main
-          local_head=$(git rev-parse HEAD)
-          remote_head=$(git rev-parse origin/main)
-          if [ "$local_head" != "$remote_head" ]; then
-            echo "::error::main changed before catalog state publication"
-            exit 1
-          fi
-          if ! git diff --quiet || ! git diff --cached --quiet; then
-            echo "::error::Tracked working tree changes remain before marker publication"
-            exit 1
-          fi
-          if ! git merge-base --is-ancestor "$PUBLISHED_CATALOG_COMMIT" "$local_head"; then
-            echo "::error::Catalog snapshot is not an ancestor of the marker parent"
-            exit 1
-          fi
-          if git cat-file -e "$local_head:.github/catalog-state.json" 2>/dev/null; then
-            existing_run_id=$(git show "$local_head:.github/catalog-state.json" \
-              | python -c 'import json, sys; value=json.load(sys.stdin)["runId"]; assert type(value) is int and value > 0; print(value)')
-            if [ "$existing_run_id" -ge "$RUN_ID" ]; then
-              echo "::error::Existing catalog marker belongs to run $existing_run_id, which is not older than $RUN_ID"
-              exit 1
-            fi
-          fi
-          CATALOG_COMMIT="$local_head"
-
-          python .github/scripts/catalog_state.py generate \
-            --catalog-commit "$CATALOG_COMMIT" \
-            --repository "$GITHUB_REPOSITORY" \
-            --workflow-name "$WORKFLOW_NAME" \
-            --workflow-path "$WORKFLOW_PATH" \
-            --run-id "$RUN_ID" \
-            --package-storage-base-url "$PACKAGE_STORAGE_BASE_URL" \
-            --output .github/catalog-state.json
-          python .github/scripts/catalog_state.py validate \
-            --state-file .github/catalog-state.json \
-            --catalog-commit "$CATALOG_COMMIT" \
-            --repository "$GITHUB_REPOSITORY" \
-            --workflow-name "$WORKFLOW_NAME" \
-            --workflow-path "$WORKFLOW_PATH" \
-            --run-id "$RUN_ID"
-
-          git config --local user.email "action@github.com"
-          git config --local user.name "GitHub Action"
-          git add .github/catalog-state.json
-          staged_files=$(git diff --cached --name-only)
-          if [ "$staged_files" != ".github/catalog-state.json" ]; then
-            echo "::error::Catalog marker commit would contain unexpected files"
-            exit 1
-          fi
-
-          git commit -m "Publish catalog state for run $RUN_ID [skip ci]"
-          marker_parent=$(git rev-parse HEAD^)
-          if [ "$marker_parent" != "$local_head" ]; then
-            echo "::error::Catalog marker parent changed unexpectedly"
-            exit 1
-          fi
-          recorded_commit=$(python -c 'import json; print(json.load(open(".github/catalog-state.json"))["catalogCommit"])')
-          if [ "$recorded_commit" != "$marker_parent" ]; then
-            echo "::error::Catalog marker does not record its exact parent snapshot"
-            exit 1
-          fi
-
-          # Never force: a concurrent main update must reject this publication.
-          git push origin HEAD:main
+          name: catalog-publication-${{ github.run_id }}
+          path: catalog-publication.json
+          if-no-files-found: error
+          retention-days: 7

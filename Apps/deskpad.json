@@ -22,5 +22,8 @@
   },
   "category": "Utilities",
   "publisher": "Stengo",
-  "homebrew_cask": "deskpad"
+  "homebrew_cask": "deskpad",
+  "source_version": "1.3.2",
+  "source_sha256": "b7aae212364193177a6feb2fed6a7942ae9a705d6d491c15e479c58585b85ae0",
+  "source_sha256_provenance": "homebrew"
 }

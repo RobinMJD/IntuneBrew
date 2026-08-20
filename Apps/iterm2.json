@@ -13,5 +13,8 @@
   "previous_version": "3.6.11",
   "category": "Developer Tools",
   "publisher": "The iTerm2 Project",
-  "homebrew_cask": "iterm2"
+  "homebrew_cask": "iterm2",
+  "source_version": "3.6.11",
+  "source_sha256": "36e78c5049560eaa8e122224f6652eb4b229c61cd5e7332d6d25b5c36f7398e7",
+  "source_sha256_provenance": "homebrew"
 }

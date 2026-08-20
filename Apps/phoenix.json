@@ -12,5 +12,8 @@
   "category": "Utilities",
   "publisher": "Kasper",
   "previous_version": "4.0.1",
-  "homebrew_cask": "phoenix"
+  "homebrew_cask": "phoenix",
+  "source_version": "4.0.1",
+  "source_sha256": "7d194ca75f33f6c018fe8fb974e372544a61a058222d62d57e6c929fe91949c3",
+  "source_sha256_provenance": "homebrew"
 }

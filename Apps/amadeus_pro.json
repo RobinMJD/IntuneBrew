@@ -12,5 +12,8 @@
   "sha": "b72ca8187107088b1df069e875b4dcd517427bc103ef7b05137af4d2fed52e47",
   "category": "Media",
   "publisher": "HairerSoft",
-  "homebrew_cask": "amadeus-pro"
+  "homebrew_cask": "amadeus-pro",
+  "source_version": "2.8.14",
+  "source_sha256": "no_check",
+  "packaging_pending": true
 }

@@ -12,5 +12,8 @@
   "category": "Communication",
   "publisher": "Fastmail Pty Ltd",
   "previous_version": "1.6.0",
-  "homebrew_cask": "fastmail"
+  "homebrew_cask": "fastmail",
+  "source_version": "1.6.0",
+  "source_sha256": "738257cb04333254b60b61f076186ec08ba7b6b4f7610c77b6d174e2945c1722",
+  "source_sha256_provenance": "homebrew"
 }

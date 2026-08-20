@@ -12,5 +12,8 @@
   "category": "Productivity",
   "publisher": "DamascenoRafael",
   "previous_version": "2.1.1",
-  "homebrew_cask": "reminders-menubar"
+  "homebrew_cask": "reminders-menubar",
+  "source_version": "2.1.1",
+  "source_sha256": "1eafb0ef195f61c7e72823899b3ac031a7e6fc4967b56a459b2a78cd5a1795a1",
+  "source_sha256_provenance": "homebrew"
 }

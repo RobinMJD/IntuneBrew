@@ -12,5 +12,8 @@
   "category": "Design",
   "publisher": "Whimsical, Inc.",
   "previous_version": "2026.10.2",
-  "homebrew_cask": "whimsical"
+  "homebrew_cask": "whimsical",
+  "source_version": "2026.10.2,260812y9dp5bzsh",
+  "source_sha256": "bd481850d38356027b8689f4de6ce56369cf2c9f060574227a7b8b489e28cfdb",
+  "source_sha256_provenance": "homebrew"
 }

@@ -12,5 +12,8 @@
   "category": "Productivity",
   "publisher": "DEVONtechnologies",
   "previous_version": "1.9.9",
-  "homebrew_cask": "devonsphere-express"
+  "homebrew_cask": "devonsphere-express",
+  "source_version": "1.9.9",
+  "source_sha256": "2c09a34fa71398e6f248bc0c6bd34a8278d5d19a4ba8e0f4a9b3864070d962e9",
+  "source_sha256_provenance": "homebrew"
 }

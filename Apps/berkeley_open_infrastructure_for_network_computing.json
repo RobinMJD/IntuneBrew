@@ -12,5 +12,7 @@
   "sha": "f850bdfe17582f459fc3a5be902660f76927c2748e132186fed6b5551faf909c",
   "category": "Utilities",
   "publisher": "University of California, Berkeley",
-  "homebrew_cask": "boinc"
+  "homebrew_cask": "boinc",
+  "deprecated": true,
+  "deprecation_reason": "Bootstrap installer only; no directly deployable app or package artifact"
 }

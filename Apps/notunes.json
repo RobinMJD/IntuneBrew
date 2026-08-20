@@ -12,5 +12,8 @@
   "previous_version": "3.5",
   "category": "Utilities",
   "publisher": "tombonez",
-  "homebrew_cask": "notunes"
+  "homebrew_cask": "notunes",
+  "source_version": "3.5",
+  "source_sha256": "07835cf9f3bf314d11f2ebe528072a200ffa2d55f38de59085979c2d476ea3d5",
+  "source_sha256_provenance": "homebrew"
 }

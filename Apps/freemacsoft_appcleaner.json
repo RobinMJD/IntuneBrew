@@ -22,5 +22,8 @@
   },
   "category": "Utilities",
   "publisher": "FreeMacSoft",
-  "homebrew_cask": "appcleaner"
+  "homebrew_cask": "appcleaner",
+  "source_version": "3.6.8",
+  "source_sha256": "e012f729442473c20e7cce334b00182521e4b6672ea681b34931b180feb3d6be",
+  "source_sha256_provenance": "homebrew"
 }

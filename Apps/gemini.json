@@ -22,5 +22,8 @@
   },
   "category": "Utilities",
   "publisher": "MacPaw",
-  "homebrew_cask": "gemini"
+  "homebrew_cask": "gemini",
+  "source_version": "2.10.1,406,1781745541",
+  "source_sha256": "c96dff8fa9f02becfab943a7e5b9c67eb054f1c7b41fb62b5caa5ef0536852dc",
+  "source_sha256_provenance": "homebrew"
 }

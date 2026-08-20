@@ -12,5 +12,8 @@
   "category": "Design",
   "publisher": "Framer B.V.",
   "previous_version": "2026.32.0",
-  "homebrew_cask": "framer"
+  "homebrew_cask": "framer",
+  "source_version": "2026.32.0",
+  "source_sha256": "324c1fcad50b801c5e03ac38682e7556895eae8dd6bd841050e8163c04aaa9e9",
+  "source_sha256_provenance": "homebrew"
 }

@@ -12,5 +12,8 @@
   "category": "Utilities",
   "publisher": "root3nl",
   "previous_version": "3.0.5",
-  "homebrew_cask": "support"
+  "homebrew_cask": "support",
+  "source_version": "3.0.5",
+  "source_sha256": "b19fde9f2e86d84a335d6f550dae2cc9b662b4311f9ef0f31eb7ff40610460cf",
+  "source_sha256_provenance": "homebrew"
 }

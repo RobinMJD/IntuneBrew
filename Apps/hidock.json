@@ -12,5 +12,8 @@
   "category": "Utilities",
   "publisher": "HiDock",
   "previous_version": "1.4",
-  "homebrew_cask": "hidock"
+  "homebrew_cask": "hidock",
+  "source_version": "1.4",
+  "source_sha256": "29e95a7eb061236658ccccbc86c1ba0ee872bf5e627c0fff0a37ca29b056f60e",
+  "source_sha256_provenance": "homebrew"
 }

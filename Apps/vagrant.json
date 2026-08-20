@@ -12,5 +12,8 @@
   "sha": "d98cb357048154f813d83ee077f87438ac2b26ffbd6db77f5dd6eff2996d6b44",
   "category": "Developer Tools",
   "publisher": "HashiCorp",
-  "previous_version": "2.4.9"
+  "previous_version": "2.4.9",
+  "source_version": "2.4.9",
+  "source_sha256": "8de08bd435ef8ae0fc5fbd6acefa9c68e62fb898c5ae0fbdacd26853bea9d4d6",
+  "source_sha256_provenance": "homebrew"
 }

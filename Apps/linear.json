@@ -11,5 +11,6 @@
   "sha": "559bcbf8a076368d56bc69109fad7213578bb5e4ca816656bc251eee41a05022",
   "category": "Developer Tools",
   "publisher": "Linear, Inc.",
-  "previous_version": "1.28.13"
+  "previous_version": "1.28.13",
+  "homebrew_cask": "linear"
 }

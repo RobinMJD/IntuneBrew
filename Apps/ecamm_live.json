@@ -12,5 +12,8 @@
   "category": "Media",
   "publisher": "Ecamm Network, LLC",
   "previous_version": "4.5.9",
-  "homebrew_cask": "ecamm-live"
+  "homebrew_cask": "ecamm-live",
+  "source_version": "4.5.9",
+  "source_sha256": "no_check",
+  "packaging_pending": true
 }

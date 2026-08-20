@@ -12,5 +12,8 @@
   "sha": "5381431418f7bdf56a5f46a49b2bb352beb472ecdce04f336200e8e7d15b4ed2",
   "category": "Utilities",
   "publisher": "Sony Interactive Entertainment",
-  "previous_version": "9.0.0"
+  "previous_version": "9.0.0",
+  "source_version": "9.0.0",
+  "source_sha256": "no_check",
+  "packaging_pending": true
 }

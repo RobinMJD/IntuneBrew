@@ -12,5 +12,8 @@
   "category": "Utilities",
   "publisher": "Native Instruments",
   "previous_version": "3.25.2",
-  "homebrew_cask": "native-access"
+  "homebrew_cask": "native-access",
+  "source_version": "3.25.2",
+  "source_sha256": "no_check",
+  "packaging_pending": true
 }

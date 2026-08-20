@@ -1,0 +1,153 @@
+name: Publish Catalog State
+
+on:
+  workflow_run:
+    workflows: [Build App Packages and Collect App Information]
+    types: [completed]
+  workflow_dispatch:
+    inputs:
+      build_run_id:
+        description: Successful Build workflow run ID to retry
+        required: true
+
+concurrency:
+  group: publish-catalog-state
+  cancel-in-progress: false
+
+permissions:
+  actions: read
+  contents: write
+
+jobs:
+  publish:
+    if: |
+      github.event_name == 'workflow_dispatch' ||
+      (github.event.workflow_run.conclusion == 'success' &&
+       github.event.workflow_run.head_branch == 'main')
+    runs-on: ubuntu-latest
+    environment: catalog-storage
+    steps:
+      - name: Resolve completed build run
+        id: build
+        env:
+          GH_TOKEN: ${{ github.token }}
+          EVENT_NAME: ${{ github.event_name }}
+          EVENT_RUN_ID: ${{ github.event.workflow_run.id }}
+          INPUT_RUN_ID: ${{ inputs.build_run_id }}
+        run: |
+          run_id="$EVENT_RUN_ID"
+          [ "$EVENT_NAME" != "workflow_dispatch" ] || run_id="$INPUT_RUN_ID"
+          case "$run_id" in
+            ''|*[!0-9]*) echo "::error::Invalid build run ID"; exit 1 ;;
+          esac
+          metadata=$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$run_id")
+          [ "$(jq -r '.conclusion' <<< "$metadata")" = "success" ] || {
+            echo "::error::Referenced build run was not successful"; exit 1;
+          }
+          [ "$(jq -r '.head_branch' <<< "$metadata")" = "main" ] || {
+            echo "::error::Referenced build run was not on main"; exit 1;
+          }
+          [ "$(jq -r '.name' <<< "$metadata")" = "Build App Packages and Collect App Information" ] || {
+            echo "::error::Referenced run is not the catalog build workflow"; exit 1;
+          }
+          artifact_count=$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$run_id/artifacts" \
+            --jq "[.artifacts[] | select(.name == \"catalog-publication-$run_id\" and .expired == false)] | length")
+          if [ "$artifact_count" = "0" ] && [ "$EVENT_NAME" = "workflow_run" ]; then
+            echo "Build committed resumable progress; no publication artifact"
+            echo "publish=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          [ "$artifact_count" = "1" ] || {
+            echo "::error::Expected exactly one publication artifact"; exit 1;
+          }
+          echo "publish=true" >> "$GITHUB_OUTPUT"
+          echo "run_id=$run_id" >> "$GITHUB_OUTPUT"
+
+      - name: Checkout current main
+        if: steps.build.outputs.publish == 'true'
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - name: Download trusted publication artifact
+        if: steps.build.outputs.publish == 'true'
+        uses: actions/download-artifact@v4
+        with:
+          name: catalog-publication-${{ steps.build.outputs.run_id }}
+          path: publication
+          run-id: ${{ steps.build.outputs.run_id }}
+          github-token: ${{ github.token }}
+
+      - name: Validate provenance and current main
+        if: steps.build.outputs.publish == 'true'
+        id: provenance
+        env:
+          BUILD_RUN_ID: ${{ steps.build.outputs.run_id }}
+        run: |
+          catalog_commit=$(python .github/scripts/publication_provenance.py \
+            --file publication/catalog-publication.json \
+            --repository "$GITHUB_REPOSITORY" \
+            --run-id "$BUILD_RUN_ID" \
+            --workflow-name "Build App Packages and Collect App Information" \
+            --workflow-path ".github/workflows/build-app-packages.yml")
+          current=$(git rev-parse HEAD)
+          if [ "$current" != "$catalog_commit" ]; then
+            existing_run=$(git show "HEAD:.github/catalog-state.json" 2>/dev/null \
+              | jq -r '.runId // empty' 2>/dev/null || true)
+            if [ "$existing_run" = "$BUILD_RUN_ID" ]; then
+              [ "$(git rev-parse HEAD^)" = "$catalog_commit" ] || {
+                echo "::error::Existing marker parent does not match provenance"; exit 1;
+              }
+              git show "HEAD:.github/catalog-state.json" > existing-marker.json
+              python .github/scripts/catalog_state.py validate \
+                --state-file existing-marker.json \
+                --catalog-commit "$catalog_commit" \
+                --repository "$GITHUB_REPOSITORY" \
+                --workflow-name "Build App Packages and Collect App Information" \
+                --workflow-path ".github/workflows/build-app-packages.yml" \
+                --run-id "$BUILD_RUN_ID"
+              echo "Marker for build run $BUILD_RUN_ID is already published"
+              echo "already_published=true" >> "$GITHUB_OUTPUT"
+              exit 0
+            fi
+            echo "::error::Current main $current is not catalog commit $catalog_commit"
+            exit 1
+          fi
+          echo "catalog_commit=$catalog_commit" >> "$GITHUB_OUTPUT"
+
+      - name: Publish immutable catalog marker
+        if: |
+          steps.build.outputs.publish == 'true' &&
+          steps.provenance.outputs.already_published != 'true'
+        env:
+          BUILD_RUN_ID: ${{ steps.build.outputs.run_id }}
+          CATALOG_COMMIT: ${{ steps.provenance.outputs.catalog_commit }}
+          PACKAGE_STORAGE_BASE_URL: ${{ vars.AZURE_STORAGE_BASE_URL }}
+        run: |
+          python .github/scripts/catalog_state.py generate \
+            --catalog-commit "$CATALOG_COMMIT" \
+            --repository "$GITHUB_REPOSITORY" \
+            --workflow-name "Build App Packages and Collect App Information" \
+            --workflow-path ".github/workflows/build-app-packages.yml" \
+            --run-id "$BUILD_RUN_ID" \
+            --package-storage-base-url "$PACKAGE_STORAGE_BASE_URL" \
+            --output .github/catalog-state.json
+          python .github/scripts/catalog_state.py validate \
+            --state-file .github/catalog-state.json \
+            --catalog-commit "$CATALOG_COMMIT" \
+            --repository "$GITHUB_REPOSITORY" \
+            --workflow-name "Build App Packages and Collect App Information" \
+            --workflow-path ".github/workflows/build-app-packages.yml" \
+            --run-id "$BUILD_RUN_ID"
+          git config user.email "action@github.com"
+          git config user.name "GitHub Action"
+          git add .github/catalog-state.json
+          [ "$(git diff --cached --name-only)" = ".github/catalog-state.json" ] || {
+            echo "::error::Marker commit contains unexpected files"; exit 1;
+          }
+          git commit -m "Publish catalog state for run $BUILD_RUN_ID [skip ci]"
+          [ "$(git rev-parse HEAD^)" = "$CATALOG_COMMIT" ] || {
+            echo "::error::Marker parent is not the catalog commit"; exit 1;
+          }
+          git push origin HEAD:main

@@ -12,5 +12,8 @@
   "category": "Utilities",
   "publisher": "Echo One",
   "previous_version": "4.115",
-  "homebrew_cask": "file-juicer"
+  "homebrew_cask": "file-juicer",
+  "source_version": "4.115",
+  "source_sha256": "no_check",
+  "packaging_pending": true
 }

@@ -12,5 +12,8 @@
   "category": "Utilities",
   "publisher": "Noteify",
   "previous_version": "2.881",
-  "homebrew_cask": "activedock"
+  "homebrew_cask": "activedock",
+  "source_version": "2.881",
+  "source_sha256": "no_check",
+  "packaging_pending": true
 }

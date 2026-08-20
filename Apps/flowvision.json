@@ -22,5 +22,8 @@
   },
   "category": "Media",
   "publisher": "FlowVision",
-  "homebrew_cask": "flowvision"
+  "homebrew_cask": "flowvision",
+  "source_version": "1.7.5",
+  "source_sha256": "10193c20095679c5ec83b24e47429cdf654bba848ff8220f6214e12ae4c445a9",
+  "source_sha256_provenance": "homebrew"
 }

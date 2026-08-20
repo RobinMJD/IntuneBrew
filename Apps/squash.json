@@ -12,5 +12,8 @@
   "category": "Media",
   "publisher": "Realmac Software",
   "previous_version": "3.3.0",
-  "homebrew_cask": "squash"
+  "homebrew_cask": "squash",
+  "source_version": "3.3.0,913",
+  "source_sha256": "8c78625b22fb599e0a8bae839815db052d234d8ff70e4c4be86b0fd3e2a5c9f5",
+  "source_sha256_provenance": "homebrew"
 }

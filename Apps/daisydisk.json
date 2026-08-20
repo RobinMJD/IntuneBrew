@@ -23,5 +23,8 @@
   },
   "category": "Utilities",
   "publisher": "Software Ambience",
-  "homebrew_cask": "daisydisk"
+  "homebrew_cask": "daisydisk",
+  "source_version": "4.34.2",
+  "source_sha256": "no_check",
+  "packaging_pending": true
 }

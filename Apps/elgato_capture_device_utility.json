@@ -22,5 +22,8 @@
   },
   "category": "Utilities",
   "publisher": "Elgato",
-  "homebrew_cask": "elgato-capture-device-utility"
+  "homebrew_cask": "elgato-capture-device-utility",
+  "source_version": "1.3.1,684",
+  "source_sha256": "4a7885e0cbb85ba94847c43a5b59cc62b7b129c2607626c7233344570f35e154",
+  "source_sha256_provenance": "homebrew"
 }

@@ -12,5 +12,8 @@
   "previous_version": "2.0.23",
   "category": "Developer Tools",
   "publisher": "Allan Odgaard",
-  "homebrew_cask": "textmate"
+  "homebrew_cask": "textmate",
+  "source_version": "2.0.23",
+  "source_sha256": "f8dba933209bd01070028892474bf0b72f36c673f7bcb8da5973f93ddc387420",
+  "source_sha256_provenance": "homebrew"
 }

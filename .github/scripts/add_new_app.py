@@ -16,6 +16,7 @@ import sys
 import json
 import requests
 from difflib import SequenceMatcher
+from urllib.parse import unquote, urlparse
 
 # Cache for the Homebrew cask list
 _cask_list_cache = None
@@ -35,6 +36,29 @@ DEPLOYABLE_ARTIFACT_TYPES = frozenset({
     'app',
     'pkg',
 })
+OPAQUE_CASK_OVERRIDES = frozenset({
+    "expandrive",
+    "postman",
+    "raycast",
+    "tenable-nessus-agent",
+    "visual-studio-code",
+    "whatsapp",
+})
+UNSUPPORTED_CASK_TOKENS = {
+    "abstract": "Vendor download host is no longer resolvable",
+    "ubar": "Vendor download host is no longer resolvable",
+}
+
+
+def deterministic_source_kind(homebrew_data):
+    parsed = urlparse(homebrew_data.get("url", ""))
+    text = f"{unquote(parsed.path)}?{unquote(parsed.query)}".lower()
+    if any(ext in text for ext in (
+        ".pkg", ".dmg", ".dmg.gz", ".zip", ".tgz",
+        ".tar.gz", ".tar.xz", ".tar.bz2", ".tbz",
+    )):
+        return True
+    return homebrew_data.get("token") in OPAQUE_CASK_OVERRIDES
 
 
 def artifact_types(homebrew_data):
@@ -47,15 +71,34 @@ def artifact_types(homebrew_data):
     }
 
 
-def binary_only_cask_reason(homebrew_data):
-    """Explain why a cask is not deployable when it only installs CLI binaries."""
+def unsupported_cask_reason(homebrew_data):
+    """Explain why a cask has no directly deployable app/package payload."""
+    token = homebrew_data.get("token")
+    if token in UNSUPPORTED_CASK_TOKENS:
+        return UNSUPPORTED_CASK_TOKENS[token]
+    if homebrew_data.get("disabled"):
+        return "Homebrew cask is disabled"
+    if homebrew_data.get("deprecated"):
+        return "Homebrew cask is deprecated"
     types = artifact_types(homebrew_data)
     if 'binary' in types and types.isdisjoint(DEPLOYABLE_ARTIFACT_TYPES):
         return (
             "Homebrew installs only command-line binaries; IntuneBrew requires "
             "a deployable app or package artifact"
         )
+    if 'installer' in types and types.isdisjoint(DEPLOYABLE_ARTIFACT_TYPES):
+        return (
+            "Homebrew exposes only a bootstrap installer; IntuneBrew requires "
+            "a directly deployable app or package artifact"
+        )
+    if types.isdisjoint(DEPLOYABLE_ARTIFACT_TYPES):
+        return "Homebrew cask has no deployable app or package artifact"
+    if not deterministic_source_kind(homebrew_data):
+        return "Homebrew cask uses an opaque source URL without a tested routing override"
     return None
+
+
+binary_only_cask_reason = unsupported_cask_reason
 
 
 def set_output(name, value):
@@ -207,6 +250,8 @@ def extract_casks_from_comment(comment_body):
 def extract_casks_from_urls(issue_body):
     """Extract all cask names from Homebrew URLs in the issue body."""
     casks = []
+    if re.search(r'formulae\.brew\.sh/(?:api/)?formula/', issue_body):
+        raise ValueError("Homebrew formula URLs are unsupported; request a macOS cask")
     # Homebrew API URLs
     for match in re.finditer(r'formulae\.brew\.sh/api/cask/([^/\s.]+)\.json', issue_body):
         if match.group(1) not in casks:
@@ -216,7 +261,10 @@ def extract_casks_from_urls(issue_body):
         if match.group(1) not in casks:
             casks.append(match.group(1))
     # brew install commands
-    for match in re.finditer(r'brew\s+install\s+(?:--cask\s+)?([^\s\n]+)', issue_body):
+    unsafe_brew = re.search(r'brew\s+install\s+(?!--cask(?:\s|$))', issue_body)
+    if unsafe_brew:
+        raise ValueError("brew install requests must explicitly use --cask")
+    for match in re.finditer(r'brew\s+install\s+--cask\s+([^\s\n]+)', issue_body):
         if match.group(1) not in casks:
             casks.append(match.group(1))
     return casks
@@ -453,12 +501,19 @@ def main():
         set_output('needs_review', 'true')
         set_output('review_json', json.dumps(low_confidence))
 
-    # Process each cask
+    # Validate the complete request before mutating the collector list.
     added_apps = []
     skipped_apps = []
     failed_apps = []
+    validated_apps = []
+    validated_casks = set()
 
     for cask_name in casks_to_process:
+        if cask_name in validated_casks:
+            print(f"Skipping duplicate request token: {cask_name}")
+            skipped_apps.append({'cask': cask_name, 'reason': 'duplicate request'})
+            continue
+        validated_casks.add(cask_name)
         # Check if already exists
         if check_app_exists(cask_name, content):
             print(f"Skipping {cask_name}: already exists")
@@ -472,17 +527,27 @@ def main():
             failed_apps.append({'cask': cask_name, 'reason': 'not found on Homebrew'})
             continue
 
-        validation_error = binary_only_cask_reason(homebrew_data)
+        validation_error = unsupported_cask_reason(homebrew_data)
         if validation_error:
             print(f"Failed {cask_name}: {validation_error}")
             failed_apps.append({'cask': cask_name, 'reason': validation_error})
             continue
 
+        list_name, app_type = determine_app_type(homebrew_data)
+        validated_apps.append(
+            (cask_name, homebrew_data, list_name, app_type)
+        )
+
+    if failed_apps:
+        failed_list = ', '.join(
+            f"{app['cask']} ({app['reason']})" for app in failed_apps
+        )
+        set_failed(f"Failed to add apps atomically: {failed_list}")
+        sys.exit(1)
+
+    for cask_name, homebrew_data, list_name, app_type in validated_apps:
         # Get app name
         app_name = cask_display_name(homebrew_data, cask_name)
-
-        # Determine app type
-        list_name, app_type = determine_app_type(homebrew_data)
         print(f"Adding {cask_name} ({app_name}) to {list_name} as {app_type}")
 
         # Add to list
@@ -501,6 +566,13 @@ def main():
         else:
             print(f"Failed to add {cask_name}: {error}")
             failed_apps.append({'cask': cask_name, 'reason': error})
+
+    if failed_apps:
+        failed_list = ', '.join(
+            f"{app['cask']} ({app['reason']})" for app in failed_apps
+        )
+        set_failed(f"Failed to add apps atomically: {failed_list}")
+        sys.exit(1)
 
     # Write the updated file if any apps were added
     if added_apps:

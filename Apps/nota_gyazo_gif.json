@@ -13,5 +13,8 @@
   "sha": "b4a7dbef7796ebce70313c22f32856770cdcf6fd55641330eed7eeb335758b62",
   "category": "Media",
   "publisher": "NOTA, Inc.",
-  "previous_version": "11.0.0"
+  "previous_version": "11.0.0",
+  "source_version": "11.0.0",
+  "source_sha256": "c670af8a5781795d39e7c02a1a6a65e3454925cd63c09e1143fc4cc650aaad66",
+  "source_sha256_provenance": "homebrew"
 }

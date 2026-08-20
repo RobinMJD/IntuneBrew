@@ -12,5 +12,8 @@
   "previous_version": "2.18.0",
   "category": "Productivity",
   "publisher": "Superwhisper",
-  "homebrew_cask": "superwhisper"
+  "homebrew_cask": "superwhisper",
+  "source_version": "2.18.0",
+  "source_sha256": "44b68e6b4f48a947240fb187ee7a62182c39c6d83754c25b07ef7331337815f8",
+  "source_sha256_provenance": "homebrew"
 }

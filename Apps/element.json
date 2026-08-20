@@ -12,5 +12,8 @@
   "sha": "06c0bf85ec0e0d2179fc46e0ee63486e344f186e274367f18471d2844ab7f6f8",
   "category": "Communication",
   "publisher": "Element",
-  "homebrew_cask": "element"
+  "homebrew_cask": "element",
+  "source_version": "1.12.26",
+  "source_sha256": "64d5a4a453f1c097ee00ef0c919e1b4abfe23709566653ffb68a61ea37922b50",
+  "source_sha256_provenance": "homebrew"
 }
