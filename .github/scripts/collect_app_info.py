@@ -90,9 +90,19 @@ def sync_artifact_metadata(existing_data, app_info):
             existing_data.pop(key, None)
 
 
+def merge_fresh_bundle_id(existing_data, app_info):
+    if app_info.get("bundleId"):
+        existing_data["bundleId"] = app_info["bundleId"]
+
+
+def preserve_existing_bundle_id(app_info, existing_data):
+    if not app_info.get("bundleId") and existing_data.get("bundleId"):
+        app_info["bundleId"] = existing_data["bundleId"]
+
+
 def can_reuse_source_hash(existing_data, app_info):
     source_sha = app_info.get("source_sha256", "")
-    return (
+    verified_identity = (
         bool(app_info.get("source_version"))
         and existing_data.get("source_version") == app_info["source_version"]
         and bool(re.fullmatch(r"[0-9a-fA-F]{64}", source_sha))
@@ -100,6 +110,14 @@ def can_reuse_source_hash(existing_data, app_info):
         and existing_data.get("url") == app_info.get("url")
         and bool(existing_data.get("sha"))
     )
+    bootstrap_direct = (
+        app_info.get("type") not in {"app", "pkg_in_dmg", "pkg_in_pkg"}
+        and existing_data.get("version") == app_info.get("version")
+        and existing_data.get("url") == app_info.get("url")
+        and bool(re.fullmatch(r"[0-9a-fA-F]{64}", source_sha))
+        and existing_data.get("sha") == source_sha
+    )
+    return verified_identity or bootstrap_direct
 
 
 def get_bundle_id_override(cask_token):
@@ -1580,6 +1598,22 @@ def calculate_file_hash(url):
             except Exception as e:
                 print(f"Warning: Could not delete temporary file: {str(e)}")
 
+
+def calculate_verified_source_hash(app_info):
+    digest = calculate_file_hash(app_info["url"])
+    expected = app_info.get("source_sha256", "")
+    if (
+        digest
+        and re.fullmatch(r"[0-9a-fA-F]{64}", expected)
+        and digest.lower() != expected.lower()
+    ):
+        print(
+            f"Source SHA256 mismatch for {app_info['name']}: "
+            f"expected {expected}, got {digest}"
+        )
+        return None
+    return digest
+
 def find_bundle_id(json_string):
     regex_patterns = {
         'pkgutil': r'(?s)"pkgutil"\s*:\s*(?:\[\s*"([^"]+)"(?:,\s*"([^"]+)")?\s*\]|\s*"([^"]+)")',
@@ -1847,7 +1881,7 @@ def get_homebrew_app_info(json_url, needs_packaging=False, is_pkg_in_dmg=False, 
 
     json_string = json.dumps(data)
 
-    bundle_id = find_bundle_id(json_string) or get_bundle_id_override(cask_token)
+    bundle_id = get_bundle_id_override(cask_token) or find_bundle_id(json_string)
     installable_artifacts = get_installable_artifacts(data)
     if has_installer_artifact(data) and not any(installable_artifacts.values()):
         raise CaskUnavailableError(
@@ -2171,12 +2205,13 @@ def main():
                     # if it saw the refreshed value.
                     existing_data["type"] = "app"
                     existing_data["vendor_url"] = app_info["vendor_url"]
+                    merge_fresh_bundle_id(existing_data, app_info)
                     sync_artifact_metadata(existing_data, app_info)
 
                     # Calculate new hash if version changed
                     if version_changed:
                         print(f"🔍 Version changed, calculating new SHA256 hash for {display_name}...")
-                        file_hash = calculate_file_hash(app_info["url"])
+                        file_hash = calculate_verified_source_hash(app_info)
                         if file_hash:
                             existing_data["sha"] = file_hash
                             print(f"✅ New SHA256 hash calculated: {file_hash}")
@@ -2227,7 +2262,7 @@ def main():
 
             if needs_hash:
                 print(f"🔍 Calculating SHA256 hash for {display_name}...")
-                file_hash = calculate_file_hash(app_info["url"])
+                file_hash = calculate_verified_source_hash(app_info)
                 if file_hash:
                     app_info["sha"] = file_hash
                     print(f"✅ SHA256 hash calculated: {file_hash}")
@@ -2243,6 +2278,7 @@ def main():
                     new_url = app_info["url"]
                     new_sha = app_info.get("sha")
                     previous_version = existing_data.get("version")
+                    preserve_existing_bundle_id(app_info, existing_data)
                     
                     # Preserve all existing data except version, url, sha, and previous_version.
                     # type, homebrew_cask and vendor_url are owned by the list being
@@ -2250,7 +2286,7 @@ def main():
                     # carries no type key at all and a stale repackaging type is dropped.
                     for key in existing_data:
                         if (key not in ["version", "url", "sha", "previous_version", "deprecated", "deprecation_reason",
-                                        "type", "homebrew_cask", "vendor_url"]
+                                        "type", "homebrew_cask", "vendor_url", "bundleId"]
                                 and key not in ARTIFACT_METADATA_KEYS):
                             app_info[key] = existing_data[key]
                     
@@ -2300,13 +2336,14 @@ def main():
                     new_version = app_info["version"]
                     new_url = app_info["url"]
                     previous_version = existing_data.get("version")
+                    preserve_existing_bundle_id(app_info, existing_data)
                     
                     # Preserve all existing data except version, url and previous_version.
                     # type, homebrew_cask and vendor_url are owned by the list being
                     # processed, so the fresh "pkg_in_pkg" values win over whatever is on disk.
                     for key in existing_data:
                         if (key not in ["version", "url", "previous_version", "deprecated", "deprecation_reason",
-                                        "type", "homebrew_cask", "vendor_url"]
+                                        "type", "homebrew_cask", "vendor_url", "bundleId"]
                                 and key not in ARTIFACT_METADATA_KEYS):
                             app_info[key] = existing_data[key]
                     
@@ -2362,7 +2399,7 @@ def main():
 
             if needs_hash:
                 print(f"🔍 Calculating SHA256 hash for {display_name}...")
-                file_hash = calculate_file_hash(app_info["url"])
+                file_hash = calculate_verified_source_hash(app_info)
                 if file_hash:
                     app_info["sha"] = file_hash
                     print(f"✅ SHA256 hash calculated: {file_hash}")
@@ -2378,13 +2415,14 @@ def main():
                     new_url = app_info["url"]
                     new_sha = app_info.get("sha")
                     previous_version = existing_data.get("version")
+                    preserve_existing_bundle_id(app_info, existing_data)
                     
                     # Preserve all existing data except version, url, sha and previous_version.
                     # type, homebrew_cask and vendor_url are owned by the list being
                     # processed, so the fresh "pkg" values win over whatever is on disk.
                     for key in existing_data:
                         if (key not in ["version", "url", "sha", "previous_version", "deprecated", "deprecation_reason",
-                                        "type", "homebrew_cask", "vendor_url"]
+                                        "type", "homebrew_cask", "vendor_url", "bundleId"]
                                 and key not in ARTIFACT_METADATA_KEYS):
                             app_info[key] = existing_data[key]
                     
@@ -2436,13 +2474,14 @@ def main():
                     new_version = app_info["version"]
                     new_url = app_info["url"]
                     previous_version = existing_data.get("version")
+                    preserve_existing_bundle_id(app_info, existing_data)
                     
                     # Preserve all existing data except version, url and previous_version.
                     # type, homebrew_cask and vendor_url are owned by the list being
                     # processed, so the fresh "pkg_in_dmg" values win over whatever is on disk.
                     for key in existing_data:
                         if (key not in ["version", "url", "previous_version", "deprecated", "deprecation_reason",
-                                        "type", "homebrew_cask", "vendor_url"]
+                                        "type", "homebrew_cask", "vendor_url", "bundleId"]
                                 and key not in ARTIFACT_METADATA_KEYS):
                             app_info[key] = existing_data[key]
                     
@@ -2496,7 +2535,7 @@ def main():
                 (app_data['url'].endswith('.dmg') or app_data['url'].endswith('.pkg'))):
                 
                 print(f"🔍 Calculating SHA256 hash for {app_data['name']}...")
-                file_hash = calculate_file_hash(app_data['url'])
+                file_hash = calculate_verified_source_hash(app_data)
                 if file_hash:
                     app_data['sha'] = file_hash
                     # Write back the updated JSON

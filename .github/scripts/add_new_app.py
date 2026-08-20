@@ -463,12 +463,19 @@ def main():
         set_output('needs_review', 'true')
         set_output('review_json', json.dumps(low_confidence))
 
-    # Process each cask
+    # Validate the complete request before mutating the collector list.
     added_apps = []
     skipped_apps = []
     failed_apps = []
+    validated_apps = []
+    validated_casks = set()
 
     for cask_name in casks_to_process:
+        if cask_name in validated_casks:
+            print(f"Skipping duplicate request token: {cask_name}")
+            skipped_apps.append({'cask': cask_name, 'reason': 'duplicate request'})
+            continue
+        validated_casks.add(cask_name)
         # Check if already exists
         if check_app_exists(cask_name, content):
             print(f"Skipping {cask_name}: already exists")
@@ -488,11 +495,21 @@ def main():
             failed_apps.append({'cask': cask_name, 'reason': validation_error})
             continue
 
+        list_name, app_type = determine_app_type(homebrew_data)
+        validated_apps.append(
+            (cask_name, homebrew_data, list_name, app_type)
+        )
+
+    if failed_apps:
+        failed_list = ', '.join(
+            f"{app['cask']} ({app['reason']})" for app in failed_apps
+        )
+        set_failed(f"Failed to add apps atomically: {failed_list}")
+        sys.exit(1)
+
+    for cask_name, homebrew_data, list_name, app_type in validated_apps:
         # Get app name
         app_name = cask_display_name(homebrew_data, cask_name)
-
-        # Determine app type
-        list_name, app_type = determine_app_type(homebrew_data)
         print(f"Adding {cask_name} ({app_name}) to {list_name} as {app_type}")
 
         # Add to list
@@ -511,6 +528,13 @@ def main():
         else:
             print(f"Failed to add {cask_name}: {error}")
             failed_apps.append({'cask': cask_name, 'reason': error})
+
+    if failed_apps:
+        failed_list = ', '.join(
+            f"{app['cask']} ({app['reason']})" for app in failed_apps
+        )
+        set_failed(f"Failed to add apps atomically: {failed_list}")
+        sys.exit(1)
 
     # Write the updated file if any apps were added
     if added_apps:

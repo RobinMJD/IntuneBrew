@@ -465,6 +465,17 @@ jobs:
               && [ "$prior_sha" = "$current_sha" ]
           }
 
+          verify_source_file() {
+            local source_path="$1"
+            local expected_sha="$2"
+            local actual_sha=""
+            if ! [[ "$expected_sha" =~ ^[0-9a-fA-F]{64}$ ]]; then
+              return 0
+            fi
+            actual_sha=$(shasum -a 256 "$source_path" | awk '{print $1}')
+            [ "$actual_sha" = "$(printf '%s' "$expected_sha" | tr 'A-F' 'a-f')" ]
+          }
+
           configured_blob_leaf() {
             local blob_url="$1"
             local leaf=""
@@ -578,6 +589,10 @@ jobs:
           
           for app_info in $APPS_TO_BUILD; do
             IFS=':' read -r app_name ignored_url <<< "$app_info"
+            [ -z "${app_temp_dir:-}" ] || rm -rf "$app_temp_dir"
+            app_temp_dir=$(mktemp -d "${TMPDIR:-/tmp}/intunebrew-${app_name}.XXXXXX")
+            download_path="$app_temp_dir/source"
+            package_path="$app_temp_dir/output.pkg"
             
             echo "🔄 Processing $app_name..."
             
@@ -669,6 +684,8 @@ jobs:
                 FAILED_APPS+=("$app_name")
                 ERROR_LOG+=("$app_name: Failed to update catalog JSON for exact existing package")
               fi
+              rm -rf "$app_temp_dir"
+              app_temp_dir=""
               continue
             fi
             
@@ -677,7 +694,6 @@ jobs:
               echo "Downloading from: $url"
 
               # Set download path
-              download_path="$HOME/Desktop/${app_name}"
               outer_pkg_path="${download_path}.pkg"
 
               # Check if URL is a ZIP file. Both branches record whether the
@@ -690,6 +706,11 @@ jobs:
                   echo "Failed to download ZIP file"
                   FAILED_APPS+=("$app_name")
                   ERROR_LOG+=("$app_name: Failed to download ZIP from $url")
+                  continue
+                fi
+                if ! verify_source_file "${download_path}.zip" "$source_sha"; then
+                  FAILED_APPS+=("$app_name")
+                  ERROR_LOG+=("$app_name: Source ZIP SHA256 mismatch")
                   continue
                 fi
 
@@ -719,7 +740,11 @@ jobs:
               else
                 # Direct PKG download
                 if curl -f -L -o "$outer_pkg_path" "$url"; then
-                  outer_pkg_ready=true
+                  if verify_source_file "$outer_pkg_path" "$source_sha"; then
+                    outer_pkg_ready=true
+                  else
+                    ERROR_LOG+=("$app_name: Source PKG SHA256 mismatch")
+                  fi
                 fi
               fi
 
@@ -756,7 +781,7 @@ jobs:
                     echo "📋 Copying inner PKG file to ${app_name}_${version}.pkg"
                     # A failed copy leaves no package to upload, which the Azure
                     # upload arm below already reports for this app.
-                    cp "$inner_pkg" "${app_name}_${version}.pkg" || true
+                    cp "$inner_pkg" "$package_path" || true
                   else
                     # Check if there's a .pkg directory (flat package)
                     inner_pkg_dir=$(find "$temp_dir" -name "*.pkg" -type d -print -quit)
@@ -765,7 +790,7 @@ jobs:
                       echo "📦 Flattening package to ${app_name}_${version}.pkg"
                       
                       # Use pkgutil to flatten the package
-                      if ! pkgutil --flatten "$inner_pkg_dir" "${app_name}_${version}.pkg"; then
+                      if ! pkgutil --flatten "$inner_pkg_dir" "$package_path"; then
                         echo "❌ Failed to flatten package"
                         rm -rf "$temp_dir"
                         rm -f "${download_path}.pkg"
@@ -783,9 +808,9 @@ jobs:
                     fi
                   fi
                   
-                  extracted_bundle_id=$(extract_bundle_id_from_pkg "${app_name}_${version}.pkg")
+                  extracted_bundle_id=$(extract_bundle_id_from_pkg "$package_path")
                   if ! require_bundle_id_match "$WORKSPACE_DIR/Apps/${app_name}.json" "$extracted_bundle_id"; then
-                    rm -f "${download_path}.pkg" "${app_name}_${version}.pkg"
+                    rm -f "${download_path}.pkg" "$package_path"
                     rm -rf "$temp_dir"
                     FAILED_APPS+=("$app_name")
                     ERROR_LOG+=("$app_name: Inner package bundle ID mismatch")
@@ -794,12 +819,12 @@ jobs:
 
                   # Calculate SHA256 hash
                   echo "🔐 Calculating SHA256 hash..."
-                  file_hash=$(shasum -a 256 "${app_name}_${version}.pkg" | awk '{print $1}')
+                  file_hash=$(shasum -a 256 "$package_path" | awk '{print $1}')
                   echo "📝 SHA256: $file_hash"
                   new_blob_name="${app_name}_${version}_${file_hash}.pkg"
                   azure_url="${STORAGE_BASE_URL}/${new_blob_name}"
 
-                  if upload_immutable_blob "${app_name}_${version}.pkg" "$new_blob_name"; then
+                  if upload_immutable_blob "$package_path" "$new_blob_name"; then
                     echo "✅ Upload successful"
                     record_prior_blob_cleanup "$cleanup_prior_blob" "$new_blob_name"
 
@@ -852,8 +877,6 @@ jobs:
               echo "📥 Downloading DMG from: $url"
               
               # Set download path
-              download_path="$HOME/Desktop/${app_name}"
-              
               # Download DMG
               if curl -f -L -o "${download_path}.dmg" "$url"; then
                 echo "✅ DMG download successful"
@@ -863,6 +886,12 @@ jobs:
                 rm -f "${download_path}.dmg"
                 FAILED_APPS+=("$app_name")
                 ERROR_LOG+=("$app_name: Failed to download DMG from $url")
+                continue
+              fi
+              if ! verify_source_file "${download_path}.dmg" "$source_sha"; then
+                FAILED_APPS+=("$app_name")
+                ERROR_LOG+=("$app_name: Source DMG SHA256 mismatch")
+                rm -f "${download_path}.dmg"
                 continue
               fi
               
@@ -905,7 +934,7 @@ jobs:
                 extracted_bundle_id=$(extract_bundle_id_from_plist "$app_file/Contents/Info.plist")
                 if ! require_bundle_id_match "$WORKSPACE_DIR/Apps/${app_name}.json" "$extracted_bundle_id"; then
                   pkg_in_dmg_error="Declared app bundle ID mismatch"
-                elif ! pkgbuild --install-location /Applications --component "$app_file" "${app_name}_${version}.pkg" 2>/dev/null; then
+                elif ! pkgbuild --install-location /Applications --component "$app_file" "$package_path" 2>/dev/null; then
                   pkg_in_dmg_error="Failed to build PKG from declared app"
                 fi
               elif [ -n "$pkg_file" ]; then
@@ -916,9 +945,9 @@ jobs:
                 echo "📋 Copying PKG file to ${app_name}_${version}.pkg"
                 # A failed copy leaves no package to upload, which the Azure
                 # upload arm below already reports for this app.
-                cp "$pkg_file" "${app_name}_${version}.pkg" || true
+                cp "$pkg_file" "$package_path" || true
 
-                extracted_bundle_id=$(extract_bundle_id_from_pkg "${app_name}_${version}.pkg")
+                extracted_bundle_id=$(extract_bundle_id_from_pkg "$package_path")
                 if ! require_bundle_id_match "$WORKSPACE_DIR/Apps/${app_name}.json" "$extracted_bundle_id"; then
                   pkg_in_dmg_error="Declared package bundle ID mismatch"
                 fi
@@ -926,16 +955,16 @@ jobs:
                 pkg_in_dmg_error="No declared app or package found inside DMG from $url"
               fi
 
-              if [ -z "$pkg_in_dmg_error" ] && [ -f "${app_name}_${version}.pkg" ]; then
+              if [ -z "$pkg_in_dmg_error" ] && [ -f "$package_path" ]; then
                 
                 # Calculate SHA256 hash
                 echo "🔐 Calculating SHA256 hash..."
-                file_hash=$(shasum -a 256 "${app_name}_${version}.pkg" | awk '{print $1}')
+                file_hash=$(shasum -a 256 "$package_path" | awk '{print $1}')
                 echo "📝 SHA256: $file_hash"
                 new_blob_name="${app_name}_${version}_${file_hash}.pkg"
                 azure_url="${STORAGE_BASE_URL}/${new_blob_name}"
 
-                if upload_immutable_blob "${app_name}_${version}.pkg" "$new_blob_name"; then
+                if upload_immutable_blob "$package_path" "$new_blob_name"; then
                   echo "✅ Upload successful"
                   record_prior_blob_cleanup "$cleanup_prior_blob" "$new_blob_name"
 
@@ -972,9 +1001,8 @@ jobs:
             else
               # Download app
               echo "Downloading $app_name..."
-              download_path="$HOME/Desktop/${app_name}"
-              extract_dir="$HOME/Desktop/${app_name}_extracted"
-              mount_dir="$HOME/Desktop/${app_name}_mount"
+              extract_dir="$app_temp_dir/extracted"
+              mount_dir="$app_temp_dir/mount"
               rm -rf "$extract_dir" "$mount_dir"
               mkdir -p "$extract_dir"
               declared_app=$(jq -r '.artifact_app // empty' "$WORKSPACE_DIR/Apps/${app_name}.json")
@@ -985,12 +1013,19 @@ jobs:
 
               case "$kind" in
                 pkg)
-                  if ! curl -f -L -o "$extract_dir/${declared_pkg:-payload.pkg}" "$url"; then
+                  source_path="$app_temp_dir/source.pkg"
+                  if ! curl -f -L -o "$source_path" "$url"; then
                     FAILED_APPS+=("$app_name")
                     ERROR_LOG+=("$app_name: Failed to download direct PKG from $url")
                     rm -rf "$extract_dir"
                     continue
                   fi
+                  if ! verify_source_file "$source_path" "$source_sha"; then
+                    FAILED_APPS+=("$app_name")
+                    ERROR_LOG+=("$app_name: Direct source PKG SHA256 mismatch")
+                    continue
+                  fi
+                  cp "$source_path" "$extract_dir/payload.pkg"
                   ;;
                 dmg|dmg_gzip)
                   if [ "$kind" = "dmg_gzip" ]; then
@@ -998,6 +1033,12 @@ jobs:
                       FAILED_APPS+=("$app_name")
                       ERROR_LOG+=("$app_name: Failed to download gzip-compressed DMG from $url")
                       rm -rf "$extract_dir"
+                      continue
+                    fi
+                    if ! verify_source_file "${download_path}.dmg.gz" "$source_sha"; then
+                      FAILED_APPS+=("$app_name")
+                      ERROR_LOG+=("$app_name: Source DMG.GZ SHA256 mismatch")
+                      rm -f "${download_path}.dmg.gz"
                       continue
                     fi
                     if ! gunzip -c "${download_path}.dmg.gz" > "${download_path}.dmg"; then
@@ -1012,6 +1053,12 @@ jobs:
                     FAILED_APPS+=("$app_name")
                     ERROR_LOG+=("$app_name: Failed to download DMG from $url")
                     rm -rf "$extract_dir"
+                    continue
+                  fi
+                  if [ "$kind" = "dmg" ] && ! verify_source_file "${download_path}.dmg" "$source_sha"; then
+                    FAILED_APPS+=("$app_name")
+                    ERROR_LOG+=("$app_name: Source DMG SHA256 mismatch")
+                    rm -f "${download_path}.dmg"
                     continue
                   fi
                   mkdir -p "$mount_dir"
@@ -1039,6 +1086,12 @@ jobs:
                     FAILED_APPS+=("$app_name")
                     ERROR_LOG+=("$app_name: Failed to download archive from $url")
                     rm -rf "$extract_dir"
+                    continue
+                  fi
+                  if ! verify_source_file "$archive_path" "$source_sha"; then
+                    FAILED_APPS+=("$app_name")
+                    ERROR_LOG+=("$app_name: Source archive SHA256 mismatch")
+                    rm -f "$archive_path"
                     continue
                   fi
                   if [ -z "$archive_format" ]; then
@@ -1105,7 +1158,6 @@ jobs:
                   ;;
               esac
 
-              cd "$HOME/Desktop"
               echo "🔍 Searching for declared app payload..."
               app_file=$(find_app_payload "$extract_dir" "$declared_app")
               
@@ -1121,13 +1173,13 @@ jobs:
                   echo "📋 Copying PKG file to ${app_name}_${version}.pkg"
                   # A failed copy leaves no package to upload, which the Azure
                   # upload arm below already reports for this app.
-                  cp "$pkg_file" "${app_name}_${version}.pkg" || true
+                  cp "$pkg_file" "$package_path" || true
 
-                  extracted_bundle_id=$(extract_bundle_id_from_pkg "${app_name}_${version}.pkg")
+                  extracted_bundle_id=$(extract_bundle_id_from_pkg "$package_path")
                   if ! require_bundle_id_match "$WORKSPACE_DIR/Apps/${app_name}.json" "$extracted_bundle_id"; then
                     cd "$WORKSPACE_DIR"
-                    rm -rf "${app_name}_extracted"
-                    rm -f "${app_name}_${version}.pkg"
+                    rm -rf "$extract_dir"
+                    rm -f "$package_path"
                     FAILED_APPS+=("$app_name")
                     ERROR_LOG+=("$app_name: Extracted package bundle ID mismatch")
                     continue
@@ -1135,12 +1187,12 @@ jobs:
                   
                   # Calculate SHA256 hash
                   echo "🔐 Calculating SHA256 hash..."
-                  file_hash=$(shasum -a 256 "${app_name}_${version}.pkg" | awk '{print $1}')
+                  file_hash=$(shasum -a 256 "$package_path" | awk '{print $1}')
                   echo "📝 SHA256: $file_hash"
                   new_blob_name="${app_name}_${version}_${file_hash}.pkg"
                   azure_url="${STORAGE_BASE_URL}/${new_blob_name}"
 
-                  if upload_immutable_blob "${app_name}_${version}.pkg" "$new_blob_name"; then
+                  if upload_immutable_blob "$package_path" "$new_blob_name"; then
                     echo "✅ Upload successful"
                     record_prior_blob_cleanup "$cleanup_prior_blob" "$new_blob_name"
 
@@ -1152,7 +1204,7 @@ jobs:
                     else
                       echo "❌ Failed to update JSON file"
                       cd "$WORKSPACE_DIR"
-                      rm -rf "${app_name}_extracted"
+                      rm -rf "$extract_dir"
                       FAILED_APPS+=("$app_name")
                       ERROR_LOG+=("$app_name: Failed to update catalog JSON after Azure upload")
                       continue
@@ -1160,7 +1212,7 @@ jobs:
                   else
                     echo "❌ Failed to upload to Azure"
                     cd "$WORKSPACE_DIR"
-                    rm -rf "${app_name}_extracted"
+                    rm -rf "$extract_dir"
                     FAILED_APPS+=("$app_name")
                     ERROR_LOG+=("$app_name: Immutable Azure upload failed for $new_blob_name")
                     continue
@@ -1170,16 +1222,18 @@ jobs:
                   # shared success counter at the end of the loop, so it counts
                   # itself.
                   cd "$WORKSPACE_DIR"
-                  rm -rf "${app_name}_extracted"
+                  rm -rf "$extract_dir"
                   SUCCESSFUL_APPS+=("$app_name")
                   echo "✅ Completed processing $app_name"
+                  rm -rf "$app_temp_dir"
+                  app_temp_dir=""
                   continue
                 else
                   echo "❌ No .app or .pkg file found for $app_name"
                   echo " Extracted contents:"
-                  ls -R "${app_name}_extracted"
+                  ls -R "$extract_dir" || true
                   cd "$WORKSPACE_DIR"
-                  rm -rf "${app_name}_extracted"
+                  rm -rf "$extract_dir"
                   FAILED_APPS+=("$app_name")
                   ERROR_LOG+=("$app_name: No .app or .pkg found inside archive from $url")
                   continue
@@ -1189,7 +1243,7 @@ jobs:
               
               extracted_bundle_id=$(extract_bundle_id_from_plist "$app_file/Contents/Info.plist")
               if ! require_bundle_id_match "$WORKSPACE_DIR/Apps/${app_name}.json" "$extracted_bundle_id"; then
-                rm -rf "${app_name}_extracted"
+                rm -rf "$extract_dir"
                 FAILED_APPS+=("$app_name")
                 ERROR_LOG+=("$app_name: Extracted app bundle ID mismatch")
                 continue
@@ -1197,9 +1251,9 @@ jobs:
 
               # Build PKG with version in filename
               echo "Building PKG for $app_name version $version..."
-              if ! pkgbuild --install-location /Applications --component "$app_file" "${app_name}_${version}.pkg" 2>/dev/null; then
+              if ! pkgbuild --install-location /Applications --component "$app_file" "$package_path" 2>/dev/null; then
                 echo "❌ Failed to build PKG for $app_name"
-                rm -rf "${app_name}_extracted"
+                rm -rf "$extract_dir"
                 FAILED_APPS+=("$app_name")
                 ERROR_LOG+=("$app_name: Failed to build PKG from .app file")
                 continue
@@ -1207,7 +1261,7 @@ jobs:
               
               # Calculate SHA256 hash
               echo "🔐 Calculating SHA256 hash..."
-              file_hash=$(shasum -a 256 "${app_name}_${version}.pkg" | awk '{print $1}')
+              file_hash=$(shasum -a 256 "$package_path" | awk '{print $1}')
               echo "📝 SHA256: $file_hash"
               new_blob_name="${app_name}_${version}_${file_hash}.pkg"
               azure_url="${STORAGE_BASE_URL}/${new_blob_name}"
@@ -1217,10 +1271,10 @@ jobs:
               # upload, otherwise a transient Azure failure would remove the
               # last working package and leave the catalog pointing at nothing.
               echo "Uploading $app_name version $version to Azure Blob Storage..."
-              if ! upload_immutable_blob "${app_name}_${version}.pkg" "$new_blob_name"; then
+              if ! upload_immutable_blob "$package_path" "$new_blob_name"; then
                 echo "❌ Failed to upload $new_blob_name to Azure"
-                sudo rm -rf "${app_name}_extracted"
-                rm -f "${app_name}_${version}.pkg"
+                rm -rf "$extract_dir"
+                rm -f "$package_path"
                 FAILED_APPS+=("$app_name")
                 ERROR_LOG+=("$app_name: Immutable Azure upload failed for $new_blob_name")
                 continue
@@ -1237,20 +1291,23 @@ jobs:
               # to jq and turn mv into the failure branch.
               if ! { jq --arg url "$azure_url" --arg filename "$new_blob_name" --arg sha "$file_hash" --arg bundleid "$extracted_bundle_id" '(if has("vendor_url") then .vendor_url else .url end) as $vurl | .url = $url | .vendor_url = $vurl | .fileName = $filename | .sha = $sha | (if $bundleid == "" then . else .bundleId = $bundleid end) | del(.packaging_pending)' "$WORKSPACE_DIR/Apps/${app_name}.json" > temp.json && mv temp.json "$WORKSPACE_DIR/Apps/${app_name}.json"; }; then
                 echo "❌ Failed to update JSON file"
-                sudo rm -rf "${app_name}_extracted"
+                rm -rf "$extract_dir"
                 FAILED_APPS+=("$app_name")
                 ERROR_LOG+=("$app_name: Failed to update catalog JSON after Azure upload")
                 continue
               fi
 
               # Cleanup
-              sudo rm -rf "${app_name}_extracted"
+              rm -rf "$extract_dir"
             fi
 
             SUCCESSFUL_APPS+=("$app_name")
+            rm -rf "$app_temp_dir"
+            app_temp_dir=""
             echo "✅ Completed processing $app_name"
             echo "------------------------------------------------"
           done
+          [ -z "${app_temp_dir:-}" ] || rm -rf "$app_temp_dir"
 
           # Never publish the collector's vendor URL or source-archive SHA for a
           # package that failed. Keep the last committed manifest until a build

@@ -147,6 +147,92 @@ class CaskArtifactValidationTests(unittest.TestCase):
             add_new_app.unsupported_cask_reason(bootstrap),
         )
 
+    def test_mixed_request_is_atomic_when_one_cask_is_installer_only(self):
+        valid = cask_data(
+            "https://example.test/Valid.zip",
+            [{"app": ["Valid.app"]}],
+        )
+        valid["name"] = ["Valid"]
+        invalid = cask_data(
+            "https://example.test/Bootstrap.zip",
+            [{"installer": [{"manual": "Bootstrap.app"}]}],
+        )
+        invalid["name"] = ["Bootstrap"]
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = pathlib.Path(temp_dir)
+            script_path = root / ".github/scripts/collect_app_info.py"
+            script_path.parent.mkdir(parents=True)
+            original = "app_urls = []\n"
+            script_path.write_text(original, encoding="utf-8")
+            previous_cwd = os.getcwd()
+            try:
+                os.chdir(root)
+                with (
+                    patch.dict(
+                        os.environ,
+                        {
+                            "ISSUE_TITLE": "Add Valid and Bootstrap",
+                            "ISSUE_BODY": "",
+                            "COMMENT_BODY": "/approve valid, bootstrap",
+                        },
+                        clear=True,
+                    ),
+                    patch.object(
+                        add_new_app,
+                        "fetch_homebrew_info",
+                        side_effect=lambda token: {
+                            "valid": valid,
+                            "bootstrap": invalid,
+                        }[token],
+                    ),
+                    self.assertRaises(SystemExit) as context,
+                ):
+                    add_new_app.main()
+            finally:
+                os.chdir(previous_cwd)
+            self.assertEqual(context.exception.code, 1)
+            self.assertEqual(script_path.read_text(encoding="utf-8"), original)
+
+    def test_duplicate_tokens_are_added_once(self):
+        valid = cask_data(
+            "https://example.test/Valid.zip",
+            [{"app": ["Valid.app"]}],
+        )
+        valid["name"] = ["Valid"]
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = pathlib.Path(temp_dir)
+            script_path = root / ".github/scripts/collect_app_info.py"
+            script_path.parent.mkdir(parents=True)
+            script_path.write_text("app_urls = []\n", encoding="utf-8")
+            previous_cwd = os.getcwd()
+            try:
+                os.chdir(root)
+                with (
+                    patch.dict(
+                        os.environ,
+                        {
+                            "ISSUE_TITLE": "Add Valid",
+                            "ISSUE_BODY": "",
+                            "COMMENT_BODY": "/approve valid, valid",
+                        },
+                        clear=True,
+                    ),
+                    patch.object(
+                        add_new_app,
+                        "fetch_homebrew_info",
+                        return_value=valid,
+                    ),
+                ):
+                    add_new_app.main()
+            finally:
+                os.chdir(previous_cwd)
+            self.assertEqual(
+                script_path.read_text(encoding="utf-8").count(
+                    "api/cask/valid.json"
+                ),
+                1,
+            )
+
 
 class ApprovalWorkflowTests(unittest.TestCase):
     def test_approval_workflows_test_catalog_before_committing(self):

@@ -257,6 +257,54 @@ class CollectAppInfoTests(unittest.TestCase):
                     collect_app_info.can_reuse_source_hash(existing, candidate)
                 )
 
+    def test_direct_manifest_bootstrap_reuses_authoritative_source_hash(self):
+        source_sha = "c" * 64
+        existing = {
+            "version": "1.0",
+            "url": "https://example.test/app.dmg",
+            "sha": source_sha,
+        }
+        current = {
+            "version": "1.0",
+            "url": "https://example.test/app.dmg",
+            "source_version": "1.0,100",
+            "source_sha256": source_sha,
+        }
+        self.assertTrue(collect_app_info.can_reuse_source_hash(existing, current))
+        current["type"] = "app"
+        self.assertFalse(collect_app_info.can_reuse_source_hash(existing, current))
+
+    def test_downloaded_source_hash_mismatch_is_rejected(self):
+        app_info = {
+            "name": "Example",
+            "url": "https://example.test/app.dmg",
+            "source_sha256": "a" * 64,
+        }
+        with patch.object(
+            collect_app_info,
+            "calculate_file_hash",
+            return_value="b" * 64,
+        ):
+            self.assertIsNone(
+                collect_app_info.calculate_verified_source_hash(app_info)
+            )
+
+    def test_downloaded_no_check_source_keeps_calculated_hash(self):
+        app_info = {
+            "name": "Example",
+            "url": "https://example.test/app.dmg",
+            "source_sha256": "no_check",
+        }
+        with patch.object(
+            collect_app_info,
+            "calculate_file_hash",
+            return_value="b" * 64,
+        ):
+            self.assertEqual(
+                collect_app_info.calculate_verified_source_hash(app_info),
+                "b" * 64,
+            )
+
     def test_wireshark_declared_app_takes_precedence_over_auxiliary_pkgs(self):
         url = "https://formulae.brew.sh/api/cask/wireshark-app.json"
         payload = {
@@ -327,6 +375,39 @@ class CollectAppInfoTests(unittest.TestCase):
 
         self.assertEqual(app_info["bundleId"], "com.cmtrace.open")
 
+    def test_bundle_id_override_wins_over_unrelated_launchctl(self):
+        url = "https://formulae.brew.sh/api/cask/hopper-disassembler.json"
+        payload = {
+            "name": ["Hopper Disassembler"],
+            "desc": "Disassembler",
+            "version": "6.5",
+            "url": "https://example.test/Hopper.dmg",
+            "sha256": "a" * 64,
+            "homepage": "https://example.test/",
+            "artifacts": [
+                {"uninstall": [{"launchctl": "com.cryptic-apps.ExternalAPI"}]},
+                {"app": ["Hopper Disassembler.app"]},
+            ],
+        }
+        with patch.dict(collect_app_info.cask_cache, {url: payload}, clear=True):
+            app_info = collect_app_info.get_homebrew_app_info(url)
+        self.assertEqual(
+            app_info["bundleId"],
+            "com.cryptic-apps.hopper-web-4",
+        )
+
+    def test_existing_null_bundle_id_cannot_replace_fresh_override(self):
+        existing = {"bundleId": None}
+        fresh = {"bundleId": "com.cmtrace.open"}
+        collect_app_info.merge_fresh_bundle_id(existing, fresh)
+        self.assertEqual(existing["bundleId"], "com.cmtrace.open")
+
+    def test_transient_null_bundle_lookup_preserves_existing_value(self):
+        fresh = {"bundleId": None}
+        existing = {"bundleId": "com.example.valid"}
+        collect_app_info.preserve_existing_bundle_id(fresh, existing)
+        self.assertEqual(fresh["bundleId"], "com.example.valid")
+
     def test_extensionless_archive_override_is_persisted(self):
         url = "https://formulae.brew.sh/api/cask/postman.json"
         payload = {
@@ -391,6 +472,7 @@ class CollectAppInfoTests(unittest.TestCase):
             merge_section.count("and key not in ARTIFACT_METADATA_KEYS"),
             4,
         )
+        self.assertGreaterEqual(merge_section.count('"bundleId"'), 4)
 
     def test_installer_only_cask_is_rejected(self):
         url = "https://formulae.brew.sh/api/cask/battle-net.json"

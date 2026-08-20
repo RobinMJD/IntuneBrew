@@ -361,6 +361,36 @@ class WorkflowPackagingRegressionTests(unittest.TestCase):
         self.assertNotIn('--overwrite true', self.process)
         self.assertIn('immutable_blob_exists "$blob_name"', self.process)
 
+    def test_every_source_download_is_verified_before_use(self):
+        self.assertIn("verify_source_file()", self.process)
+        for message in (
+            "Source ZIP SHA256 mismatch",
+            "Source PKG SHA256 mismatch",
+            "Source DMG SHA256 mismatch",
+            "Direct source PKG SHA256 mismatch",
+            "Source DMG.GZ SHA256 mismatch",
+            "Source archive SHA256 mismatch",
+        ):
+            with self.subTest(message=message):
+                self.assertIn(message, self.process)
+
+    def test_remote_artifact_metadata_is_not_used_as_download_path(self):
+        self.assertNotIn('${declared_pkg:-payload.pkg}', self.process)
+        self.assertIn('source_path="$app_temp_dir/source.pkg"', self.process)
+
+    def test_package_workspace_is_bounded_and_cleaned(self):
+        self.assertIn('app_temp_dir=$(mktemp -d', self.process)
+        self.assertIn('package_path="$app_temp_dir/output.pkg"', self.process)
+        self.assertNotIn('$HOME/Desktop/${app_name}', self.process)
+        self.assertNotIn('${app_name}_extracted', self.process)
+        self.assertNotIn('cd "$HOME/Desktop"', self.process)
+        self.assertIn('rm -rf "$app_temp_dir"', self.process)
+        self.assertIn('[ -z "${app_temp_dir:-}" ] || rm -rf', self.process)
+        self.assertGreaterEqual(
+            self.process.count('app_temp_dir=""'),
+            3,
+        )
+
     def test_same_version_rebuild_does_not_touch_prior_blob_before_marker(self):
         marker = self.workflow.index("- name: Publish catalog state")
         before_marker = self.workflow[:marker]
