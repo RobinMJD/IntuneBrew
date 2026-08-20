@@ -362,15 +362,78 @@ jobs:
             esac
           }
 
+          safe_artifact_relative_path() {
+            local value=""
+            local component=""
+            value=$(printf '%s' "$1" | tr '\\' '/')
+            case "$value" in
+              ""|"."|/*|[A-Za-z]:*|*[$'\n\r\t']*) return 1 ;;
+            esac
+            IFS='/' read -r -a components <<< "$value"
+            for component in "${components[@]}"; do
+              case "$component" in
+                ""|"."|".."|*"*"*|*"?"*|*"["*|*"]"*) return 1 ;;
+              esac
+            done
+            printf '%s\n' "$value"
+          }
+
+          resolved_payload_path() {
+            local root="$1"
+            local candidate="$2"
+            python -c 'import pathlib, sys; root=pathlib.Path(sys.argv[1]).resolve(strict=True); candidate=pathlib.Path(sys.argv[2]).resolve(strict=True); candidate.relative_to(root); print(candidate)' \
+              "$root" "$candidate" 2>/dev/null
+          }
+
+          find_declared_payload() {
+            local root="$1"
+            local expected="$2"
+            local payload_type="$3"
+            local normalized=""
+            local candidate=""
+            local resolved=""
+            local matches=()
+            normalized=$(safe_artifact_relative_path "$expected") || {
+              echo "Rejected unsafe Homebrew artifact path: $expected" >&2
+              return 0
+            }
+
+            candidate="$root/$normalized"
+            if { [ "$payload_type" = "app" ] && [ -d "$candidate" ]; } \
+              || { [ "$payload_type" = "pkg" ] && [ -f "$candidate" ]; }; then
+              resolved=$(resolved_payload_path "$root" "$candidate") || return 0
+              printf '%s\n' "$resolved"
+              return 0
+            fi
+
+            # Homebrew archives sometimes add one release-directory wrapper.
+            # Accept it only when exactly one immediate wrapper resolves.
+            for wrapper in "$root"/*; do
+              [ -d "$wrapper" ] || continue
+              candidate="$wrapper/$normalized"
+              if { [ "$payload_type" = "app" ] && [ -d "$candidate" ]; } \
+                || { [ "$payload_type" = "pkg" ] && [ -f "$candidate" ]; }; then
+                resolved=$(resolved_payload_path "$root" "$candidate") || continue
+                matches+=("$resolved")
+              fi
+            done
+            if [ ${#matches[@]} -eq 1 ]; then
+              printf '%s\n' "${matches[0]}"
+            elif [ ${#matches[@]} -gt 1 ]; then
+              echo "Ambiguous Homebrew artifact path under $root: $expected" >&2
+            fi
+          }
+
           find_app_payload() {
             local root="$1"
             local expected="$2"
             local result=""
             if [ -n "$expected" ]; then
-              result=$(find "$root" -type d -name "$expected" -prune -print -quit 2>/dev/null)
+              result=$(find_declared_payload "$root" "$expected" app)
             else
-              result=$(find "$root" -type d -name "*.app" ! -path "*/__MACOSX/*" \
+              result=$(find -P "$root" -type d -name "*.app" ! -path "*/__MACOSX/*" \
                 -prune -print 2>/dev/null | awk '{ print length, $0 }' | sort -n | head -1 | cut -d" " -f2-)
+              [ -z "$result" ] || result=$(resolved_payload_path "$root" "$result" 2>/dev/null || true)
             fi
             if [ -n "$result" ] && [ -f "$result/Contents/Info.plist" ]; then
               printf '%s\n' "$result"
@@ -381,9 +444,9 @@ jobs:
             local root="$1"
             local expected="$2"
             if [ -n "$expected" ]; then
-              find "$root" -type f -name "$expected" ! -path "*/__MACOSX/*" -print -quit 2>/dev/null
+              find_declared_payload "$root" "$expected" pkg
             else
-              find "$root" -type f -name "*.pkg" ! -path "*/__MACOSX/*" -print -quit 2>/dev/null
+              find -P "$root" -type f -name "*.pkg" ! -path "*/__MACOSX/*" -print -quit 2>/dev/null
             fi
           }
 
@@ -424,6 +487,43 @@ jobs:
               --name "$1" \
               --query exists \
               -o tsv)" = "true" ]
+          }
+
+          verify_blob_sha() {
+            local blob_name="$1"
+            local expected_sha="$2"
+            local temp_pkg=""
+            local actual_sha=""
+            local expected_lower=""
+            [[ "$expected_sha" =~ ^[0-9a-fA-F]{64}$ ]] || return 1
+            expected_lower=$(printf '%s' "$expected_sha" | tr 'A-F' 'a-f')
+            temp_pkg=$(mktemp "${TMPDIR:-/tmp}/intunebrew-verify.XXXXXX.pkg") || return 1
+            if ! az storage blob download \
+              --account-name "$AZURE_STORAGE_ACCOUNT" \
+              --container-name "$AZURE_STORAGE_CONTAINER" \
+              --auth-mode login \
+              --name "$blob_name" \
+              --file "$temp_pkg" \
+              --no-progress >/dev/null; then
+              rm -f "$temp_pkg"
+              return 1
+            fi
+            actual_sha=$(shasum -a 256 "$temp_pkg" | awk '{print $1}')
+            rm -f "$temp_pkg"
+            [ "$actual_sha" = "$expected_lower" ]
+          }
+
+          prior_blob_sha_matches() {
+            local prior_is_configured="$1"
+            local blob_name="$2"
+            local expected_sha="$3"
+            local expected_lower=""
+            expected_lower=$(printf '%s' "$expected_sha" | tr 'A-F' 'a-f')
+            if [ "$prior_is_configured" = true ] \
+              && [ "$blob_name" = "${blob_name%_"$expected_lower".pkg}_${expected_lower}.pkg" ]; then
+              return 0
+            fi
+            verify_blob_sha "$blob_name" "$expected_lower"
           }
 
           upload_immutable_blob() {
@@ -498,6 +598,8 @@ jobs:
             prior_sha=$(printf '%s' "$prior_manifest" | jq -r '.sha // empty' 2>/dev/null || true)
             prior_blob=$(reusable_blob_leaf "$prior_catalog_url" 2>/dev/null || true)
             cleanup_prior_blob=$(configured_blob_leaf "$prior_catalog_url" 2>/dev/null || true)
+            prior_is_configured=false
+            [ -z "$cleanup_prior_blob" ] || prior_is_configured=true
 
             catalog_url=$(jq -r '.url // empty' "$WORKSPACE_DIR/Apps/${app_name}.json")
             vendor_url=$(jq -r '.vendor_url // empty' "$WORKSPACE_DIR/Apps/${app_name}.json")
@@ -524,7 +626,11 @@ jobs:
               && [[ "$prior_sha" =~ ^[0-9a-fA-F]{64}$ ]] \
               && [ -n "$prior_blob" ] \
               && immutable_blob_exists "$prior_blob"; then
-              reuse_existing_blob=true
+              if prior_blob_sha_matches "$prior_is_configured" "$prior_blob" "$prior_sha"; then
+                reuse_existing_blob=true
+              else
+                echo "Exact prior blob failed SHA verification; rebuilding $app_name"
+              fi
             fi
 
             if [ "$reuse_existing_blob" = true ]; then

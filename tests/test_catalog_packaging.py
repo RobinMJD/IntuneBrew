@@ -1,6 +1,9 @@
 import importlib.util
 import json
+import os
 import re
+import shutil
+import subprocess
 import tempfile
 import unittest
 from pathlib import Path
@@ -133,6 +136,33 @@ class WorkflowPackagingRegressionTests(unittest.TestCase):
     def setUpClass(cls):
         cls.workflow = WORKFLOW_PATH.read_text(encoding="utf-8")
         cls.process = cls.workflow.split("- name: Process apps", 1)[1]
+        cls.payload_helpers = cls.process.split(
+            "safe_artifact_relative_path() {", 1
+        )[1].split("safe_blob_leaf() {", 1)[0]
+        cls.payload_helpers = (
+            "safe_artifact_relative_path() {" + cls.payload_helpers
+        )
+
+    def run_payload_helper(self, root, expected, payload_type="app"):
+        bash = shutil.which("bash")
+        self.assertIsNotNone(bash)
+        root_arg = str(root)
+        if os.name == "nt":
+            root_arg = root_arg.replace("\\", "/")
+        function_name = (
+            "find_app_payload" if payload_type == "app" else "find_pkg_payload"
+        )
+        script = (
+            self.payload_helpers
+            + f'\n{function_name} "$1" "$2"\n'
+        )
+        return subprocess.run(
+            [bash, "-c", script, "_", root_arg, expected],
+            text=True,
+            capture_output=True,
+            check=False,
+            env={**os.environ, "MSYS2_ARG_CONV_EXCL": "*"},
+        )
 
     def test_direct_xar_pkg_routes_as_pkg_without_archive_extraction(self):
         pkg_route = self.process.split("case \"$kind\" in", 1)[1].split("dmg)", 1)[0]
@@ -150,6 +180,62 @@ class WorkflowPackagingRegressionTests(unittest.TestCase):
         self.assertIn('find_app_payload "$mount_dir" "$declared_app"', self.process)
         self.assertIn('-name "*.app"', self.process)
         self.assertIn("-prune -print", self.process)
+
+    def test_declared_payload_supports_basename_and_nested_relative_paths(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            basename = root / "Product.app" / "Contents"
+            basename.mkdir(parents=True)
+            (basename / "Info.plist").write_text("plist", encoding="utf-8")
+            result = self.run_payload_helper(root, "Product.app")
+            self.assertEqual(result.returncode, 0)
+            self.assertTrue(result.stdout.strip().endswith("Product.app"))
+
+            nested = root / "Airfoil" / "Airfoil.app" / "Contents"
+            nested.mkdir(parents=True)
+            (nested / "Info.plist").write_text("plist", encoding="utf-8")
+            result = self.run_payload_helper(root, "Airfoil/Airfoil.app")
+            self.assertEqual(result.returncode, 0)
+            self.assertTrue(result.stdout.strip().endswith("Airfoil.app"))
+
+            pkg = root / "ELAN" / "Installer.pkg"
+            pkg.parent.mkdir(exist_ok=True)
+            pkg.write_bytes(b"pkg")
+            result = self.run_payload_helper(root, "ELAN/Installer.pkg", "pkg")
+            self.assertEqual(result.returncode, 0)
+            self.assertTrue(result.stdout.strip().endswith("Installer.pkg"))
+
+    def test_declared_payload_allows_one_deterministic_wrapper(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            app = root / "release-1" / "Airfoil" / "Airfoil.app" / "Contents"
+            app.mkdir(parents=True)
+            (app / "Info.plist").write_text("plist", encoding="utf-8")
+
+            result = self.run_payload_helper(root, "Airfoil/Airfoil.app")
+
+            self.assertEqual(result.returncode, 0)
+            self.assertTrue(result.stdout.strip().endswith("Airfoil.app"))
+
+    def test_declared_payload_rejects_absolute_traversal_and_ambiguity(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            for wrapper in ("release-1", "release-2"):
+                app = root / wrapper / "Product.app" / "Contents"
+                app.mkdir(parents=True)
+                (app / "Info.plist").write_text("plist", encoding="utf-8")
+
+            for expected in ("../Product.app", "/Applications/Product.app"):
+                with self.subTest(expected=expected):
+                    result = self.run_payload_helper(root, expected)
+                    self.assertEqual(result.returncode, 0)
+                    self.assertEqual(result.stdout.strip(), "")
+                    self.assertIn("Rejected unsafe", result.stderr)
+
+            result = self.run_payload_helper(root, "Product.app")
+            self.assertEqual(result.returncode, 0)
+            self.assertEqual(result.stdout.strip(), "")
+            self.assertIn("Ambiguous", result.stderr)
 
     def test_nested_dmg_is_mounted_only_after_archive_extraction(self):
         archive_route = self.process.split("archive)", 1)[1].split("*)", 1)[0]
@@ -250,6 +336,55 @@ class WorkflowPackagingRegressionTests(unittest.TestCase):
         self.assertIn('prior_sha=$(printf', self.process)
         self.assertIn('prior_vendor_url=$(printf', self.process)
         self.assertIn('"$prior_vendor_url" != "$url"', self.process)
+
+    def test_cross_account_reuse_requires_downloaded_sha_match(self):
+        self.assertIn("prior_blob_sha_matches()", self.process)
+        self.assertIn("verify_blob_sha \"$blob_name\"", self.process)
+        self.assertIn("az storage blob download", self.process)
+        self.assertIn('actual_sha=$(shasum -a 256', self.process)
+        self.assertIn('[ "$actual_sha" = "$expected_lower" ]', self.process)
+        self.assertIn(
+            'prior_blob_sha_matches "$prior_is_configured" "$prior_blob" "$prior_sha"',
+            self.process,
+        )
+
+    def test_configured_immutable_blob_can_use_name_sha_provenance(self):
+        matcher = self.process.split("prior_blob_sha_matches() {", 1)[1].split(
+            "upload_immutable_blob() {", 1
+        )[0]
+        matcher = "prior_blob_sha_matches() {" + matcher
+        sha = "a" * 64
+        script = (
+            "verify_blob_sha() { return 1; }\n"
+            + matcher
+            + '\nprior_blob_sha_matches "$1" "$2" "$3"\n'
+        )
+        bash = shutil.which("bash")
+        result = subprocess.run(
+            [bash, "-c", script, "_", "true", f"app_1_{sha}.pkg", sha],
+            check=False,
+        )
+        self.assertEqual(result.returncode, 0)
+
+    def test_cross_account_blob_match_and_mismatch_follow_verifier(self):
+        matcher = self.process.split("prior_blob_sha_matches() {", 1)[1].split(
+            "upload_immutable_blob() {", 1
+        )[0]
+        matcher = "prior_blob_sha_matches() {" + matcher
+        sha = "b" * 64
+        bash = shutil.which("bash")
+        for verifier_result, expected_code in ((0, 0), (1, 1)):
+            with self.subTest(verifier_result=verifier_result):
+                script = (
+                    f"verify_blob_sha() {{ return {verifier_result}; }}\n"
+                    + matcher
+                    + '\nprior_blob_sha_matches "$1" "$2" "$3"\n'
+                )
+                result = subprocess.run(
+                    [bash, "-c", script, "_", "false", "legacy.pkg", sha],
+                    check=False,
+                )
+                self.assertEqual(result.returncode, expected_code)
 
     def test_strict_index_generation_runs_after_packaging(self):
         pre = self.workflow.index(
