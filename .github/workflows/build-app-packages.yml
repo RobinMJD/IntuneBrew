@@ -309,6 +309,8 @@ jobs:
 
           extract_bundle_id_from_pkg() {
             local pkg_path="$1"
+            local declared_app="${2:-}"
+            local source_app="${3:-}"
             local expand_dir=""
             local plist=""
             local package_info=""
@@ -323,18 +325,44 @@ jobs:
             # drivers) legitimately yield nothing here.
             if pkgutil --expand-full "$pkg_path" "$expand_dir/payload" >/dev/null 2>&1 \
               && require_extracted_quota "$expand_dir"; then
-              # Shortest path wins so a nested helper bundle inside Frameworks
-              # cannot shadow the top level app.
-              plist=$(find "$expand_dir/payload" -type f -path "*.app/Contents/Info.plist" -print 2>/dev/null | awk '{ print length, $0 }' | sort -n | head -1 | cut -d" " -f2-)
-              if [ -n "$plist" ]; then
-                extract_bundle_id_from_plist "$plist"
-              else
+              if [ -f "$expand_dir/payload/Contents/Info.plist" ]; then
+                plist="$expand_dir/payload/Contents/Info.plist"
+              fi
+              if [ -z "$plist" ] && [ -n "$source_app" ]; then
+                primary_app=$(find_source_payload "$expand_dir/payload" "$source_app" app)
+                [ -z "$primary_app" ] || plist="$primary_app/Contents/Info.plist"
+              fi
+              if [ -z "$plist" ] && [ -n "$declared_app" ]; then
+                primary_app=$(find_declared_payload "$expand_dir/payload" "$declared_app" app)
+                [ -z "$primary_app" ] || plist="$primary_app/Contents/Info.plist"
+              fi
+              if [ -z "$plist" ] && [ -z "$source_app" ] && [ -z "$declared_app" ]; then
                 package_info=$(find "$expand_dir/payload" -type f -name PackageInfo \
                   -print 2>/dev/null | awk '{ print length, $0 }' | sort -n \
                   | head -1 | cut -d" " -f2-)
                 if [ -n "$package_info" ]; then
                   package_id=$(sed -n 's/.*identifier="\([^"]*\)".*/\1/p' \
                     "$package_info" | head -1)
+                fi
+              fi
+              if [ -z "$plist" ] && [ -z "$package_id" ]; then
+                plist=$(find -P "$expand_dir/payload" -type f -path "*.app/Contents/Info.plist" \
+                  ! -path "*/Frameworks/*" ! -path "*/Sparkle/*" \
+                  ! -path "*/LoginItems/*" ! -path "*/XPCServices/*" \
+                  ! -path "*/Helpers/*" -print 2>/dev/null \
+                  | awk '{ print length, $0 }' | sort -n | head -1 | cut -d" " -f2-)
+              fi
+              if [ -n "$plist" ]; then
+                extract_bundle_id_from_plist "$plist"
+              else
+                if [ -z "$package_id" ]; then
+                  package_info=$(find "$expand_dir/payload" -type f -name PackageInfo \
+                    -print 2>/dev/null | awk '{ print length, $0 }' | sort -n \
+                    | head -1 | cut -d" " -f2-)
+                  if [ -n "$package_info" ]; then
+                    package_id=$(sed -n 's/.*identifier="\([^"]*\)".*/\1/p' \
+                      "$package_info" | head -1)
+                  fi
                 fi
                 if [ -n "$package_id" ]; then
                   echo "$package_id"
@@ -461,13 +489,27 @@ jobs:
             fi
           }
 
+          find_source_payload() {
+            local root="$1"
+            local pattern="$2"
+            local payload_type="$3"
+            local result=""
+            result=$(python -c 'import glob,pathlib,sys; root=pathlib.Path(sys.argv[1]).resolve(strict=True); pattern=sys.argv[2].replace("\\","/"); parts=pattern.split("/"); assert all(part not in ("",".","..") for part in parts); candidates=[pathlib.Path(value).resolve(strict=True) for value in glob.glob(str(root / pattern))]; matches=[str(candidate) for candidate in candidates if root in candidate.parents and ((sys.argv[3]=="app" and candidate.is_dir()) or (sys.argv[3]=="pkg" and candidate.is_file()))]; assert len(matches)<=1; print(matches[0] if matches else "")' "$root" "$pattern" "$payload_type" 2>/dev/null) || return 0
+            [ -z "$result" ] || printf '%s\n' "$result"
+          }
+
           find_app_payload() {
             local root="$1"
             local expected="$2"
+            local source_expected="${3:-}"
             local result=""
-            if [ -n "$expected" ]; then
+            if [ -n "$source_expected" ]; then
+              result=$(find_source_payload "$root" "$source_expected" app)
+            fi
+            if [ -z "$result" ] && [ -n "$expected" ]; then
               result=$(find_declared_payload "$root" "$expected" app)
-            else
+            fi
+            if [ -z "$result" ] && [ -z "$source_expected" ] && [ -z "$expected" ]; then
               result=$(find -P "$root" -type d -name "*.app" ! -path "*/__MACOSX/*" \
                 -prune -print 2>/dev/null | awk '{ print length, $0 }' | sort -n | head -1 | cut -d" " -f2-)
               [ -z "$result" ] || result=$(resolved_payload_path "$root" "$result" 2>/dev/null || true)
@@ -480,11 +522,19 @@ jobs:
           find_pkg_payload() {
             local root="$1"
             local expected="$2"
-            if [ -n "$expected" ]; then
-              find_declared_payload "$root" "$expected" pkg
-            else
-              find -P "$root" -type f -name "*.pkg" ! -path "*/__MACOSX/*" -print -quit 2>/dev/null
+            local source_expected="${3:-}"
+            local result=""
+            if [ -n "$source_expected" ]; then
+              result=$(find_source_payload "$root" "$source_expected" pkg)
             fi
+            if [ -z "$result" ] && [ -n "$expected" ]; then
+              result=$(find_declared_payload "$root" "$expected" pkg)
+            fi
+            if [ -z "$result" ] && [ -z "$source_expected" ] && [ -z "$expected" ]; then
+              result=$(find -P "$root" -type f -name "*.pkg" ! -path "*/__MACOSX/*" -print 2>/dev/null)
+              [ "$(printf '%s\n' "$result" | sed '/^$/d' | wc -l | tr -d ' ')" = "1" ] || result=""
+            fi
+            [ -z "$result" ] || printf '%s\n' "$result"
           }
 
           safe_blob_leaf() {
@@ -599,7 +649,12 @@ jobs:
             local destination="$1"
             local source_url="$2"
             require_free_disk "$app_temp_dir" || return 1
-            curl -fLsS --connect-timeout 30 --max-time 300 --retry 3 \
+            local user_agent_args=()
+            if [ "${download_user_agent:-default}" = "browser" ]; then
+              user_agent_args=(-A "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 Chrome/124 Safari/537.36")
+            fi
+            curl -fLsS "${user_agent_args[@]}" \
+              --connect-timeout 30 --max-time 300 --retry 3 \
               --retry-all-errors --retry-max-time 300 \
               --max-filesize "$MAX_SOURCE_BYTES" \
               -o "$destination" "$source_url"
@@ -818,6 +873,7 @@ jobs:
             source_version=$(jq -r '.source_version // empty' "$WORKSPACE_DIR/Apps/${app_name}.json")
             source_sha=$(jq -r '.source_sha256 // empty' "$WORKSPACE_DIR/Apps/${app_name}.json")
             app_type=$(jq -r '.type' "$WORKSPACE_DIR/Apps/${app_name}.json")
+            download_user_agent=$(jq -r '.download_user_agent // "default"' "$WORKSPACE_DIR/Apps/${app_name}.json")
             echo "📦 Version: $version"
             echo "🏷️ Type: $app_type"
             
@@ -1110,9 +1166,11 @@ jobs:
               
               declared_app=$(jq -r '.artifact_app // empty' "$WORKSPACE_DIR/Apps/${app_name}.json")
               declared_pkg=$(jq -r '.artifact_pkg // empty' "$WORKSPACE_DIR/Apps/${app_name}.json")
-              app_file=$(find_app_payload "${download_path}_mount" "$declared_app")
+              source_app=$(jq -r '.artifact_app_source // empty' "$WORKSPACE_DIR/Apps/${app_name}.json")
+              source_pkg=$(jq -r '.artifact_pkg_source // empty' "$WORKSPACE_DIR/Apps/${app_name}.json")
+              app_file=$(find_app_payload "${download_path}_mount" "$declared_app" "$source_app")
               pkg_file=""
-              [ -n "$app_file" ] || pkg_file=$(find_pkg_payload "${download_path}_mount" "$declared_pkg")
+              [ -n "$app_file" ] || pkg_file=$(find_pkg_payload "${download_path}_mount" "$declared_pkg" "$source_pkg")
 
               # The DMG must be unmounted whether this succeeds or not, so
               # failures set a flag here and are recorded after the cleanup.
@@ -1134,7 +1192,7 @@ jobs:
                 # upload arm below already reports for this app.
                 cp "$pkg_file" "$package_path" || true
 
-                extracted_bundle_id=$(extract_bundle_id_from_pkg "$package_path")
+                extracted_bundle_id=$(extract_bundle_id_from_pkg "$package_path" "$declared_app" "$source_app")
                 if ! require_bundle_id_match "$WORKSPACE_DIR/Apps/${app_name}.json" "$extracted_bundle_id"; then
                   pkg_in_dmg_error="Declared package bundle ID mismatch"
                 fi
@@ -1193,6 +1251,8 @@ jobs:
               mkdir -p "$extract_dir"
               declared_app=$(jq -r '.artifact_app // empty' "$WORKSPACE_DIR/Apps/${app_name}.json")
               declared_pkg=$(jq -r '.artifact_pkg // empty' "$WORKSPACE_DIR/Apps/${app_name}.json")
+              source_app=$(jq -r '.artifact_app_source // empty' "$WORKSPACE_DIR/Apps/${app_name}.json")
+              source_pkg=$(jq -r '.artifact_pkg_source // empty' "$WORKSPACE_DIR/Apps/${app_name}.json")
               kind=$(jq -r '.artifact_kind // empty' "$WORKSPACE_DIR/Apps/${app_name}.json")
               archive_format=$(jq -r '.archive_format // empty' "$WORKSPACE_DIR/Apps/${app_name}.json")
               [ -n "$kind" ] || kind=$(artifact_kind "$url")
@@ -1266,8 +1326,8 @@ jobs:
                     rm -f "${download_path}.dmg"
                     continue
                   fi
-                  mounted_app=$(find_app_payload "$mount_dir" "$declared_app")
-                  mounted_pkg=$(find_pkg_payload "$mount_dir" "$declared_pkg")
+                  mounted_app=$(find_app_payload "$mount_dir" "$declared_app" "$source_app")
+                  mounted_pkg=$(find_pkg_payload "$mount_dir" "$declared_pkg" "$source_pkg")
                   if [ -n "$mounted_app" ]; then
                     ditto "$mounted_app" "$extract_dir/$(basename "$mounted_app")"
                   elif [ -n "$mounted_pkg" ]; then
@@ -1340,15 +1400,15 @@ jobs:
                     continue
                   fi
 
-                  app_file=$(find_app_payload "$extract_dir" "$declared_app")
-                  pkg_file=$(find_pkg_payload "$extract_dir" "$declared_pkg")
+                  app_file=$(find_app_payload "$extract_dir" "$declared_app" "$source_app")
+                  pkg_file=$(find_pkg_payload "$extract_dir" "$declared_pkg" "$source_pkg")
                   if [ -z "$app_file" ] && [ -z "$pkg_file" ]; then
                     nested_dmg=$(find "$extract_dir" -type f -name "*.dmg" -print -quit)
                     if [ -n "$nested_dmg" ]; then
                       mkdir -p "$mount_dir"
                       if hdiutil attach "$nested_dmg" -mountpoint "$mount_dir" -nobrowse >/dev/null; then
-                        mounted_app=$(find_app_payload "$mount_dir" "$declared_app")
-                        mounted_pkg=$(find_pkg_payload "$mount_dir" "$declared_pkg")
+                        mounted_app=$(find_app_payload "$mount_dir" "$declared_app" "$source_app")
+                        mounted_pkg=$(find_pkg_payload "$mount_dir" "$declared_pkg" "$source_pkg")
                         if [ -n "$mounted_app" ]; then
                           ditto "$mounted_app" "$extract_dir/$(basename "$mounted_app")"
                         elif [ -n "$mounted_pkg" ]; then
@@ -1369,12 +1429,12 @@ jobs:
               esac
 
               echo "🔍 Searching for declared app payload..."
-              app_file=$(find_app_payload "$extract_dir" "$declared_app")
+              app_file=$(find_app_payload "$extract_dir" "$declared_app" "$source_app")
               
               if [ -z "$app_file" ]; then
                 echo "❌ No .app file found, searching for .pkg file..."
                 pkg_file="$direct_pkg_file"
-                [ -n "$pkg_file" ] || pkg_file=$(find_pkg_payload "$extract_dir" "$declared_pkg")
+                [ -n "$pkg_file" ] || pkg_file=$(find_pkg_payload "$extract_dir" "$declared_pkg" "$source_pkg")
                 
                 if [ -n "$pkg_file" ]; then
                   echo "✅ Found .pkg file: $pkg_file"
@@ -1386,7 +1446,7 @@ jobs:
                   # upload arm below already reports for this app.
                   cp "$pkg_file" "$package_path" || true
 
-                  extracted_bundle_id=$(extract_bundle_id_from_pkg "$package_path")
+                  extracted_bundle_id=$(extract_bundle_id_from_pkg "$package_path" "$declared_app" "$source_app")
                   if ! require_bundle_id_match "$WORKSPACE_DIR/Apps/${app_name}.json" "$extracted_bundle_id"; then
                     cd "$WORKSPACE_DIR"
                     rm -rf "$extract_dir"
@@ -1619,6 +1679,7 @@ jobs:
         run: |
           while IFS= read -r file; do
             [ -n "$file" ] || continue
+            [ "$(jq -r '.deprecated // false' "$file" 2>/dev/null)" != "true" ] || continue
             type=$(jq -r '.type // empty' "$file" 2>/dev/null || true)
             case "$type" in
               app|pkg_in_dmg|pkg_in_pkg) ;;
@@ -1636,6 +1697,7 @@ jobs:
 
           while IFS= read -r file; do
             [ -n "$file" ] || continue
+            [ "$(jq -r '.deprecated // false' "$file" 2>/dev/null)" != "true" ] || continue
             type=$(jq -r '.type // empty' "$file" 2>/dev/null || true)
             case "$type" in
               app|pkg_in_dmg|pkg_in_pkg) ;;
@@ -1661,6 +1723,7 @@ jobs:
           reverted=0
           while IFS= read -r f; do
             [ -n "$f" ] || continue
+            [ "$(jq -r '.deprecated // false' "$f" 2>/dev/null)" != "true" ] || continue
             cask=$(jq -r '.homebrew_cask // empty' "$f" 2>/dev/null || true)
             if [ -z "$cask" ] || [[ " $SCOPE_TOKENS " != *" $cask "* ]]; then
               git checkout -- "$f"
@@ -1670,6 +1733,7 @@ jobs:
 
           while IFS= read -r f; do
             [ -n "$f" ] || continue
+            [ "$(jq -r '.deprecated // false' "$f" 2>/dev/null)" != "true" ] || continue
             cask=$(jq -r '.homebrew_cask // empty' "$f" 2>/dev/null || true)
             if [ -z "$cask" ] || [[ " $SCOPE_TOKENS " != *" $cask "* ]]; then
               rm -f "$f"

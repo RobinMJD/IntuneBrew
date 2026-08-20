@@ -508,6 +508,55 @@ class CollectAppInfoTests(unittest.TestCase):
         self.assertEqual(app_info["archive_format"], "zip")
         self.assertEqual(app_info["type"], "app")
 
+    def test_rename_source_paths_and_browser_user_agent_are_persisted(self):
+        cases = (
+            (
+                "ecamm-live",
+                [{"app": ["Ecamm/Ecamm Live.app"]}],
+                "artifact_app_source",
+                "Ecamm*/Ecamm Live.app",
+            ),
+            (
+                "loupedeck",
+                [{"pkg": ["Installer.pkg"]}],
+                "artifact_pkg_source",
+                "LoupedeckInstaller.pkg",
+            ),
+        )
+        for token, artifacts, key, expected in cases:
+            with self.subTest(token=token):
+                url = f"https://formulae.brew.sh/api/cask/{token}.json"
+                payload = {
+                    "name": [token],
+                    "desc": token,
+                    "version": "1",
+                    "url": "https://example.test/app.zip",
+                    "sha256": "a" * 64,
+                    "homepage": "https://example.test/",
+                    "artifacts": artifacts,
+                    "url_specs": {},
+                }
+                with patch.dict(
+                    collect_app_info.cask_cache,
+                    {url: payload},
+                    clear=True,
+                ):
+                    info = collect_app_info.get_homebrew_app_info(
+                        url,
+                        needs_packaging=True,
+                    )
+                self.assertEqual(info[key], expected)
+                self.assertEqual(info["download_user_agent"], "default")
+
+        url = "https://formulae.brew.sh/api/cask/ddpm.json"
+        payload["name"] = ["DDPM"]
+        payload["artifacts"] = [{"pkg": ["DDPM_Installer.pkg"]}]
+        payload["url_specs"] = {"user_agent": ":browser", "headers": {"X": "secret"}}
+        with patch.dict(collect_app_info.cask_cache, {url: payload}, clear=True):
+            info = collect_app_info.get_homebrew_app_info(url, needs_packaging=True)
+        self.assertEqual(info["download_user_agent"], "browser")
+        self.assertNotIn("headers", info)
+
     def test_query_bearing_dmg_is_queued_for_repackaging(self):
         url = "https://formulae.brew.sh/api/cask/raycast.json"
         payload = {
@@ -1191,6 +1240,16 @@ class CatalogConsistencyTests(unittest.TestCase):
                     collect_app_info.INSTALLER_ONLY_DEPRECATION_REASON,
                 )
                 self.assertNotIn(Path(filename).stem, supported)
+
+    def test_mitmproxy_binary_tombstone_is_preserved(self):
+        app = json.loads(
+            (ROOT / "Apps/mitmproxy.json").read_text(encoding="utf-8")
+        )
+        supported = json.loads(
+            (ROOT / "supported_apps.json").read_text(encoding="utf-8")
+        )
+        self.assertTrue(app["deprecated"])
+        self.assertNotIn("mitmproxy", supported)
 
     def test_supported_catalog_matches_valid_apps(self):
         apps = {

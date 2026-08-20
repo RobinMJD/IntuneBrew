@@ -296,7 +296,7 @@ class WorkflowPackagingRegressionTests(unittest.TestCase):
             'elif [ "$app_type" = "pkg_in_dmg" ]', 1
         )[1].split("else\n              # Download app", 1)[0]
         self.assertIn(
-            'app_file=$(find_app_payload "${download_path}_mount" "$declared_app")',
+            'app_file=$(find_app_payload "${download_path}_mount" "$declared_app" "$source_app")',
             dmg_path,
         )
         self.assertIn(
@@ -341,6 +341,13 @@ class WorkflowPackagingRegressionTests(unittest.TestCase):
             result = self.run_payload_helper(root, "ELAN/Installer.pkg", "pkg")
             self.assertEqual(result.returncode, 0)
             self.assertTrue(result.stdout.strip().endswith("Installer.pkg"))
+
+    def test_rename_source_path_precedes_declared_path_and_rejects_ambiguity(self):
+        self.assertIn("find_source_payload()", self.process)
+        self.assertIn('find_source_payload "$root" "$source_expected"', self.process)
+        self.assertIn("assert len(matches)<=1", self.process)
+        self.assertIn("artifact_app_source", self.process)
+        self.assertIn("artifact_pkg_source", self.process)
 
     def test_declared_payload_allows_one_deterministic_wrapper(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -430,6 +437,32 @@ class WorkflowPackagingRegressionTests(unittest.TestCase):
         )
         self.assertNotIn("falling back to a full build", find_step)
 
+    def test_new_deprecation_tombstones_are_never_reverted(self):
+        revert = self.workflow.split(
+            "- name: Revert unselected package candidates", 1
+        )[1].split("- name: Finalize catalog readiness", 1)[0]
+        self.assertEqual(
+            revert.count(".deprecated // false"),
+            4,
+        )
+
+    def test_pkg_identity_excludes_nested_helpers_and_prefers_root(self):
+        helper = self.process.split("extract_bundle_id_from_pkg() {", 1)[1].split(
+            "require_bundle_id_match() {", 1
+        )[0]
+        self.assertIn('payload/Contents/Info.plist', helper)
+        for excluded in ("Frameworks", "Sparkle", "LoginItems", "XPCServices", "Helpers"):
+            self.assertIn(f'*/{excluded}/*', helper)
+        self.assertIn("PackageInfo", helper)
+        self.assertIn(
+            '[ -z "$plist" ] && [ -n "$source_app" ]',
+            helper,
+        )
+        self.assertIn(
+            '[ -z "$plist" ] && [ -n "$declared_app" ]',
+            helper,
+        )
+
     def test_package_batches_are_bounded_resumable_and_deterministic(self):
         self.assertIn("max_packages:", self.workflow)
         self.assertIn('default: "25"', self.workflow)
@@ -496,6 +529,10 @@ class WorkflowPackagingRegressionTests(unittest.TestCase):
         ):
             with self.subTest(message=message):
                 self.assertIn(message, self.process)
+        self.assertIn('download_user_agent=$(jq -r', self.process)
+        self.assertIn('download_user_agent:-default', self.process)
+        self.assertIn("Mozilla/5.0 (Macintosh;", self.process)
+        self.assertNotIn("url_specs", self.process)
         verifier = self.process.split("verify_source_file() {", 1)[1].split(
             "MAX_SOURCE_BYTES=", 1
         )[0]

@@ -22,11 +22,20 @@ ARTIFACT_KIND_OVERRIDES = {
     "visual-studio-code": ("archive", "zip"),
     "whatsapp": ("archive", "zip"),
 }
+ARTIFACT_SOURCE_OVERRIDES = {
+    "ecamm-live": {"app": "Ecamm*/Ecamm Live.app"},
+    "loupedeck": {"pkg": "LoupedeckInstaller.pkg"},
+    "rode-central": {"pkg": "RØDE Central*.pkg"},
+    "rode-connect": {"pkg": "RØDE Connect*.pkg"},
+}
 ARTIFACT_METADATA_KEYS = {
     "artifact_app",
     "artifact_pkg",
     "artifact_kind",
     "archive_format",
+    "artifact_app_source",
+    "artifact_pkg_source",
+    "download_user_agent",
     "source_version",
     "source_sha256",
     "source_sha256_provenance",
@@ -1997,6 +2006,15 @@ def get_homebrew_app_info(json_url, needs_packaging=False, is_pkg_in_dmg=False, 
         app_info["artifact_app"] = installable_artifacts["app"]
     if installable_artifacts["pkg"]:
         app_info["artifact_pkg"] = installable_artifacts["pkg"]
+    source_paths = ARTIFACT_SOURCE_OVERRIDES.get(cask_token, {})
+    if source_paths.get("app"):
+        app_info["artifact_app_source"] = source_paths["app"]
+    if source_paths.get("pkg"):
+        app_info["artifact_pkg_source"] = source_paths["pkg"]
+    user_agent = (data.get("url_specs") or {}).get("user_agent")
+    app_info["download_user_agent"] = (
+        "browser" if user_agent == ":browser" else "default"
+    )
 
     if needs_packaging:
         app_info["type"] = "app"
