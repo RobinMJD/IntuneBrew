@@ -451,15 +451,19 @@ class WorkflowPackagingRegressionTests(unittest.TestCase):
             "require_bundle_id_match() {", 1
         )[0]
         self.assertIn('payload/Contents/Info.plist', helper)
+        self.assertIn("select_package_identity.py", helper)
+        selector = (
+            ROOT / ".github/scripts/select_package_identity.py"
+        ).read_text(encoding="utf-8")
         for excluded in ("Frameworks", "Sparkle", "LoginItems", "XPCServices", "Helpers"):
-            self.assertIn(f'*/{excluded}/*', helper)
-        self.assertIn("PackageInfo", helper)
+            self.assertIn(f'"{excluded}"', selector)
+        self.assertIn("PackageInfo", selector)
         self.assertIn(
-            '[ -z "$plist" ] && [ -n "$source_app" ]',
+            '[ -z "$selected_id" ] && [ -n "$source_app" ]',
             helper,
         )
         self.assertIn(
-            '[ -z "$plist" ] && [ -n "$declared_app" ]',
+            '[ -z "$selected_id" ] && [ -n "$declared_app" ]',
             helper,
         )
 

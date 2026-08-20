@@ -312,9 +312,8 @@ jobs:
             local declared_app="${2:-}"
             local source_app="${3:-}"
             local expand_dir=""
-            local plist=""
-            local package_info=""
-            local package_id=""
+            local expected_id=""
+            local selected_id=""
             if [ -z "${app_temp_dir:-}" ] \
               || ! expand_dir=$(mktemp -d "$app_temp_dir/pkg-expand.XXXXXX" 2>/dev/null); then
               echo "Could not create a temporary directory to inspect $pkg_path, bundleId left unchanged" >&2
@@ -325,51 +324,23 @@ jobs:
             # drivers) legitimately yield nothing here.
             if pkgutil --expand-full "$pkg_path" "$expand_dir/payload" >/dev/null 2>&1 \
               && require_extracted_quota "$expand_dir"; then
+              expected_id=$(jq -r '.bundleId // empty' "$WORKSPACE_DIR/Apps/${app_name}.json")
               if [ -f "$expand_dir/payload/Contents/Info.plist" ]; then
-                plist="$expand_dir/payload/Contents/Info.plist"
+                selected_id=$(extract_bundle_id_from_plist "$expand_dir/payload/Contents/Info.plist")
               fi
-              if [ -z "$plist" ] && [ -n "$source_app" ]; then
+              if [ -z "$selected_id" ] && [ -n "$source_app" ]; then
                 primary_app=$(find_source_payload "$expand_dir/payload" "$source_app" app)
-                [ -z "$primary_app" ] || plist="$primary_app/Contents/Info.plist"
+                [ -z "$primary_app" ] || selected_id=$(extract_bundle_id_from_plist "$primary_app/Contents/Info.plist")
               fi
-              if [ -z "$plist" ] && [ -n "$declared_app" ]; then
+              if [ -z "$selected_id" ] && [ -n "$declared_app" ]; then
                 primary_app=$(find_declared_payload "$expand_dir/payload" "$declared_app" app)
-                [ -z "$primary_app" ] || plist="$primary_app/Contents/Info.plist"
+                [ -z "$primary_app" ] || selected_id=$(extract_bundle_id_from_plist "$primary_app/Contents/Info.plist")
               fi
-              if [ -z "$plist" ] && [ -z "$source_app" ] && [ -z "$declared_app" ]; then
-                package_info=$(find "$expand_dir/payload" -type f -name PackageInfo \
-                  -print 2>/dev/null | awk '{ print length, $0 }' | sort -n \
-                  | head -1 | cut -d" " -f2-)
-                if [ -n "$package_info" ]; then
-                  package_id=$(sed -n 's/.*identifier="\([^"]*\)".*/\1/p' \
-                    "$package_info" | head -1)
-                fi
+              if [ -z "$selected_id" ]; then
+                selected_id=$(python "$WORKSPACE_DIR/.github/scripts/select_package_identity.py" \
+                  --root "$expand_dir/payload" --expected "$expected_id" 2>/dev/null || true)
               fi
-              if [ -z "$plist" ] && [ -z "$package_id" ]; then
-                plist=$(find -P "$expand_dir/payload" -type f -path "*.app/Contents/Info.plist" \
-                  ! -path "*/Frameworks/*" ! -path "*/Sparkle/*" \
-                  ! -path "*/LoginItems/*" ! -path "*/XPCServices/*" \
-                  ! -path "*/Helpers/*" -print 2>/dev/null \
-                  | awk '{ print length, $0 }' | sort -n | head -1 | cut -d" " -f2-)
-              fi
-              if [ -n "$plist" ]; then
-                extract_bundle_id_from_plist "$plist"
-              else
-                if [ -z "$package_id" ]; then
-                  package_info=$(find "$expand_dir/payload" -type f -name PackageInfo \
-                    -print 2>/dev/null | awk '{ print length, $0 }' | sort -n \
-                    | head -1 | cut -d" " -f2-)
-                  if [ -n "$package_info" ]; then
-                    package_id=$(sed -n 's/.*identifier="\([^"]*\)".*/\1/p' \
-                      "$package_info" | head -1)
-                  fi
-                fi
-                if [ -n "$package_id" ]; then
-                  echo "$package_id"
-                else
-                  echo "No app or package identifier inside $pkg_path" >&2
-                fi
-              fi
+              [ -z "$selected_id" ] || echo "$selected_id"
             else
               echo "Could not expand $pkg_path, bundleId left unchanged" >&2
             fi
