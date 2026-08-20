@@ -12,5 +12,8 @@
   "category": "Developer Tools",
   "publisher": "Schlaubischlump",
   "previous_version": "0.2.2",
-  "homebrew_cask": "locationsimulator"
+  "homebrew_cask": "locationsimulator",
+  "source_version": "0.2.2",
+  "source_sha256": "867941213a23e23c22a3e868e0fa5fec443d1e597e912eca8a1e97f68e7dbb08",
+  "source_sha256_provenance": "homebrew"
 }

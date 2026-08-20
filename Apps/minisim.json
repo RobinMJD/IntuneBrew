@@ -12,5 +12,8 @@
   "category": "Developer Tools",
   "publisher": "MiniSim",
   "previous_version": "0.10.0",
-  "homebrew_cask": "minisim"
+  "homebrew_cask": "minisim",
+  "source_version": "0.10.0",
+  "source_sha256": "b6af5775f0afb1b3c12a438fc35c1f4207a87341fbd39e256e6d3fbfa5aca64d",
+  "source_sha256_provenance": "homebrew"
 }

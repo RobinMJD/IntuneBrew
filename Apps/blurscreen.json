@@ -22,5 +22,8 @@
   "sha": "2f1fc1a6796d1f3b10dcffeaf79804c75b8c53cba75282c2b11ceb101334d83e",
   "category": "Utilities",
   "publisher": "Unknown",
-  "previous_version": "1.0"
+  "previous_version": "1.0",
+  "source_version": "1.0",
+  "source_sha256": "no_check",
+  "packaging_pending": true
 }

@@ -12,5 +12,8 @@
   "category": "Productivity",
   "publisher": "Eltima Software",
   "previous_version": "8.10.575",
-  "homebrew_cask": "syncmate"
+  "homebrew_cask": "syncmate",
+  "source_version": "8.10.575",
+  "source_sha256": "40338edb0651afd9578333467ff847053e62b8b82017193dda7418abb1ef87a3",
+  "source_sha256_provenance": "homebrew"
 }

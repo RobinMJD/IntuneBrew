@@ -12,5 +12,8 @@
   "sha": "96bdc11c3ef8bc70c2df6c0bc078225a79fcc7ced560d7be28572d158fe34480",
   "category": "Design",
   "publisher": "ColorSnapper",
-  "homebrew_cask": "colorsnapper"
+  "homebrew_cask": "colorsnapper",
+  "source_version": "1.7.1",
+  "source_sha256": "82617dffd3ddeda0eeeb30e75deab5249b5c667affd02bb2995ad57ffb9d3145",
+  "source_sha256_provenance": "homebrew"
 }

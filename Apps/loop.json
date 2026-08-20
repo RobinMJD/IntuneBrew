@@ -12,5 +12,8 @@
   "previous_version": "1.4.2",
   "category": "Utilities",
   "publisher": "MrKai77",
-  "homebrew_cask": "loop"
+  "homebrew_cask": "loop",
+  "source_version": "1.4.2",
+  "source_sha256": "514e97faab3843cdfb8b1859b91333704639a1a2ce580e4f684d75efe007d386",
+  "source_sha256_provenance": "homebrew"
 }

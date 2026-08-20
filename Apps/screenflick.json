@@ -12,5 +12,8 @@
   "category": "Media",
   "publisher": "Araelium",
   "previous_version": "3.3.2",
-  "homebrew_cask": "screenflick"
+  "homebrew_cask": "screenflick",
+  "source_version": "3.3.2",
+  "source_sha256": "5902bd75e1bc8934ba44feca1801522ef943d70c02c56ce8cf61a30eab861619",
+  "source_sha256_provenance": "homebrew"
 }

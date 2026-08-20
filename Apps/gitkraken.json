@@ -22,5 +22,8 @@
   },
   "category": "Developer Tools",
   "publisher": "Axosoft, Inc.",
-  "homebrew_cask": "gitkraken"
+  "homebrew_cask": "gitkraken",
+  "source_version": "12.4.0",
+  "source_sha256": "c7aec6ea8a5469d8f7d541866f8357aa22c4a813580ea20d085663e8840f8b1b",
+  "source_sha256_provenance": "homebrew"
 }

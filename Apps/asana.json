@@ -22,5 +22,8 @@
   },
   "category": "Productivity",
   "publisher": "Asana, Inc.",
-  "homebrew_cask": "asana"
+  "homebrew_cask": "asana",
+  "source_version": "2.8.1",
+  "source_sha256": "ada5626bcf7e657da850a19f9c07bd616f1c51d464d4bf0e6eaa7886aa1c4afb",
+  "source_sha256_provenance": "homebrew"
 }

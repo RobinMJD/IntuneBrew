@@ -22,5 +22,8 @@
   },
   "category": "Utilities",
   "publisher": "Scooter Software, Inc.",
-  "homebrew_cask": "beyond-compare"
+  "homebrew_cask": "beyond-compare",
+  "source_version": "5.2.5.32528",
+  "source_sha256": "f913d05e082c785f35e9532facd93e5165c1d27547ef92c9e0c196cb85b3aba3",
+  "source_sha256_provenance": "homebrew"
 }

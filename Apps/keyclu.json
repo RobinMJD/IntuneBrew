@@ -12,5 +12,8 @@
   "previous_version": "0.32",
   "category": "Utilities",
   "publisher": "Sergii Tatarenkov",
-  "homebrew_cask": "keyclu"
+  "homebrew_cask": "keyclu",
+  "source_version": "0.32",
+  "source_sha256": "0f28de586ae1335621ed6ecff19255b1c320e4fe2ebb0ef2e96fc07ac0104d96",
+  "source_sha256_provenance": "homebrew"
 }

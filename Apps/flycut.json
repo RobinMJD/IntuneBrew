@@ -22,5 +22,8 @@
   },
   "category": "Developer Tools",
   "publisher": "TermiT",
-  "homebrew_cask": "flycut"
+  "homebrew_cask": "flycut",
+  "source_version": "1.9.6",
+  "source_sha256": "bc1a73b9cb4b4d316fa11572f43383f0f02fc7e6ba88bbed046cc1b074336862",
+  "source_sha256_provenance": "homebrew"
 }

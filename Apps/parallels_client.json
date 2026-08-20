@@ -12,5 +12,8 @@
   "sha": "a945233c19a8c27a86e815e312fea23da4400d2cbfd6dd84edf8a8c167e82392",
   "category": "Productivity",
   "publisher": "Parallels International GmbH",
-  "previous_version": "19.4.3"
+  "previous_version": "19.4.3",
+  "source_version": "19.4.3,25221",
+  "source_sha256": "c64146077b2c847170650d13f058289441a1e595990e9863c018c41cb4e92fe0",
+  "source_sha256_provenance": "homebrew"
 }

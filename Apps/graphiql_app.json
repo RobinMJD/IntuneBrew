@@ -11,5 +11,7 @@
   "sha": "cd8fe736de0d09acf03bc0ec0193375a99beebae08641592bfb4629997de44d3",
   "category": "Developer Tools",
   "publisher": "skevy",
-  "previous_version": "0.7.2"
+  "previous_version": "0.7.2",
+  "deprecated": true,
+  "deprecation_reason": "No maintained Homebrew cask or supported upstream release channel"
 }

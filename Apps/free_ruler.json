@@ -22,5 +22,8 @@
   },
   "category": "Utilities",
   "publisher": "Pascal",
-  "homebrew_cask": "free-ruler"
+  "homebrew_cask": "free-ruler",
+  "source_version": "2.0.19",
+  "source_sha256": "b261c6bb152fdef376844e88c3e2b32938077ca7cdd1ccc9d9f60b97d3294e0d",
+  "source_sha256_provenance": "homebrew"
 }

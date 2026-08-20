@@ -12,5 +12,8 @@
   "sha": "70209b2fb049a863e493312c18fe9be58b283a7cdbbb6d9124933f3b6c1f244a",
   "category": "Communication",
   "publisher": "Front, Inc.",
-  "homebrew_cask": "front"
+  "homebrew_cask": "front",
+  "source_version": "3.77.0",
+  "source_sha256": "e8fb367c9746626f08afe7a7d0f40fb458097d028281daa1b65d3ba29d2f6af8",
+  "source_sha256_provenance": "homebrew"
 }

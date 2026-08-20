@@ -31,6 +31,47 @@ class CaskArtifactValidationTests(unittest.TestCase):
             )
         with self.assertRaisesRegex(ValueError, "explicitly use --cask"):
             add_new_app.extract_casks_from_urls("brew install copilot")
+
+    def test_deprecated_disabled_and_opaque_sources_are_rejected(self):
+        for data, reason in (
+            (
+                {
+                    "deprecated": True,
+                    "url": "https://example.test/app.dmg",
+                    "artifacts": [{"app": ["App.app"]}],
+                },
+                "deprecated",
+            ),
+            (
+                {
+                    "disabled": True,
+                    "url": "https://example.test/app.dmg",
+                    "artifacts": [{"app": ["App.app"]}],
+                },
+                "disabled",
+            ),
+            (
+                {
+                    "token": "apipost",
+                    "url": "https://example.test/download",
+                    "artifacts": [{"app": ["App.app"]}],
+                },
+                "opaque",
+            ),
+        ):
+            with self.subTest(reason=reason):
+                self.assertIn(
+                    reason,
+                    add_new_app.unsupported_cask_reason(data).lower(),
+                )
+
+    def test_tested_opaque_override_is_admitted(self):
+        data = {
+            "token": "postman",
+            "url": "https://example.test/download",
+            "artifacts": [{"app": ["Postman.app"]}],
+        }
+        self.assertIsNone(add_new_app.unsupported_cask_reason(data))
     def test_codex_cli_is_rejected(self):
         codex = cask_data(
             "https://example.test/codex-package-aarch64-apple-darwin.tar.gz",

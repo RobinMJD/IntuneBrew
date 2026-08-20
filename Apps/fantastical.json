@@ -23,5 +23,8 @@
   },
   "category": "Productivity",
   "publisher": "Flexibits",
-  "homebrew_cask": "fantastical"
+  "homebrew_cask": "fantastical",
+  "source_version": "4.1.18",
+  "source_sha256": "a62c8ca6fe608d6c4c20a1faa1828256339e9f132be9ac8979d140179aff0a51",
+  "source_sha256_provenance": "homebrew"
 }

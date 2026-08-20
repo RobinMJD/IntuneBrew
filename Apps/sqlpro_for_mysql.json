@@ -12,5 +12,8 @@
   "previous_version": "2026.173",
   "category": "Developer Tools",
   "publisher": "Hankinsoft Development, Ltd.",
-  "homebrew_cask": "sqlpro-for-mysql"
+  "homebrew_cask": "sqlpro-for-mysql",
+  "source_version": "2026.173",
+  "source_sha256": "fdd7029f0fcfa49c289915e59ba4e4255f14af718249f2f85842fed8c3df179a",
+  "source_sha256_provenance": "homebrew"
 }

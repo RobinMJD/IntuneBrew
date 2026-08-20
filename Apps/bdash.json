@@ -12,5 +12,8 @@
   "category": "Developer Tools",
   "publisher": "bdash-app",
   "previous_version": "1.35.1",
-  "homebrew_cask": "bdash"
+  "homebrew_cask": "bdash",
+  "source_version": "1.35.1",
+  "source_sha256": "ba56bebc97f714a95ad5dfdcb52b49d55cfd08ebad4235211488632d1128d990",
+  "source_sha256_provenance": "homebrew"
 }

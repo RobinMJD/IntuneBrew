@@ -13,5 +13,8 @@
   "previous_version": "2026.2.1",
   "category": "Design",
   "publisher": "Bohemian Coding",
-  "homebrew_cask": "sketch"
+  "homebrew_cask": "sketch",
+  "source_version": "2026.2.1,231087",
+  "source_sha256": "97a0b99a69b562747c9b6c2bd6acc15815ff9297144204816344bece13cd4544",
+  "source_sha256_provenance": "homebrew"
 }

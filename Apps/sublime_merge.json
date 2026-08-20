@@ -12,5 +12,8 @@
   "previous_version": "2125",
   "category": "Developer Tools",
   "publisher": "Sublime HQ Pty Ltd",
-  "homebrew_cask": "sublime-merge"
+  "homebrew_cask": "sublime-merge",
+  "source_version": "2125",
+  "source_sha256": "f1d766577d73e50f847ce596b86247a9f552d63575d267f880d9455c3ddc5156",
+  "source_sha256_provenance": "homebrew"
 }

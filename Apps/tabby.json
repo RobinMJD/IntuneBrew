@@ -12,5 +12,8 @@
   "category": "Developer Tools",
   "publisher": "Eugeny",
   "previous_version": "1.0.235",
-  "homebrew_cask": "tabby"
+  "homebrew_cask": "tabby",
+  "source_version": "1.0.235",
+  "source_sha256": "1080a05d44c8acfe9301ec56c5ffa3ab0e472086d1ace8fe8a5e2cbf9f71c7d5",
+  "source_sha256_provenance": "homebrew"
 }

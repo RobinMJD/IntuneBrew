@@ -10,6 +10,8 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 SCRIPT_PATH = ROOT / ".github/scripts/catalog_state.py"
 WORKFLOW_PATH = ROOT / ".github/workflows/build-app-packages.yml"
+PUBLISH_WORKFLOW_PATH = ROOT / ".github/workflows/publish-catalog-state.yml"
+PROVENANCE_PATH = ROOT / ".github/scripts/publication_provenance.py"
 SPEC = importlib.util.spec_from_file_location("catalog_state", SCRIPT_PATH)
 catalog_state = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(catalog_state)
@@ -140,50 +142,44 @@ class CatalogWorkflowTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         cls.workflow = WORKFLOW_PATH.read_text(encoding="utf-8")
+        cls.publisher = PUBLISH_WORKFLOW_PATH.read_text(encoding="utf-8")
 
-    def test_marker_is_last_and_follows_publication_steps(self):
+    def test_build_emits_provenance_but_never_publishes_marker(self):
         process = self.workflow.index("- name: Process apps")
         commit = self.workflow.index("- name: Commit and push changes")
         report = self.workflow.index("- name: Report packaging failures")
-        marker = self.workflow.index("- name: Publish catalog state")
+        provenance = self.workflow.index("- name: Create publication provenance")
 
         self.assertLess(process, commit)
         self.assertLess(commit, report)
-        self.assertLess(report, marker)
-        self.assertNotIn("- name:", self.workflow[marker + 1 :])
+        self.assertLess(report, provenance)
+        self.assertNotIn("- name: Publish catalog state", self.workflow)
+        self.assertIn("catalog-publication-${{ github.run_id }}", self.workflow)
         self.assertNotIn("pending_requests.py resolve", self.workflow)
         self.assertNotIn("Commit resolved requests", self.workflow)
 
-    def test_marker_requires_proven_success_and_exact_catalog_commit(self):
-        marker = self.workflow.split("- name: Publish catalog state", 1)[1]
+    def test_publisher_requires_successful_main_build_and_artifact(self):
         self.assertIn(
-            "if: success() && steps.process-apps.outputs.packaging_succeeded == 'true'",
-            marker,
+            "github.event.workflow_run.conclusion == 'success'",
+            self.publisher,
         )
-        self.assertIn(
-            "PUBLISHED_CATALOG_COMMIT: "
-            "${{ steps.catalog-snapshot.outputs.catalog_commit }}",
-            marker,
-        )
-        self.assertIn('CATALOG_COMMIT="$local_head"', marker)
-        self.assertIn('marker_parent=$(git rev-parse HEAD^)', marker)
-        self.assertIn('if [ "$marker_parent" != "$local_head" ]; then', marker)
-        self.assertIn('if [ "$recorded_commit" != "$marker_parent" ]; then', marker)
+        self.assertIn("github.event.workflow_run.head_branch == 'main'", self.publisher)
+        self.assertIn("actions/download-artifact@v4", self.publisher)
+        self.assertIn("publication_provenance.py", self.publisher)
+        self.assertIn('if [ "$current" != "$catalog_commit" ]; then', self.publisher)
 
-    def test_marker_push_is_fail_closed_and_never_forced(self):
-        marker = self.workflow.split("- name: Publish catalog state", 1)[1]
-        self.assertIn('if [ "$local_head" != "$remote_head" ]; then', marker)
-        self.assertIn('if [ "$existing_run_id" -ge "$RUN_ID" ]; then', marker)
-        self.assertIn("git push origin HEAD:main", marker)
-        self.assertNotIn("git pull --rebase", self.workflow)
-        self.assertNotIn("git rebase", self.workflow)
-        self.assertNotIn("--force", self.workflow)
-        self.assertNotIn("git push -f", self.workflow)
+    def test_publisher_marker_parent_and_build_run_identity_are_exact(self):
+        self.assertIn('--run-id "$BUILD_RUN_ID"', self.publisher)
+        self.assertIn('--workflow-path ".github/workflows/build-app-packages.yml"', self.publisher)
+        self.assertIn('[ "$(git rev-parse HEAD^)" = "$CATALOG_COMMIT" ]', self.publisher)
+        self.assertIn("git push origin HEAD:main", self.publisher)
+        self.assertNotIn("--force", self.publisher)
 
     def test_marker_path_cannot_recurse_into_catalog_workflow(self):
         trigger = self.workflow.split("  schedule:", 1)[0]
         self.assertIn("'.github/scripts/collect_app_info.py'", trigger)
         self.assertNotIn(".github/catalog-state.json", trigger)
+        self.assertNotIn("publish-catalog-state.yml", trigger)
 
     def test_publication_rejects_non_main_dispatch_refs(self):
         collect_job = self.workflow.split("  collect:", 1)[1].split("  build:", 1)[0]
@@ -192,6 +188,49 @@ class CatalogWorkflowTests(unittest.TestCase):
         self.assertLess(guard, checkout)
         self.assertIn("if: github.ref != 'refs/heads/main'", collect_job)
         self.assertIn("exit 1", collect_job[guard:checkout])
+
+    def test_manual_retry_is_idempotent_for_an_existing_marker(self):
+        self.assertIn("workflow_dispatch:", self.publisher)
+        self.assertIn("Marker for build run $BUILD_RUN_ID is already published", self.publisher)
+        self.assertIn("already_published=true", self.publisher)
+
+
+class PublicationProvenanceTests(unittest.TestCase):
+    def load_module(self):
+        spec = importlib.util.spec_from_file_location(
+            "publication_provenance",
+            PROVENANCE_PATH,
+        )
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        return module
+
+    def test_exact_schema_and_build_identity_are_required(self):
+        module = self.load_module()
+        data = {
+            "catalogCommit": "a" * 40,
+            "repository": "RobinMJD/IntuneBrew",
+            "runId": 123,
+            "workflowName": "Build App Packages and Collect App Information",
+            "workflowPath": ".github/workflows/build-app-packages.yml",
+        }
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "catalog-publication.json"
+            path.write_text(json.dumps(data), encoding="utf-8")
+            loaded = module.load_and_validate(
+                path,
+                {
+                    "repository": data["repository"],
+                    "runId": data["runId"],
+                    "workflowName": data["workflowName"],
+                    "workflowPath": data["workflowPath"],
+                },
+            )
+            self.assertEqual(loaded["catalogCommit"], "a" * 40)
+            data["runId"] = 124
+            path.write_text(json.dumps(data), encoding="utf-8")
+            with self.assertRaisesRegex(ValueError, "runId"):
+                module.load_and_validate(path, {"runId": 123})
 
 
 if __name__ == "__main__":

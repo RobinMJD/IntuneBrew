@@ -12,5 +12,8 @@
   "previous_version": "9.2.1",
   "category": "Media",
   "publisher": "Dirk Krause",
-  "homebrew_cask": "neofinder"
+  "homebrew_cask": "neofinder",
+  "source_version": "9.2.1",
+  "source_sha256": "a59758e0189ffc6488af92d4ed50a30077cbc4cf804520eddf8b24a6eca4a4d7",
+  "source_sha256_provenance": "homebrew"
 }

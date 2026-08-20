@@ -23,5 +23,8 @@
   },
   "category": "Utilities",
   "publisher": "Binary Fruit",
-  "homebrew_cask": "drivedx"
+  "homebrew_cask": "drivedx",
+  "source_version": "1.12.1",
+  "source_sha256": "2011868774efd3a96405058985bb3fb8df2d6f06aead3f06d5dfde8fb80c745a",
+  "source_sha256_provenance": "homebrew"
 }

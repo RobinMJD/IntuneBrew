@@ -22,5 +22,7 @@
   },
   "category": "Design",
   "publisher": "Abstract, Inc.",
-  "homebrew_cask": "abstract"
+  "homebrew_cask": "abstract",
+  "deprecated": true,
+  "deprecation_reason": "Vendor download host is no longer resolvable"
 }

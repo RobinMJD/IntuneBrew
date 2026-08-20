@@ -12,5 +12,8 @@
   "previous_version": "1.10.0",
   "category": "Developer Tools",
   "publisher": "Fat Cat Software",
-  "homebrew_cask": "plistedit-pro"
+  "homebrew_cask": "plistedit-pro",
+  "source_version": "1.10.0",
+  "source_sha256": "0ad2f7a4066945b5a67db0667e946748cc4f33858f786554779c54f1a6608c4e",
+  "source_sha256_provenance": "homebrew"
 }

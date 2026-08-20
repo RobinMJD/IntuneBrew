@@ -12,5 +12,8 @@
   "sha": "5e76e5355a3aa5621aed38e1caf064b017b68aada2407cd675c902500bd3e703",
   "category": "Utilities",
   "publisher": "Riley Testut",
-  "homebrew_cask": "altserver"
+  "homebrew_cask": "altserver",
+  "source_version": "1.7.2",
+  "source_sha256": "e089ee6c9288e9097e3570839421226a4c467ce29817bbc5c84eb13f3c24b076",
+  "source_sha256_provenance": "homebrew"
 }

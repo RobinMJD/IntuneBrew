@@ -12,5 +12,8 @@
   "category": "Productivity",
   "publisher": "DEVONtechnologies",
   "previous_version": "3.11.11",
-  "homebrew_cask": "devonagent"
+  "homebrew_cask": "devonagent",
+  "source_version": "3.11.11",
+  "source_sha256": "470cb01ae5543fd60c846973437610a0c90c3ffd62999bdb9df560f51d5a5cde",
+  "source_sha256_provenance": "homebrew"
 }

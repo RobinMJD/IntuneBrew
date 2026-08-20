@@ -12,5 +12,8 @@
   "category": "Utilities",
   "publisher": "Actually Mentor",
   "previous_version": "1.4.0",
-  "homebrew_cask": "battery"
+  "homebrew_cask": "battery",
+  "source_version": "1.4.0",
+  "source_sha256": "4510a3c3fc772f57a1a7fa595604002458120b55b83364edb98b762d4e19ab14",
+  "source_sha256_provenance": "homebrew"
 }

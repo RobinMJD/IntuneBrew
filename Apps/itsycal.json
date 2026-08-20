@@ -12,5 +12,8 @@
   "previous_version": "0.15.12",
   "category": "Productivity",
   "publisher": "Mowglii",
-  "homebrew_cask": "itsycal"
+  "homebrew_cask": "itsycal",
+  "source_version": "0.15.12",
+  "source_sha256": "b03f8f546b035b5954ffc481e4cec3b9895a60a7378aaa36cdf544581ed057da",
+  "source_sha256_provenance": "homebrew"
 }

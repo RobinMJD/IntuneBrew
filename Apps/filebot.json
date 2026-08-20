@@ -12,5 +12,8 @@
   "category": "Media",
   "publisher": "FileBot",
   "previous_version": "5.2.3",
-  "homebrew_cask": "filebot"
+  "homebrew_cask": "filebot",
+  "source_version": "5.2.3",
+  "source_sha256": "1f590c7f70122c5c4614989571323dc7956e77ee9463bb91f3fba538a82846fb",
+  "source_sha256_provenance": "homebrew"
 }

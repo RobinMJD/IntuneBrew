@@ -12,5 +12,8 @@
   "previous_version": "8.1.4087.68",
   "category": "Browsers",
   "publisher": "Vivaldi Technologies",
-  "homebrew_cask": "vivaldi"
+  "homebrew_cask": "vivaldi",
+  "source_version": "8.1.4087.68",
+  "source_sha256": "0fbf068cc9affa5855806a31dde612d1a14433461952e10eee5fd81cae60343c",
+  "source_sha256_provenance": "homebrew"
 }

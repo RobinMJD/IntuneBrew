@@ -22,5 +22,8 @@
   },
   "category": "Productivity",
   "publisher": "Godspeed",
-  "homebrew_cask": "godspeed"
+  "homebrew_cask": "godspeed",
+  "source_version": "1.9.19",
+  "source_sha256": "61f56b65a1bf3819e96034044b3bf2faa3f2f980696564d6ece677a4512016fa",
+  "source_sha256_provenance": "homebrew"
 }

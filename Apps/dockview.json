@@ -12,5 +12,8 @@
   "category": "Utilities",
   "publisher": "Noteify",
   "previous_version": "1.7.5",
-  "homebrew_cask": "dockview"
+  "homebrew_cask": "dockview",
+  "source_version": "1.7.5",
+  "source_sha256": "no_check",
+  "packaging_pending": true
 }

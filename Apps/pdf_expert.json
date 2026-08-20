@@ -13,5 +13,8 @@
   "previous_version": "3.13",
   "category": "Productivity",
   "publisher": "Readdle Inc.",
-  "homebrew_cask": "pdf-expert"
+  "homebrew_cask": "pdf-expert",
+  "source_version": "3.13,1170",
+  "source_sha256": "253cf3d4441182707c4b0841fb698a6376de7f1a95998472eab33b28d19c78d8",
+  "source_sha256_provenance": "homebrew"
 }

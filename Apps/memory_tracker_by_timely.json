@@ -12,5 +12,8 @@
   "category": "Productivity",
   "publisher": "Memory",
   "previous_version": "2023.11",
-  "homebrew_cask": "memory"
+  "homebrew_cask": "memory",
+  "source_version": "2023.11",
+  "source_sha256": "no_check",
+  "packaging_pending": true
 }

@@ -23,5 +23,8 @@
   },
   "category": "Developer Tools",
   "publisher": "DevToys-app",
-  "homebrew_cask": "devtoys"
+  "homebrew_cask": "devtoys",
+  "source_version": "2.0.9.0",
+  "source_sha256": "49d1910e24cecd1709086e47fcf0ece09080f1b93056a3bd2c874de0a0b77a82",
+  "source_sha256_provenance": "homebrew"
 }

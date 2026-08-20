@@ -12,5 +12,8 @@
   "sha": "5c5fc1aff5ac9ec25089d7e5dfe46f308e15de940f5af03c0125729f092357c9",
   "category": "Utilities",
   "publisher": "Amazon Web Services, Inc.",
-  "homebrew_cask": "amazon-workspaces"
+  "homebrew_cask": "amazon-workspaces",
+  "source_version": "5.33.0.6168",
+  "source_sha256": "1c9c4d241b5a5c19d4ef3ec755e067abc8d5a5105b2c12b8643830281ca2264c",
+  "source_sha256_provenance": "homebrew"
 }

@@ -12,5 +12,8 @@
   "previous_version": "2026.87",
   "category": "Developer Tools",
   "publisher": "Hankin Software",
-  "homebrew_cask": "sqlpro-studio"
+  "homebrew_cask": "sqlpro-studio",
+  "source_version": "2026.87",
+  "source_sha256": "5d7fb3b82837228cbec1361387f4e20eff8553defa169c6eef6d092b71e565b8",
+  "source_sha256_provenance": "homebrew"
 }

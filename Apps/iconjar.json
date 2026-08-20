@@ -12,5 +12,8 @@
   "sha": "1c76b2e4887af40b8798881e94af8172e2a28227d6241e53dd8acc788a40edfb",
   "category": "Design",
   "publisher": "IconJar",
-  "homebrew_cask": "iconjar"
+  "homebrew_cask": "iconjar",
+  "source_version": "2.11.4,50604",
+  "source_sha256": "ee4b02ded14fb84e0d75ac7314f5336401f12f924d1b67410d7a541dc328d8df",
+  "source_sha256_provenance": "homebrew"
 }

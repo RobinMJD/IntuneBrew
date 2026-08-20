@@ -12,5 +12,8 @@
   "category": "Productivity",
   "publisher": "Sunsama, Inc.",
   "previous_version": "3.4.11",
-  "homebrew_cask": "sunsama"
+  "homebrew_cask": "sunsama",
+  "source_version": "3.4.11,260714l3e0cmg9r",
+  "source_sha256": "9fc1b6cd27ece812f1d9315dd6e7272222b3730764cac47941deba126b92feb2",
+  "source_sha256_provenance": "homebrew"
 }

@@ -12,5 +12,8 @@
   "sha": "8da4d77e6343b61338f8bdb20e39a613ef21a36da02a03aadda9f9af212843b9",
   "category": "Utilities",
   "publisher": "Splashtop Inc.",
-  "previous_version": "3.8.4.2"
+  "previous_version": "3.8.4.2",
+  "source_version": "3.8.4.2",
+  "source_sha256": "93fca9b9f3c03bae0446b6d814a7ed0e8c0e244d71aa68c19efdc364e71b5076",
+  "source_sha256_provenance": "homebrew"
 }

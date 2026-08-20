@@ -13,5 +13,8 @@
   "previous_version": "12.9",
   "category": "Communication",
   "publisher": "Telegram Messenger LLP",
-  "homebrew_cask": "telegram"
+  "homebrew_cask": "telegram",
+  "source_version": "12.9,282555",
+  "source_sha256": "4407eac056c74363059418cef3be024f3f2f8135bb85b12ee511b21c92269f47",
+  "source_sha256_provenance": "homebrew"
 }

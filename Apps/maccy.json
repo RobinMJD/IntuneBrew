@@ -13,5 +13,8 @@
   "previous_version": "2.7.1",
   "category": "Utilities",
   "publisher": "Maccy",
-  "homebrew_cask": "maccy"
+  "homebrew_cask": "maccy",
+  "source_version": "2.7.1",
+  "source_sha256": "f388aee34de09a0c7531631303785d9938bef9a92130e21ce1049c8f56aad077",
+  "source_sha256_provenance": "homebrew"
 }

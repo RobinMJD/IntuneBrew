@@ -12,5 +12,8 @@
   "previous_version": "1.57.0",
   "category": "Productivity",
   "publisher": "Superlist",
-  "homebrew_cask": "superlist"
+  "homebrew_cask": "superlist",
+  "source_version": "1.57.0",
+  "source_sha256": "441ab74c2eb9b885243a8884c40d5356ea74f8d9e58e1611daea22885b2ba3d4",
+  "source_sha256_provenance": "homebrew"
 }

@@ -22,5 +22,8 @@
   },
   "category": "Developer Tools",
   "publisher": "Inside GUI",
-  "homebrew_cask": "asset-catalog-tinkerer"
+  "homebrew_cask": "asset-catalog-tinkerer",
+  "source_version": "2.9",
+  "source_sha256": "ab18ece5d597960f9002c84cc800b61b2b22f4f61a63d6695dac378340ded5c0",
+  "source_sha256_provenance": "homebrew"
 }

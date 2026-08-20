@@ -23,5 +23,8 @@
   },
   "category": "Productivity",
   "publisher": "Anthropic, Inc.",
-  "homebrew_cask": "claude"
+  "homebrew_cask": "claude",
+  "source_version": "1.32885.1,a757f53392ab406812eac6d069efb087b541c07c",
+  "source_sha256": "e88a998ebafc6c9b71edb46a81f8b334e469dcfd8b143f0b3321910220904ae2",
+  "source_sha256_provenance": "homebrew"
 }

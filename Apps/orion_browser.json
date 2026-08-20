@@ -12,5 +12,8 @@
   "sha": "df518a2dac0dc33a5083367259926b40e45f4c223b6f5b70cecd4cc72c9054e4",
   "category": "Browsers",
   "publisher": "Kagi, Inc.",
-  "homebrew_cask": "orion"
+  "homebrew_cask": "orion",
+  "source_version": "1.1.2,151",
+  "source_sha256": "77a55ae66c0dfae9406856e8e1d20a10dcd06a699175f9059ea395db398f8100",
+  "source_sha256_provenance": "homebrew"
 }

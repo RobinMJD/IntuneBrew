@@ -12,5 +12,8 @@
   "category": "Utilities",
   "publisher": "KeepingYouAwake",
   "previous_version": "1.6.8",
-  "homebrew_cask": "keepingyouawake"
+  "homebrew_cask": "keepingyouawake",
+  "source_version": "1.6.8",
+  "source_sha256": "8001a149b4490c008fdac19898bce9902d516c4aa6412a7eb0f9a37443b15c6b",
+  "source_sha256_provenance": "homebrew"
 }

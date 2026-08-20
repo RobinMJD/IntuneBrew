@@ -12,5 +12,8 @@
   "previous_version": "5.11.6",
   "category": "Utilities",
   "publisher": "Panic, Inc.",
-  "homebrew_cask": "transmit"
+  "homebrew_cask": "transmit",
+  "source_version": "5.11.6",
+  "source_sha256": "6761097e3ec7141058f0fa67815ff2244e2ca68f9fcdce06edeaf04279a10208",
+  "source_sha256_provenance": "homebrew"
 }

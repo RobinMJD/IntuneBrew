@@ -13,5 +13,8 @@
   "previous_version": "1.134.0",
   "category": "Developer Tools",
   "publisher": "Microsoft Corporation",
-  "homebrew_cask": "visual-studio-code"
+  "homebrew_cask": "visual-studio-code",
+  "source_version": "1.134.0",
+  "source_sha256": "6df181646588f0132339d19f5bdfb20bd0d6db05e5801061f12e0dc93c85fa70",
+  "source_sha256_provenance": "homebrew"
 }

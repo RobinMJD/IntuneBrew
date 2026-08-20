@@ -12,5 +12,8 @@
   "category": "Utilities",
   "publisher": "The Stellarium Project",
   "previous_version": "26.2",
-  "homebrew_cask": "stellarium"
+  "homebrew_cask": "stellarium",
+  "source_version": "26.2",
+  "source_sha256": "960cdf1526a2989d213bc2c75f4b5747fd77f5a580345286a4913825ad192978",
+  "source_sha256_provenance": "homebrew"
 }

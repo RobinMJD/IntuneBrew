@@ -12,5 +12,8 @@
   "previous_version": "8.1.1",
   "sha": "b6baf32a5119914dfbba8f26733d6ce0c58f0005b11f035c32768d9c5b43e255",
   "category": "Developer Tools",
-  "publisher": "Kapeli"
+  "publisher": "Kapeli",
+  "source_version": "8.1.1",
+  "source_sha256": "bf66b0fa12fa8b800e5233c06aa41373f6444d3c8cf9635aca1eb6a528a01513",
+  "source_sha256_provenance": "homebrew"
 }

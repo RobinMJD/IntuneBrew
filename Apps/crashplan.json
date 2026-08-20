@@ -12,5 +12,8 @@
   "sha": "1b1df29a8bb34c841e400fb940c182e2ab68cf74907cb1de6c38a14b7c1f7c03",
   "category": "Utilities",
   "publisher": "Code42 Software, Inc.",
-  "previous_version": "12.0.0"
+  "previous_version": "12.0.0",
+  "source_version": "12.0.0,735",
+  "source_sha256": "2fe4dfb428c6342a7e9e4c0ad73429d5ca45149e8b260fbb398285bd16c77152",
+  "source_sha256_provenance": "homebrew"
 }

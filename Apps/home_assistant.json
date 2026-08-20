@@ -12,5 +12,8 @@
   "previous_version": "2026.7.3",
   "category": "Utilities",
   "publisher": "Nabu Casa, Inc.",
-  "homebrew_cask": "home-assistant"
+  "homebrew_cask": "home-assistant",
+  "source_version": "2026.7.3,2026.2546",
+  "source_sha256": "b5f46418a6634f24d9ff4c62e47503aa30741eb9d2bf47de6a131fe4db91d9be",
+  "source_sha256_provenance": "homebrew"
 }

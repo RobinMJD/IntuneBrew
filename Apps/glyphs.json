@@ -12,5 +12,8 @@
   "sha": "f4c8231b4489b2c6edd88bcdff8a29765e0426166787f1af4203ec552eed8f7b",
   "category": "Design",
   "publisher": "Glyphs App",
-  "homebrew_cask": "glyphs"
+  "homebrew_cask": "glyphs",
+  "source_version": "3.5,3531",
+  "source_sha256": "1f8b0de72f1d6c10c5ab93994fcf01db148b2c896fff11e80b379abb77b42c66",
+  "source_sha256_provenance": "homebrew"
 }

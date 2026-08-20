@@ -22,5 +22,8 @@
   },
   "category": "Utilities",
   "publisher": "Rogue Amoeba",
-  "homebrew_cask": "airfoil"
+  "homebrew_cask": "airfoil",
+  "source_version": "5.12.7",
+  "source_sha256": "no_check",
+  "packaging_pending": true
 }

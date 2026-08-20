@@ -12,5 +12,8 @@
   "category": "Utilities",
   "publisher": "stonerl",
   "previous_version": "1.2.0",
-  "homebrew_cask": "thaw"
+  "homebrew_cask": "thaw",
+  "source_version": "1.2.0",
+  "source_sha256": "d67f4d31ef9fa057849a98540b810cfa42e0bc66019d3605abd08e45c69aa06f",
+  "source_sha256_provenance": "homebrew"
 }

@@ -12,5 +12,8 @@
   "previous_version": "5.6.3",
   "category": "Media",
   "publisher": "Figure 53, LLC",
-  "homebrew_cask": "qlab"
+  "homebrew_cask": "qlab",
+  "source_version": "5.6.3",
+  "source_sha256": "fa655221b20f5add503faedfacd1d8d3b37a24f0ac7b05736c3e61e905300dea",
+  "source_sha256_provenance": "homebrew"
 }

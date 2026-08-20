@@ -12,5 +12,8 @@
   "category": "Media",
   "publisher": "Rogue Amoeba",
   "previous_version": "2.1.5",
-  "homebrew_cask": "farrago"
+  "homebrew_cask": "farrago",
+  "source_version": "2.1.5",
+  "source_sha256": "no_check",
+  "packaging_pending": true
 }

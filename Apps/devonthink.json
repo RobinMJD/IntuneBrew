@@ -12,5 +12,8 @@
   "sha": "9157298158cf57f6db331e68061b74c82084e7c3b753b16b9d47bef745aa701a",
   "category": "Productivity",
   "publisher": "DEVONtechnologies",
-  "homebrew_cask": "devonthink"
+  "homebrew_cask": "devonthink",
+  "source_version": "4.3.2",
+  "source_sha256": "8496de08384066bd4da57c8b21f705f2b033d2aab9c40c827ecd4583b9cecaf3",
+  "source_sha256_provenance": "homebrew"
 }

@@ -12,5 +12,8 @@
   "sha": "227ca7aecb287cfdd7575e60857b89b7c018e2f842a589597ec433c51f81243d",
   "category": "Utilities",
   "publisher": "Signify Netherlands B.V.",
-  "previous_version": "1.13.1.83"
+  "previous_version": "1.13.1.83",
+  "source_version": "1.13.1.83,367fa136-d05e-4de6-8f9b-318fed481842,83",
+  "source_sha256": "520d2a6895ae0fee73718a9a6a1be356afe346daa1ae90783750bff3cb12d354",
+  "source_sha256_provenance": "homebrew"
 }

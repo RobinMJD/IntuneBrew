@@ -12,5 +12,8 @@
   "previous_version": "4.2.0",
   "category": "Design",
   "publisher": "Nucleo",
-  "homebrew_cask": "nucleo"
+  "homebrew_cask": "nucleo",
+  "source_version": "4.2.0",
+  "source_sha256": "47bb642f3d0491326ae71096be3a5f97f5c3c997bdd2017669a1109bd90c10fd",
+  "source_sha256_provenance": "homebrew"
 }

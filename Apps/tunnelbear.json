@@ -12,5 +12,8 @@
   "sha": "36bd39755c485261cdb371f26ea95d1590755eef1749d1a82d60170ad46a813d",
   "category": "Security",
   "publisher": "TunnelBear, Inc.",
-  "homebrew_cask": "tunnelbear"
+  "homebrew_cask": "tunnelbear",
+  "source_version": "5.10.0",
+  "source_sha256": "f1a4ff16be2945bd766d3c796a6da8fb55319a086437a53fc5bb3e0d3dd66044",
+  "source_sha256_provenance": "homebrew"
 }

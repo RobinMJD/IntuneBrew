@@ -12,5 +12,8 @@
   "category": "Developer Tools",
   "publisher": "Panic",
   "previous_version": "4.5.5",
-  "homebrew_cask": "rapidapi"
+  "homebrew_cask": "rapidapi",
+  "source_version": "4.5.5",
+  "source_sha256": "d5447b2e3ff87dd870608be55a3b28f2d1833bed2c1fc5e48b2b173768baffbf",
+  "source_sha256_provenance": "homebrew"
 }

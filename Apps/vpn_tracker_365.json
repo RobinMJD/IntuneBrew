@@ -12,5 +12,8 @@
   "category": "Security",
   "publisher": "iphion GmbH",
   "previous_version": "26.7",
-  "homebrew_cask": "vpn-tracker-365"
+  "homebrew_cask": "vpn-tracker-365",
+  "source_version": "26.7,23",
+  "source_sha256": "97281d2a34d96bf56c61f7dbe3beb9e84152d43c3cdaeaa84333bd405a3613d7",
+  "source_sha256_provenance": "homebrew"
 }

@@ -12,5 +12,8 @@
   "previous_version": "5.4.12",
   "category": "Media",
   "publisher": "Splice, Inc.",
-  "homebrew_cask": "splice"
+  "homebrew_cask": "splice",
+  "source_version": "5.4.12",
+  "source_sha256": "913e4f4b7d65bb3ee1393d9751b1f339750ca575e6c368b170a959902ceace86",
+  "source_sha256_provenance": "homebrew"
 }

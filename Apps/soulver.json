@@ -12,5 +12,8 @@
   "category": "Productivity",
   "publisher": "Acqualia Pty Ltd",
   "previous_version": "3.16.3",
-  "homebrew_cask": "soulver"
+  "homebrew_cask": "soulver",
+  "source_version": "3.16.3,541",
+  "source_sha256": "5412bb0f5aecf456b2c767ae9ce19e0a34ccaa9c3c0c1d9fe217749eef799d9c",
+  "source_sha256_provenance": "homebrew"
 }

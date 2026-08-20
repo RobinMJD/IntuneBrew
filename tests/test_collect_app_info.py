@@ -428,7 +428,7 @@ class CollectAppInfoTests(unittest.TestCase):
             (
                 {"bundleId": "com.figma.Desktop"},
                 {"bundleId": "com.figma.agent", "bundleId_source": "heuristic"},
-                ("com.figma.Desktop", "stored"),
+                ("com.figma.Desktop", "legacy"),
             ),
             (
                 {"bundleId": "com.figma.Desktop"},
@@ -463,7 +463,7 @@ class CollectAppInfoTests(unittest.TestCase):
         collect_app_info.sync_artifact_metadata(existing, fresh)
         collect_app_info.merge_fresh_bundle_id(existing, fresh)
         self.assertEqual(existing["bundleId"], "com.figma.Desktop")
-        self.assertEqual(existing["bundleId_source"], "stored")
+        self.assertEqual(existing["bundleId_source"], "legacy")
 
     def test_wildcard_bundle_ids_are_never_concrete(self):
         self.assertFalse(collect_app_info.is_concrete_bundle_id("com.example.*"))
@@ -1045,6 +1045,38 @@ class CalculateFileHashTests(unittest.TestCase):
 
 
 class CatalogConsistencyTests(unittest.TestCase):
+    def test_unowned_catalog_entries_have_deterministic_disposition(self):
+        configured = (
+            collect_app_info.app_urls
+            + collect_app_info.homebrew_cask_urls
+            + collect_app_info.pkg_in_pkg_urls
+            + collect_app_info.pkg_urls
+            + collect_app_info.pkg_in_dmg_urls
+        )
+        self.assertIn(
+            "https://formulae.brew.sh/api/cask/linear.json",
+            configured,
+        )
+        self.assertIn(
+            "https://formulae.brew.sh/api/cask/rhino-app.json",
+            configured,
+        )
+        self.assertNotIn(
+            "https://formulae.brew.sh/api/cask/abstract.json",
+            configured,
+        )
+        self.assertNotIn(
+            "https://formulae.brew.sh/api/cask/ubar.json",
+            configured,
+        )
+        for filename in ("graphiql_app.json", "abstract.json", "ubar.json"):
+            with self.subTest(filename=filename):
+                app = json.loads(
+                    (ROOT / "Apps" / filename).read_text(encoding="utf-8")
+                )
+                self.assertTrue(app["deprecated"])
+                self.assertTrue(app["deprecation_reason"])
+
     def test_formula_api_urls_are_not_configured_as_apps(self):
         configured = (
             collect_app_info.app_urls
@@ -1140,7 +1172,7 @@ class CatalogConsistencyTests(unittest.TestCase):
                 )
                 self.assertNotIn(Path(filename).stem, supported)
 
-    def test_supported_catalog_matches_non_deprecated_apps(self):
+    def test_supported_catalog_matches_valid_apps(self):
         apps = {
             path.stem: json.loads(path.read_text(encoding="utf-8"))
             for path in (ROOT / "Apps").glob("*.json")
@@ -1155,7 +1187,9 @@ class CatalogConsistencyTests(unittest.TestCase):
         generator = importlib.util.module_from_spec(generator_spec)
         generator_spec.loader.exec_module(generator)
         expected = {
-            name for name, app_data in apps.items() if not app_data.get("deprecated")
+            name
+            for name, app_data in apps.items()
+            if generator.is_publishable(app_data)
         }
 
         self.assertEqual(set(supported), expected)

@@ -23,5 +23,8 @@
   },
   "category": "Utilities",
   "publisher": "f.lux Software LLC",
-  "homebrew_cask": "flux-app"
+  "homebrew_cask": "flux-app",
+  "source_version": "42.2",
+  "source_sha256": "c937e24209f2ee99ad4586d7a19948bb1bdfca725b62e6bd061668be1f182765",
+  "source_sha256_provenance": "homebrew"
 }

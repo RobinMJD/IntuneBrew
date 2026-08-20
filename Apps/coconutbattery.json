@@ -12,5 +12,8 @@
   "sha": "0467a363ec391090502b020f0e3f743e7ce0ba5b1d47a96185bb5f97f30bf265",
   "category": "Utilities",
   "publisher": "coconut-flavour",
-  "homebrew_cask": "coconutbattery"
+  "homebrew_cask": "coconutbattery",
+  "source_version": "4.3.3,218",
+  "source_sha256": "d2aea31aaf95a1a178743c41b40c5c1b93d3d4106576aa644e8918a54fde130e",
+  "source_sha256_provenance": "homebrew"
 }

@@ -12,5 +12,8 @@
   "sha": "3cf57d70d5d254b9a06ec071497f8b41551c9f9b3c6cc62ab66fdb6b6f652bc1",
   "category": "Media",
   "publisher": "Swinsian",
-  "homebrew_cask": "swinsian"
+  "homebrew_cask": "swinsian",
+  "source_version": "3.0.8",
+  "source_sha256": "05739cc1eeeae2a5a7eb6dd0eaaad7cba484c051e5c2a28f157a78f3f7670ad7",
+  "source_sha256_provenance": "homebrew"
 }

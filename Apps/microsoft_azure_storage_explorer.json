@@ -13,5 +13,8 @@
   "previous_version": "1.45.0",
   "category": "Developer Tools",
   "publisher": "Microsoft Corporation",
-  "homebrew_cask": "microsoft-azure-storage-explorer"
+  "homebrew_cask": "microsoft-azure-storage-explorer",
+  "source_version": "1.45.0",
+  "source_sha256": "5750a3d17014c3185c433dc1f8fbddbd4d486758ea2ecc144c66e50b58199b22",
+  "source_sha256_provenance": "homebrew"
 }

@@ -12,5 +12,8 @@
   "sha": "880767cc7d1e79460f3f46d885a36c3743974ce9312c4df326b2ffd4f95ae773",
   "category": "Security",
   "publisher": "Objective-See LLC",
-  "homebrew_cask": "knockknock"
+  "homebrew_cask": "knockknock",
+  "source_version": "4.0.3",
+  "source_sha256": "1e1371ff6eb62e0866266a0744e90aa3bdc6b22cca0599afbd330ddf52663c69",
+  "source_sha256_provenance": "homebrew"
 }

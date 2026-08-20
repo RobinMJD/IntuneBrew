@@ -12,5 +12,8 @@
   "category": "Media",
   "publisher": "MaddTheSane",
   "previous_version": "1.9.9",
-  "homebrew_cask": "simple-comic"
+  "homebrew_cask": "simple-comic",
+  "source_version": "1.9.9",
+  "source_sha256": "34fa1777c0643d145b8e8ba90b6c6eeb096b21c3beb34728c9df97dad9a1f1ac",
+  "source_sha256_provenance": "homebrew"
 }

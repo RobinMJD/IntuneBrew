@@ -12,5 +12,8 @@
   "category": "Developer Tools",
   "publisher": "Ji4n1ng",
   "previous_version": "2.3.9",
-  "homebrew_cask": "openinterminal"
+  "homebrew_cask": "openinterminal",
+  "source_version": "2.3.9",
+  "source_sha256": "14df8720783492fb430237e221604ac332f1025b1d51019e230b796daa387765",
+  "source_sha256_provenance": "homebrew"
 }

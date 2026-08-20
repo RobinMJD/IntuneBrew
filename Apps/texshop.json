@@ -12,5 +12,8 @@
   "category": "Productivity",
   "publisher": "The TeXShop Team",
   "previous_version": "5.57",
-  "homebrew_cask": "texshop"
+  "homebrew_cask": "texshop",
+  "source_version": "5.57",
+  "source_sha256": "08aa26a5dfacfa67bacedbc73d57fe07b64dcfe49e9fab34a3be1dc5372d20d4",
+  "source_sha256_provenance": "homebrew"
 }

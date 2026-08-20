@@ -12,5 +12,8 @@
   "category": "Media",
   "publisher": "Grids",
   "previous_version": "8.5.8",
-  "homebrew_cask": "grids"
+  "homebrew_cask": "grids",
+  "source_version": "8.5.8",
+  "source_sha256": "61522452b57cfe5cfd023b4c01cdd5d3a8a491535fc9a15ea2940fe974c468c9",
+  "source_sha256_provenance": "homebrew"
 }

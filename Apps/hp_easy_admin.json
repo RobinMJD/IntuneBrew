@@ -13,5 +13,8 @@
   "previous_version": "2.16.0",
   "category": "Utilities",
   "publisher": "HP Inc.",
-  "homebrew_cask": "hp-easy-admin"
+  "homebrew_cask": "hp-easy-admin",
+  "source_version": "2.16.0,251010",
+  "source_sha256": "no_check",
+  "packaging_pending": true
 }

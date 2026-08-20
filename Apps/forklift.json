@@ -12,5 +12,8 @@
   "sha": "438870ab85eef6f7720358583c9cea589140ad3b93a03376e510ebe4f3856977",
   "category": "Utilities",
   "publisher": "BinaryNights",
-  "homebrew_cask": "forklift"
+  "homebrew_cask": "forklift",
+  "source_version": "4.7.4",
+  "source_sha256": "197d4e2f76df9cdf5ae044c275721acbeb177371d497b56937cd6a7f1bc5dab5",
+  "source_sha256_provenance": "homebrew"
 }

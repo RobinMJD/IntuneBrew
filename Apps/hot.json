@@ -12,5 +12,8 @@
   "category": "Utilities",
   "publisher": "macmade",
   "previous_version": "1.9.4",
-  "homebrew_cask": "hot"
+  "homebrew_cask": "hot",
+  "source_version": "1.9.4",
+  "source_sha256": "e4f6ccf7606673ee611870bfb1d4cc8be86a508058db8f9bb5cf41e997ed61ca",
+  "source_sha256_provenance": "homebrew"
 }

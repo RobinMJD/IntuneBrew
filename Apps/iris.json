@@ -12,5 +12,8 @@
   "category": "Utilities",
   "publisher": "IRIS Technologies Ltd",
   "previous_version": "1.2.2",
-  "homebrew_cask": "iris"
+  "homebrew_cask": "iris",
+  "source_version": "1.2.2",
+  "source_sha256": "ce7dd246b849b1c7af0436e8bc4d3fb0cc51e4563db361b480769ed6788c65ae",
+  "source_sha256_provenance": "homebrew"
 }

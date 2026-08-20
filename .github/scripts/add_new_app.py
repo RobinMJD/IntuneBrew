@@ -16,6 +16,7 @@ import sys
 import json
 import requests
 from difflib import SequenceMatcher
+from urllib.parse import unquote, urlparse
 
 # Cache for the Homebrew cask list
 _cask_list_cache = None
@@ -35,6 +36,29 @@ DEPLOYABLE_ARTIFACT_TYPES = frozenset({
     'app',
     'pkg',
 })
+OPAQUE_CASK_OVERRIDES = frozenset({
+    "expandrive",
+    "postman",
+    "raycast",
+    "tenable-nessus-agent",
+    "visual-studio-code",
+    "whatsapp",
+})
+UNSUPPORTED_CASK_TOKENS = {
+    "abstract": "Vendor download host is no longer resolvable",
+    "ubar": "Vendor download host is no longer resolvable",
+}
+
+
+def deterministic_source_kind(homebrew_data):
+    parsed = urlparse(homebrew_data.get("url", ""))
+    text = f"{unquote(parsed.path)}?{unquote(parsed.query)}".lower()
+    if any(ext in text for ext in (
+        ".pkg", ".dmg", ".dmg.gz", ".zip", ".tgz",
+        ".tar.gz", ".tar.xz", ".tar.bz2", ".tbz",
+    )):
+        return True
+    return homebrew_data.get("token") in OPAQUE_CASK_OVERRIDES
 
 
 def artifact_types(homebrew_data):
@@ -49,6 +73,13 @@ def artifact_types(homebrew_data):
 
 def unsupported_cask_reason(homebrew_data):
     """Explain why a cask has no directly deployable app/package payload."""
+    token = homebrew_data.get("token")
+    if token in UNSUPPORTED_CASK_TOKENS:
+        return UNSUPPORTED_CASK_TOKENS[token]
+    if homebrew_data.get("disabled"):
+        return "Homebrew cask is disabled"
+    if homebrew_data.get("deprecated"):
+        return "Homebrew cask is deprecated"
     types = artifact_types(homebrew_data)
     if 'binary' in types and types.isdisjoint(DEPLOYABLE_ARTIFACT_TYPES):
         return (
@@ -62,6 +93,8 @@ def unsupported_cask_reason(homebrew_data):
         )
     if types.isdisjoint(DEPLOYABLE_ARTIFACT_TYPES):
         return "Homebrew cask has no deployable app or package artifact"
+    if not deterministic_source_kind(homebrew_data):
+        return "Homebrew cask uses an opaque source URL without a tested routing override"
     return None
 
 

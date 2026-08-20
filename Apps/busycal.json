@@ -22,5 +22,8 @@
   },
   "category": "Productivity",
   "publisher": "BusyMac",
-  "homebrew_cask": "busycal"
+  "homebrew_cask": "busycal",
+  "source_version": "2026.3.1,2026-08-05-22-20",
+  "source_sha256": "90d047658b64a38481c62839d7cfb9fe3ace69041e0567d036898eb452b02328",
+  "source_sha256_provenance": "homebrew"
 }

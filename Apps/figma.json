@@ -23,5 +23,8 @@
   },
   "category": "Design",
   "publisher": "Figma, Inc.",
-  "homebrew_cask": "figma"
+  "homebrew_cask": "figma",
+  "source_version": "126.7.10",
+  "source_sha256": "8533538d83d055c0cd1961260105606012a9dac8e2d4eb104bb631f9e65c728f",
+  "source_sha256_provenance": "homebrew"
 }

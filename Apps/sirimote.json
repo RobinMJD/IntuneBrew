@@ -12,5 +12,8 @@
   "category": "Utilities",
   "publisher": "Eternal Storms Software",
   "previous_version": "1.4.6",
-  "homebrew_cask": "sirimote"
+  "homebrew_cask": "sirimote",
+  "source_version": "1.4.6",
+  "source_sha256": "no_check",
+  "packaging_pending": true
 }

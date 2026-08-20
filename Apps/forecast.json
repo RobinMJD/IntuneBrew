@@ -22,5 +22,8 @@
   },
   "category": "Media",
   "publisher": "Overcast, LLC",
-  "homebrew_cask": "forecast"
+  "homebrew_cask": "forecast",
+  "source_version": "0.9.6,139",
+  "source_sha256": "5323c8afcc5114ebeb3d97c02e7f367e2c7e7a776a4e8b57809ef8c305272501",
+  "source_sha256_provenance": "homebrew"
 }

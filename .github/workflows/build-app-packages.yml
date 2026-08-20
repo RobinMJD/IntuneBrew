@@ -2,6 +2,11 @@ name: Build App Packages and Collect App Information
 
 on:
   workflow_dispatch:
+    inputs:
+      max_packages:
+        description: Maximum package builds in this run
+        required: false
+        default: "25"
   push:
     branches: [main]
     paths:
@@ -166,6 +171,11 @@ jobs:
               exit 1
               ;;
           esac
+          expected_host="https://${AZURE_STORAGE_ACCOUNT}.blob.core.windows.net/${AZURE_STORAGE_CONTAINER}"
+          if [ "${AZURE_STORAGE_BASE_URL%/}" != "$expected_host" ]; then
+            echo "::error::AZURE_STORAGE_BASE_URL does not match configured account/container"
+            exit 1
+          fi
 
           case "$AZURE_STORAGE_BASE_URL" in
             *\?*|*\#*)
@@ -202,6 +212,8 @@ jobs:
         env:
           BUILD_SCOPE: ${{ needs.collect.outputs.scope }}
           SCOPE_TOKENS: ${{ needs.collect.outputs.tokens }}
+          MAX_PACKAGES: ${{ inputs.max_packages || '25' }}
+          AZURE_STORAGE_BASE_URL: ${{ vars.AZURE_STORAGE_BASE_URL }}
         run: |
           echo "Finding apps that need special packaging..."
           all_apps=()
@@ -238,24 +250,19 @@ jobs:
             [ "$in_scope" = true ] && scoped_apps+=("$entry")
           done
 
-          apps_to_build=("${all_apps[@]}")
           if [ "$BUILD_SCOPE" = "partial" ]; then
-            if [ ${#scoped_apps[@]} -gt 0 ]; then
-              apps_to_build=("${scoped_apps[@]}")
-              echo "Scoped build: packaging ${#scoped_apps[@]} of ${#all_apps[@]} apps, skipping the rest"
-            elif [ "$scoped_files_seen" -gt 0 ]; then
-              # The added apps exist but need no repackaging, so there is
-              # genuinely nothing to build.
-              apps_to_build=()
-              echo "Scoped build: added apps need no packaging, nothing to build"
-            else
+            if [ "$scoped_files_seen" -eq 0 ]; then
               echo "::error::No manifest matched requested partial casks: $SCOPE_TOKENS"
               exit 1
             fi
           fi
 
-          echo "APPS_TO_BUILD=${apps_to_build[*]}" >> $GITHUB_ENV
-          echo "Found apps: ${apps_to_build[*]}"
+          python .github/scripts/package_candidates.py \
+            --max-packages "$MAX_PACKAGES" \
+            --storage-base-url "${AZURE_STORAGE_BASE_URL%/}" \
+            --scope "$BUILD_SCOPE" \
+            --tokens "$SCOPE_TOKENS"
+          cat package-candidates.json
 
       - name: Log in to Azure with GitHub OIDC
         id: azure-login
@@ -268,9 +275,6 @@ jobs:
           client-id: ${{ vars.AZURE_CLIENT_ID }}
           tenant-id: ${{ vars.AZURE_TENANT_ID }}
           subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
-
-      - name: Create supported_apps.json
-        run: python .github/scripts/generate_supported_apps.py --allow-incomplete
 
       - name: Process apps
         id: process-apps
@@ -354,7 +358,9 @@ jobs:
               echo "Bundle ID validation failed: expected ${expected_id:-missing}, got ${actual_id:-missing}" >&2
               return 1
             fi
-            if [ "$expected_source" = "override" ] || [ "$expected_source" = "stored" ]; then
+            if [ "$expected_source" = "override" ] \
+              || [ "$expected_source" = "stored" ] \
+              || [ "$expected_source" = "package" ]; then
               if [ -z "$expected_id" ] || [ "$actual_id" != "$expected_id" ]; then
                 echo "Bundle ID validation failed: expected ${expected_id:-missing}, got $actual_id" >&2
                 return 1
@@ -506,10 +512,12 @@ jobs:
             [ "$actual_sha" = "$(printf '%s' "$expected_sha" | tr 'A-F' 'a-f')" ]
           }
 
-          # GitHub macOS has about 14 GiB available. Keep one app below 6 GiB
-          # compressed, 10 GiB expanded, and require 2 GiB free headroom.
-          MAX_SOURCE_BYTES=6442450944
-          MAX_EXPANDED_BYTES=10737418240
+          # GitHub macOS has about 14 GiB available. One app may temporarily
+          # need source + expanded payload + output package, so cap source at
+          # 3 GiB, expanded payload at 6 GiB, and retain 2 GiB headroom.
+          MAX_SOURCE_BYTES=3221225472
+          MAX_EXPANDED_BYTES=6442450944
+          MAX_ARCHIVE_MEMBERS=100000
           MIN_FREE_KB=2097152
 
           require_free_disk() {
@@ -523,8 +531,9 @@ jobs:
             local destination="$1"
             local source_url="$2"
             require_free_disk "$app_temp_dir" || return 1
-            curl -fLsS --connect-timeout 30 --max-time 1800 --retry 3 \
-              --retry-all-errors --max-filesize "$MAX_SOURCE_BYTES" \
+            curl -fLsS --connect-timeout 30 --max-time 300 --retry 3 \
+              --retry-all-errors --retry-max-time 300 \
+              --max-filesize "$MAX_SOURCE_BYTES" \
               -o "$destination" "$source_url"
           }
 
@@ -532,20 +541,35 @@ jobs:
             local archive="$1"
             local format="$2"
             local expanded=0
-            case "$format" in
-              zip)
-                expanded=$(python -c 'import sys, zipfile; print(sum(item.file_size for item in zipfile.ZipFile(sys.argv[1]).infolist()))' "$archive")
-                probe_status=$?
-                ;;
-              tar.gz|tar.xz|tar.bz2)
-                expanded=$(python -c 'import sys, tarfile; print(sum(item.size for item in tarfile.open(sys.argv[1]).getmembers()))' "$archive")
-                probe_status=$?
-                ;;
-              *) return 1 ;;
-            esac
+            local members=0
+            local probe=""
+            probe=$(python "$WORKSPACE_DIR/.github/scripts/archive_quota.py" archive \
+              --file "$archive" \
+              --format "$format" \
+              --max-bytes "$MAX_EXPANDED_BYTES" \
+              --max-members "$MAX_ARCHIVE_MEMBERS")
+            probe_status=$?
             [ "${probe_status:-1}" -eq 0 ] || return 1
+            read -r expanded members <<< "$probe"
             [[ "$expanded" =~ ^[0-9]+$ ]] || return 1
+            [[ "$members" =~ ^[0-9]+$ ]] || return 1
             [ "$expanded" -le "$MAX_EXPANDED_BYTES" ] \
+              && [ "$members" -le "$MAX_ARCHIVE_MEMBERS" ] \
+              && require_free_disk "$app_temp_dir"
+          }
+
+          require_gzip_quota() {
+            python "$WORKSPACE_DIR/.github/scripts/archive_quota.py" gzip \
+              --file "$1" --max-bytes "$MAX_EXPANDED_BYTES" \
+              && require_free_disk "$app_temp_dir"
+          }
+
+          require_extracted_quota() {
+            local directory="$1"
+            local actual_kb=""
+            actual_kb=$(du -sk "$directory" | awk '{print $1}')
+            [[ "$actual_kb" =~ ^[0-9]+$ ]] \
+              && [ $((actual_kb * 1024)) -le "$MAX_EXPANDED_BYTES" ] \
               && require_free_disk "$app_temp_dir"
           }
 
@@ -636,13 +660,20 @@ jobs:
           upload_immutable_blob() {
             local package_path="$1"
             local blob_name="$2"
+            local expected_sha="$3"
+            local package_bytes=""
+            [ -f "$package_path" ] || return 1
+            package_bytes=$(stat -f %z "$package_path") || return 1
+            [ "$package_bytes" -le "$MAX_EXPANDED_BYTES" ] || return 1
+            require_free_disk "$package_path" || return 1
             safe_blob_leaf "$blob_name" || {
               echo "Unsafe immutable blob name: $blob_name" >&2
               return 1
             }
             if immutable_blob_exists "$blob_name"; then
               echo "Immutable blob already exists: $blob_name"
-              return 0
+              verify_blob_sha "$blob_name" "$expected_sha"
+              return
             fi
             if az storage blob upload \
               --account-name "$AZURE_STORAGE_ACCOUNT" \
@@ -651,10 +682,12 @@ jobs:
               --file "$package_path" \
               --name "$blob_name" \
               --overwrite false; then
-              return 0
+              verify_blob_sha "$blob_name" "$expected_sha"
+              return
             fi
             # A concurrent run may have created the same content-addressed blob.
-            immutable_blob_exists "$blob_name"
+            immutable_blob_exists "$blob_name" \
+              && verify_blob_sha "$blob_name" "$expected_sha"
           }
 
           ERROR_LOG=()  # Track errors for summary
@@ -793,9 +826,13 @@ jobs:
                 zip_extract_dir="${download_path}_zip_extracted"
                 rm -rf "$zip_extract_dir"
                 mkdir -p "$zip_extract_dir"
-                # A corrupt archive must not abort the step: the found_pkg test
-                # below owns that failure and reports it per app.
-                unzip -q "${download_path}.zip" -d "$zip_extract_dir" || true
+                if ! require_archive_quota "${download_path}.zip" zip \
+                  || ! unzip -q "${download_path}.zip" -d "$zip_extract_dir" \
+                  || ! require_extracted_quota "$zip_extract_dir"; then
+                  FAILED_APPS+=("$app_name")
+                  ERROR_LOG+=("$app_name: PKG ZIP extraction failed resource checks")
+                  continue
+                fi
 
                 # Find the PKG file inside the ZIP
                 found_pkg=$(find "$zip_extract_dir" -name "*.pkg" -type f -print -quit)
@@ -840,6 +877,12 @@ jobs:
                 # Extract PKG (pkgutil will create the directory)
                 echo "Extracting outer PKG..."
                 if pkgutil --expand "$outer_pkg_path" "$temp_dir" 2>/dev/null; then
+                  if ! require_extracted_quota "$temp_dir"; then
+                    rm -rf "$temp_dir"
+                    FAILED_APPS+=("$app_name")
+                    ERROR_LOG+=("$app_name: Expanded outer PKG exceeds quota or disk headroom")
+                    continue
+                  fi
                   echo "✅ PKG extraction successful"
                   echo "📁 Extracted contents:"
                   ls -R "$temp_dir"
@@ -900,7 +943,7 @@ jobs:
                   new_blob_name="${app_name}_${version}_${file_hash}.pkg"
                   azure_url="${STORAGE_BASE_URL}/${new_blob_name}"
 
-                  if upload_immutable_blob "$package_path" "$new_blob_name"; then
+                  if upload_immutable_blob "$package_path" "$new_blob_name" "$file_hash"; then
                     echo "✅ Upload successful"
 
                     # Update JSON with Azure URL and SHA256
@@ -1040,7 +1083,7 @@ jobs:
                 new_blob_name="${app_name}_${version}_${file_hash}.pkg"
                 azure_url="${STORAGE_BASE_URL}/${new_blob_name}"
 
-                if upload_immutable_blob "$package_path" "$new_blob_name"; then
+                if upload_immutable_blob "$package_path" "$new_blob_name" "$file_hash"; then
                   echo "✅ Upload successful"
 
                   # Update JSON with Azure URL and SHA256
@@ -1120,6 +1163,12 @@ jobs:
                       continue
                     fi
                     record_observed_source_digest "${download_path}.dmg.gz" "$WORKSPACE_DIR/Apps/${app_name}.json"
+                    if ! require_gzip_quota "${download_path}.dmg.gz"; then
+                      FAILED_APPS+=("$app_name")
+                      ERROR_LOG+=("$app_name: DMG.GZ exceeds expansion quota or disk headroom")
+                      rm -f "${download_path}.dmg.gz"
+                      continue
+                    fi
                     if ! gunzip -c "${download_path}.dmg.gz" > "${download_path}.dmg"; then
                       FAILED_APPS+=("$app_name")
                       ERROR_LOG+=("$app_name: Failed to decompress DMG from $url")
@@ -1216,6 +1265,12 @@ jobs:
                     rm -rf "$extract_dir"
                     continue
                   fi
+                  if ! require_extracted_quota "$extract_dir"; then
+                    FAILED_APPS+=("$app_name")
+                    ERROR_LOG+=("$app_name: Extracted archive exceeds quota or disk headroom")
+                    rm -rf "$extract_dir"
+                    continue
+                  fi
 
                   app_file=$(find_app_payload "$extract_dir" "$declared_app")
                   pkg_file=$(find_pkg_payload "$extract_dir" "$declared_pkg")
@@ -1280,7 +1335,7 @@ jobs:
                   new_blob_name="${app_name}_${version}_${file_hash}.pkg"
                   azure_url="${STORAGE_BASE_URL}/${new_blob_name}"
 
-                  if upload_immutable_blob "$package_path" "$new_blob_name"; then
+                  if upload_immutable_blob "$package_path" "$new_blob_name" "$file_hash"; then
                     echo "✅ Upload successful"
 
                     # Update JSON with Azure URL and SHA256
@@ -1358,7 +1413,7 @@ jobs:
               # upload, otherwise a transient Azure failure would remove the
               # last working package and leave the catalog pointing at nothing.
               echo "Uploading $app_name version $version to Azure Blob Storage..."
-              if ! upload_immutable_blob "$package_path" "$new_blob_name"; then
+              if ! upload_immutable_blob "$package_path" "$new_blob_name" "$file_hash"; then
                 echo "❌ Failed to upload $new_blob_name to Azure"
                 rm -rf "$extract_dir"
                 rm -f "$package_path"
@@ -1403,6 +1458,16 @@ jobs:
             else
               rm -f "$WORKSPACE_DIR/Apps/${failed_app}.json"
             fi
+          done
+
+          checked_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+          for successful_app in "${SUCCESSFUL_APPS[@]}"; do
+            json_path="$WORKSPACE_DIR/Apps/${successful_app}.json"
+            [ -f "$json_path" ] || continue
+            jq --arg checked_at "$checked_at" \
+              '.source_checked_at = $checked_at' "$json_path" \
+              > "$json_path.checked.tmp" \
+              && mv "$json_path.checked.tmp" "$json_path"
           done
           
           # Display summary
@@ -1484,6 +1549,38 @@ jobs:
             fi
           } > "$WORKSPACE_DIR/packaging-failures.md"
 
+      - name: Revert unselected package candidates
+        run: |
+          while IFS= read -r file; do
+            [ -n "$file" ] || continue
+            type=$(jq -r '.type // empty' "$file" 2>/dev/null || true)
+            case "$type" in
+              app|pkg_in_dmg|pkg_in_pkg) ;;
+              *) continue ;;
+            esac
+            app=$(basename "$file" .json)
+            if ! grep -Fxq "$app" selected-packages.txt 2>/dev/null; then
+              if git cat-file -e "HEAD:$file" 2>/dev/null; then
+                git checkout HEAD -- "$file"
+              else
+                rm -f "$file"
+              fi
+            fi
+          done < <(git diff --name-only -- 'Apps/*.json')
+
+          while IFS= read -r file; do
+            [ -n "$file" ] || continue
+            type=$(jq -r '.type // empty' "$file" 2>/dev/null || true)
+            case "$type" in
+              app|pkg_in_dmg|pkg_in_pkg) ;;
+              *) continue ;;
+            esac
+            app=$(basename "$file" .json)
+            if ! grep -Fxq "$app" selected-packages.txt 2>/dev/null; then
+              rm -f "$file"
+            fi
+          done < <(git ls-files --others --exclude-standard -- 'Apps/*.json')
+
       # The collector rewrites every app's url to the vendor URL, and Process
       # apps restores the Azure URL only for the apps it packaged. On a scoped
       # build the unprocessed apps would therefore be committed pointing at
@@ -1520,8 +1617,16 @@ jobs:
 
           echo "Reverted $reverted out-of-scope app files"
 
-      - name: Refresh supported app index
-        run: python .github/scripts/generate_supported_apps.py
+      - name: Finalize catalog readiness
+        id: catalog-ready
+        run: |
+          if python .github/scripts/generate_supported_apps.py; then
+            echo "ready=true" >> "$GITHUB_OUTPUT"
+          else
+            python .github/scripts/generate_supported_apps.py --exclude-invalid
+            echo "ready=false" >> "$GITHUB_OUTPUT"
+            echo "Catalog progress committed without publication marker"
+          fi
 
       - name: Commit and push changes
         id: catalog-snapshot
@@ -1597,78 +1702,28 @@ jobs:
           echo "::error::Catalog publication blocked because ${FAILED_COUNT:-unknown} apps failed packaging"
           exit 1
 
-      - name: Publish catalog state
-        if: success() && steps.process-apps.outputs.packaging_succeeded == 'true'
-        env:
-          PUBLISHED_CATALOG_COMMIT: ${{ steps.catalog-snapshot.outputs.catalog_commit }}
-          PACKAGE_STORAGE_BASE_URL: ${{ vars.AZURE_STORAGE_BASE_URL }}
-          RUN_ID: ${{ github.run_id }}
-          WORKFLOW_NAME: Build App Packages and Collect App Information
-          WORKFLOW_PATH: .github/workflows/build-app-packages.yml
+      - name: Create publication provenance
+        if: steps.catalog-ready.outputs.ready == 'true'
         run: |
-          # Do not rebase the marker. It is valid only when this checkout is still
-          # the exact tip of main; a normal push also closes the remaining race.
-          git fetch origin main
-          local_head=$(git rev-parse HEAD)
-          remote_head=$(git rev-parse origin/main)
-          if [ "$local_head" != "$remote_head" ]; then
-            echo "::error::main changed before catalog state publication"
-            exit 1
-          fi
-          if ! git diff --quiet || ! git diff --cached --quiet; then
-            echo "::error::Tracked working tree changes remain before marker publication"
-            exit 1
-          fi
-          if ! git merge-base --is-ancestor "$PUBLISHED_CATALOG_COMMIT" "$local_head"; then
-            echo "::error::Catalog snapshot is not an ancestor of the marker parent"
-            exit 1
-          fi
-          if git cat-file -e "$local_head:.github/catalog-state.json" 2>/dev/null; then
-            existing_run_id=$(git show "$local_head:.github/catalog-state.json" \
-              | python -c 'import json, sys; value=json.load(sys.stdin)["runId"]; assert type(value) is int and value > 0; print(value)')
-            if [ "$existing_run_id" -ge "$RUN_ID" ]; then
-              echo "::error::Existing catalog marker belongs to run $existing_run_id, which is not older than $RUN_ID"
-              exit 1
-            fi
-          fi
-          CATALOG_COMMIT="$local_head"
+          python - <<'PY'
+          import json, os
+          data = {
+              "catalogCommit": "${{ steps.catalog-snapshot.outputs.catalog_commit }}",
+              "repository": os.environ["GITHUB_REPOSITORY"],
+              "runId": int(os.environ["GITHUB_RUN_ID"]),
+              "workflowName": "Build App Packages and Collect App Information",
+              "workflowPath": ".github/workflows/build-app-packages.yml",
+          }
+          with open("catalog-publication.json", "w", encoding="utf-8") as handle:
+              json.dump(data, handle, indent=2, sort_keys=True)
+              handle.write("\n")
+          PY
 
-          python .github/scripts/catalog_state.py generate \
-            --catalog-commit "$CATALOG_COMMIT" \
-            --repository "$GITHUB_REPOSITORY" \
-            --workflow-name "$WORKFLOW_NAME" \
-            --workflow-path "$WORKFLOW_PATH" \
-            --run-id "$RUN_ID" \
-            --package-storage-base-url "$PACKAGE_STORAGE_BASE_URL" \
-            --output .github/catalog-state.json
-          python .github/scripts/catalog_state.py validate \
-            --state-file .github/catalog-state.json \
-            --catalog-commit "$CATALOG_COMMIT" \
-            --repository "$GITHUB_REPOSITORY" \
-            --workflow-name "$WORKFLOW_NAME" \
-            --workflow-path "$WORKFLOW_PATH" \
-            --run-id "$RUN_ID"
-
-          git config --local user.email "action@github.com"
-          git config --local user.name "GitHub Action"
-          git add .github/catalog-state.json
-          staged_files=$(git diff --cached --name-only)
-          if [ "$staged_files" != ".github/catalog-state.json" ]; then
-            echo "::error::Catalog marker commit would contain unexpected files"
-            exit 1
-          fi
-
-          git commit -m "Publish catalog state for run $RUN_ID [skip ci]"
-          marker_parent=$(git rev-parse HEAD^)
-          if [ "$marker_parent" != "$local_head" ]; then
-            echo "::error::Catalog marker parent changed unexpectedly"
-            exit 1
-          fi
-          recorded_commit=$(python -c 'import json; print(json.load(open(".github/catalog-state.json"))["catalogCommit"])')
-          if [ "$recorded_commit" != "$marker_parent" ]; then
-            echo "::error::Catalog marker does not record its exact parent snapshot"
-            exit 1
-          fi
-
-          # Never force: a concurrent main update must reject this publication.
-          git push origin HEAD:main
+      - name: Upload publication provenance
+        if: steps.catalog-ready.outputs.ready == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: catalog-publication-${{ github.run_id }}
+          path: catalog-publication.json
+          if-no-files-found: error
+          retention-days: 7

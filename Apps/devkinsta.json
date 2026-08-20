@@ -12,5 +12,8 @@
   "category": "Developer Tools",
   "publisher": "Kinsta",
   "previous_version": "2.13.6",
-  "homebrew_cask": "devkinsta"
+  "homebrew_cask": "devkinsta",
+  "source_version": "2.13.6",
+  "source_sha256": "16dc1b81a1d8d45b6ae6611f9de899f6e7a5be59a2a8c80a0d0edd504afa0303",
+  "source_sha256_provenance": "homebrew"
 }

@@ -23,5 +23,8 @@
   },
   "category": "Utilities",
   "publisher": "MacPaw",
-  "homebrew_cask": "cleanmymac"
+  "homebrew_cask": "cleanmymac",
+  "source_version": "5.5.7,50507.0.2607220856",
+  "source_sha256": "fa0d0cb0a78340c5b33934e3963fe8eb561a1282a5fc557369420455a7c6c089",
+  "source_sha256_provenance": "homebrew"
 }

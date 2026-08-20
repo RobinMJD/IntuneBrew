@@ -12,5 +12,8 @@
   "category": "Productivity",
   "publisher": "Tabula",
   "previous_version": "1.2.1",
-  "homebrew_cask": "tabula"
+  "homebrew_cask": "tabula",
+  "source_version": "1.2.1",
+  "source_sha256": "7f0270ce3db17cfa14a8a111de9fbf39fbdd330d9784796daf13019d08cac140",
+  "source_sha256_provenance": "homebrew"
 }

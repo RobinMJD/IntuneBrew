@@ -23,5 +23,8 @@
   },
   "category": "Utilities",
   "publisher": "DEVONtechnologies",
-  "homebrew_cask": "easyfind"
+  "homebrew_cask": "easyfind",
+  "source_version": "5.0.2",
+  "source_sha256": "1539a562539e3b3a243da864fddee0351a4c7d109aa9dcae436775ecbb288fc9",
+  "source_sha256_provenance": "homebrew"
 }

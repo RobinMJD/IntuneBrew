@@ -22,5 +22,8 @@
   },
   "category": "Utilities",
   "publisher": "FIPLAB Ltd",
-  "homebrew_cask": "copyclip"
+  "homebrew_cask": "copyclip",
+  "source_version": "3.993",
+  "source_sha256": "0435b30b802887fe5259169c45742ab4cdbce87a5966e8bba8e102a5d041c38b",
+  "source_sha256_provenance": "homebrew"
 }

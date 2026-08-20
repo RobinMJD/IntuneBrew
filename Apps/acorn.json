@@ -22,5 +22,8 @@
   },
   "category": "Design",
   "publisher": "Flying Meat",
-  "homebrew_cask": "acorn"
+  "homebrew_cask": "acorn",
+  "source_version": "8.6.1",
+  "source_sha256": "8784aa59f29e7451776054ee21ec69dbe433298195bfc21ca47574f50573ecf4",
+  "source_sha256_provenance": "homebrew"
 }

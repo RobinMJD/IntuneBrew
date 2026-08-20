@@ -22,5 +22,8 @@
   },
   "category": "Developer Tools",
   "publisher": "intitni",
-  "homebrew_cask": "copilot-for-xcode"
+  "homebrew_cask": "copilot-for-xcode",
+  "source_version": "0.38.0",
+  "source_sha256": "e9c90f708427b98b7a3a9dac77f6d7b0188f7ec4d6a3dc122cf2b6555ad671ba",
+  "source_sha256_provenance": "homebrew"
 }

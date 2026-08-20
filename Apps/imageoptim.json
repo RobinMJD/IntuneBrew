@@ -12,5 +12,8 @@
   "sha": "a86aef54ed2480790d3d54022e3ac167b73896a03c42f6d54ab47836713157e6",
   "category": "Utilities",
   "publisher": "ImageOptim",
-  "homebrew_cask": "imageoptim"
+  "homebrew_cask": "imageoptim",
+  "source_version": "1.9.3",
+  "source_sha256": "d4e453bbb55b6491d519a30e0e6de5beb7ce1a929e8f835767b638ef6ffd371d",
+  "source_sha256_provenance": "homebrew"
 }

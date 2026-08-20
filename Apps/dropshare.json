@@ -23,5 +23,8 @@
   },
   "category": "Utilities",
   "publisher": "Dropshare",
-  "homebrew_cask": "dropshare"
+  "homebrew_cask": "dropshare",
+  "source_version": "6.14,6257",
+  "source_sha256": "629302d962e890fdd32887dbf7915e734d6d6703774ad60423d93030935ee66f",
+  "source_sha256_provenance": "homebrew"
 }

@@ -13,5 +13,8 @@
   "sha": "f0adffa3a3ad380d9fa2dbda4dae2592428b2b64e564e7c6f5b02278da62a817",
   "category": "Security",
   "publisher": "OpenVPN Technologies, Inc.",
-  "previous_version": "3.8.2"
+  "previous_version": "3.8.2",
+  "source_version": "3.8.2,6009",
+  "source_sha256": "8d50036510859956d20d1f50e43171be53417431104c6befb1352ff5187c248a",
+  "source_sha256_provenance": "homebrew"
 }

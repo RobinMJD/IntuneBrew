@@ -12,5 +12,8 @@
   "category": "Utilities",
   "publisher": "Houdah Software",
   "previous_version": "1.3",
-  "homebrew_cask": "customshortcuts"
+  "homebrew_cask": "customshortcuts",
+  "source_version": "1.3",
+  "source_sha256": "8bb0dade6f8f0ee8fbb0f3e84c5e8f6fb927a277af5c11f5df4c8be16989e1fa",
+  "source_sha256_provenance": "homebrew"
 }

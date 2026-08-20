@@ -12,5 +12,8 @@
   "category": "Productivity",
   "publisher": "Creaceed",
   "previous_version": "4.7.1",
-  "homebrew_cask": "prizmo"
+  "homebrew_cask": "prizmo",
+  "source_version": "4.7.1",
+  "source_sha256": "71f085b54ec6dde38a25675a81a9e799661fcd82b27629b28bbf8e88907d6456",
+  "source_sha256_provenance": "homebrew"
 }

@@ -12,5 +12,8 @@
   "sha": "630b671131b21d57d985403b5491979dfcf98509cd6d5bc675bf09e39c28ecdf",
   "category": "Design",
   "publisher": "Helftone",
-  "homebrew_cask": "monodraw"
+  "homebrew_cask": "monodraw",
+  "source_version": "1.7.1,118",
+  "source_sha256": "eed8bf157a3134c852615ed359378ff2602709daae908d12803756e91450b057",
+  "source_sha256_provenance": "homebrew"
 }

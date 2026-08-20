@@ -23,5 +23,8 @@
   },
   "category": "Productivity",
   "publisher": "Adobe Inc.",
-  "previous_version": "26.001.21662"
+  "previous_version": "26.001.21662",
+  "source_version": "26.001.21662",
+  "source_sha256": "21821609bea4210e54b1844a1129cdafccea21f6d6d3d0797808f92e357d5705",
+  "source_sha256_provenance": "homebrew"
 }

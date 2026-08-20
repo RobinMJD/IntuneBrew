@@ -12,5 +12,8 @@
   "category": "Developer Tools",
   "publisher": "Electron",
   "previous_version": "0.39.0",
-  "homebrew_cask": "electron-fiddle"
+  "homebrew_cask": "electron-fiddle",
+  "source_version": "0.39.0",
+  "source_sha256": "98206b1b49729c0bb011c3302f06bc84c1b79bd8805c908f43a8dc196eaf7fda",
+  "source_sha256_provenance": "homebrew"
 }

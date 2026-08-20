@@ -12,5 +12,8 @@
   "category": "Productivity",
   "publisher": "Renewed Vision, LLC",
   "previous_version": "21.4",
-  "homebrew_cask": "propresenter"
+  "homebrew_cask": "propresenter",
+  "source_version": "21.4,352583705",
+  "source_sha256": "a428409c5a59c0e1f0ced0d8788d521c75672fadd50ec15e20992a1fffbd4b9d",
+  "source_sha256_provenance": "homebrew"
 }

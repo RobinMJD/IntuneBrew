@@ -13,5 +13,8 @@
   "previous_version": "12.2.3",
   "category": "Developer Tools",
   "publisher": "mitmproxy",
-  "homebrew_cask": "mitmproxy"
+  "homebrew_cask": "mitmproxy",
+  "source_version": "12.2.3",
+  "source_sha256": "0a09ee3b82569e8985aff8186e4792618b8e5d0c766098db093d09a87d4b013a",
+  "source_sha256_provenance": "homebrew"
 }

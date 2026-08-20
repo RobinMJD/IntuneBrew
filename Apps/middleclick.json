@@ -12,5 +12,8 @@
   "previous_version": "3.2.0",
   "category": "Utilities",
   "publisher": "artginzburg",
-  "homebrew_cask": "middleclick"
+  "homebrew_cask": "middleclick",
+  "source_version": "3.2.0",
+  "source_sha256": "e93f17612a77413c5e7cef9423f0dc9db166d66f38d41d783a990e2ea6ba698c",
+  "source_sha256_provenance": "homebrew"
 }

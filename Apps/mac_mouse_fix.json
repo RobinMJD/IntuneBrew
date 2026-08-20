@@ -12,5 +12,8 @@
   "previous_version": "3.0.8",
   "category": "Utilities",
   "publisher": "Mac Mouse Fix",
-  "homebrew_cask": "mac-mouse-fix"
+  "homebrew_cask": "mac-mouse-fix",
+  "source_version": "3.0.8",
+  "source_sha256": "db164e45d30b2fd02ff12635ac17c5441ebfc542faefde6bb861596a798df8ae",
+  "source_sha256_provenance": "homebrew"
 }

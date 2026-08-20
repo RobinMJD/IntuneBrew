@@ -12,5 +12,8 @@
   "category": "Utilities",
   "publisher": "ianyh",
   "previous_version": "0.24.3",
-  "homebrew_cask": "amethyst"
+  "homebrew_cask": "amethyst",
+  "source_version": "0.24.3",
+  "source_sha256": "442d2b9fe53f8062051dd63e5d01512ed2020c78cbdbe4f93ecf30290a5b0302",
+  "source_sha256_provenance": "homebrew"
 }

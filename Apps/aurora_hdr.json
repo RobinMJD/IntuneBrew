@@ -12,5 +12,8 @@
   "sha": "44192dec2e90d680f7b21cbceb1bb43d6c168a01478e2191167238f1d0f326ae",
   "category": "Media",
   "publisher": "Skylum",
-  "homebrew_cask": "aurora-hdr"
+  "homebrew_cask": "aurora-hdr",
+  "source_version": "1.0.2,6495",
+  "source_sha256": "af6fe2c085ec14bad9370604147050d0f431541de0f9badf11dacf7d56f2e5a3",
+  "source_sha256_provenance": "homebrew"
 }

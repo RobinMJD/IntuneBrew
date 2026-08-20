@@ -12,5 +12,8 @@
   "sha": "858ee755c7559f72b15198e295e7df5070a67c36c716ab955a6a06df0fc743b4",
   "category": "Productivity",
   "publisher": "Stairways Software LLC",
-  "homebrew_cask": "keyboard-maestro"
+  "homebrew_cask": "keyboard-maestro",
+  "source_version": "11.1.1,1111",
+  "source_sha256": "0b9ccdbce9e6f81159041e0369bf571ce411a96eb21c20dfce9cf23af3dbe172",
+  "source_sha256_provenance": "homebrew"
 }

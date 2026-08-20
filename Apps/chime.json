@@ -12,5 +12,8 @@
   "category": "Developer Tools",
   "publisher": "Chime HQ",
   "previous_version": "2.2.5",
-  "homebrew_cask": "chime"
+  "homebrew_cask": "chime",
+  "source_version": "2.2.5,157",
+  "source_sha256": "0a52a3cf970e38f07dd45c2854e1096926e4960219b438f3601b5af55a747453",
+  "source_sha256_provenance": "homebrew"
 }

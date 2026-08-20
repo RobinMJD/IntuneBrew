@@ -13,5 +13,8 @@
   "previous_version": "0.84",
   "category": "Utilities",
   "publisher": "snark",
-  "homebrew_cask": "jumpcut"
+  "homebrew_cask": "jumpcut",
+  "source_version": "0.84",
+  "source_sha256": "ef43d3fee801188a3f6fb9ba14bf738aa2d103bd4986b390e9820e7390c6178c",
+  "source_sha256_provenance": "homebrew"
 }

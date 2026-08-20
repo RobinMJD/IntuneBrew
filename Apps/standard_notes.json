@@ -12,5 +12,8 @@
   "category": "Productivity",
   "publisher": "Standard Notes",
   "previous_version": "3.201.21",
-  "homebrew_cask": "standard-notes"
+  "homebrew_cask": "standard-notes",
+  "source_version": "3.201.21",
+  "source_sha256": "192c92d0889dc5b0fbfbd6194d1064afffc06b5d20fe971c1e795aa90e0fdcee",
+  "source_sha256_provenance": "homebrew"
 }

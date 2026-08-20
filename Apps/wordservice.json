@@ -12,5 +12,8 @@
   "category": "Utilities",
   "publisher": "DEVONtechnologies",
   "previous_version": "2.8.3",
-  "homebrew_cask": "wordservice"
+  "homebrew_cask": "wordservice",
+  "source_version": "2.8.3",
+  "source_sha256": "35e553ec48d8dbae490142d184cd61396aed9a13e2c226580aba7683b1016d6e",
+  "source_sha256_provenance": "homebrew"
 }

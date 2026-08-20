@@ -11,6 +11,9 @@
   "previous_version": "4.3.9",
   "sha": "012babd65ce9821d1d50978dc5d90bc3e3de86f001d4a71a24950eb3c3a4a528",
   "category": "Utilities",
-  "publisher": "Dag Ågren",
-  "homebrew_cask": "the-unarchiver"
+  "publisher": "Dag \u00c5gren",
+  "homebrew_cask": "the-unarchiver",
+  "source_version": "4.3.9,147,1742287964",
+  "source_sha256": "d0d8dd2e028519ece5eeb0f018b3392f67e1c85053472ccbbaee64e87f173a28",
+  "source_sha256_provenance": "homebrew"
 }

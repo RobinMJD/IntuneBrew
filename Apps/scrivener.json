@@ -12,5 +12,8 @@
   "category": "Productivity",
   "publisher": "Literature & Latte, Ltd.",
   "previous_version": "3.5.2",
-  "homebrew_cask": "scrivener"
+  "homebrew_cask": "scrivener",
+  "source_version": "3.5.2,17487,11",
+  "source_sha256": "c925c4d3c44da3be479248603a42e2811352d21c97317c1324c1f7f707725758",
+  "source_sha256_provenance": "homebrew"
 }

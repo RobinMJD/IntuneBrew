@@ -76,7 +76,7 @@ def is_publishable(app):
     return not app.get("deprecated") and not publication_errors(app)
 
 
-def generate_supported_apps(allow_incomplete=False):
+def generate_supported_apps(allow_incomplete=False, exclude_invalid=False):
     supported = {}
     invalid = []
     for path in APPS_DIR.glob("*.json"):
@@ -89,7 +89,7 @@ def generate_supported_apps(allow_incomplete=False):
             print(f"Excluding deprecated app: {path.name}")
             continue
         errors = publication_errors(app)
-        if not errors or allow_incomplete:
+        if not errors or (allow_incomplete and not exclude_invalid):
             supported[path.stem] = (
                 "https://raw.githubusercontent.com/ugurkocde/IntuneBrew/main/"
                 f"Apps/{path.name}"
@@ -97,7 +97,7 @@ def generate_supported_apps(allow_incomplete=False):
         if errors:
             invalid.append(f"{path.name}: {', '.join(errors)}")
 
-    if invalid and not allow_incomplete:
+    if invalid and not allow_incomplete and not exclude_invalid:
         raise SystemExit(
             "Catalog publication contract failed:\n- " + "\n- ".join(invalid)
         )
@@ -125,4 +125,10 @@ if __name__ == "__main__":
         action="store_true",
         help="Keep non-deprecated packaging candidates before Process apps",
     )
-    generate_supported_apps(parser.parse_args().allow_incomplete)
+    parser.add_argument(
+        "--exclude-invalid",
+        action="store_true",
+        help="Write a safe progress index containing only valid manifests",
+    )
+    args = parser.parse_args()
+    generate_supported_apps(args.allow_incomplete, args.exclude_invalid)

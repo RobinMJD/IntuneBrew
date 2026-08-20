@@ -13,5 +13,8 @@
   "previous_version": "0.11.12",
   "category": "Utilities",
   "publisher": "Ice",
-  "homebrew_cask": "jordanbaird-ice"
+  "homebrew_cask": "jordanbaird-ice",
+  "source_version": "0.11.12",
+  "source_sha256": "d770e81597566dd2d2363feb350f808c7a92e363df95c51e48140eb30e452cc9",
+  "source_sha256_provenance": "homebrew"
 }

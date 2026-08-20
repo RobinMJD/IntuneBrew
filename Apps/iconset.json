@@ -12,5 +12,8 @@
   "category": "Design",
   "publisher": "Iconset",
   "previous_version": "2.5.0",
-  "homebrew_cask": "iconset"
+  "homebrew_cask": "iconset",
+  "source_version": "2.5.0",
+  "source_sha256": "ed567c877bb0b7ba6889edc857f7cc83deb1f4e8c6bfc692ae7eb97e9ef9452c",
+  "source_sha256_provenance": "homebrew"
 }

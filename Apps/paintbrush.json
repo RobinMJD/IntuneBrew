@@ -12,5 +12,8 @@
   "previous_version": "2.6.0",
   "category": "Design",
   "publisher": "The Paintbrush Team",
-  "homebrew_cask": "paintbrush"
+  "homebrew_cask": "paintbrush",
+  "source_version": "2.6.0,20210402",
+  "source_sha256": "9d12b754ec65edc77fa51d3a3c8a0b08ac863e10fd530bff219f9f22bb9dba3a",
+  "source_sha256_provenance": "homebrew"
 }

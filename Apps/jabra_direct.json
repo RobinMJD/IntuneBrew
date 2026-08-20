@@ -13,5 +13,8 @@
   "sha": "efc1f2a2c834a23df342a9a1391ab5a3a4fcbc8edeb74421a03f84f3d1d3e20a",
   "category": "Utilities",
   "publisher": "GN Audio A/S",
-  "previous_version": "8.1.14601"
+  "previous_version": "8.1.14601",
+  "source_version": "8.1.14601",
+  "source_sha256": "no_check",
+  "packaging_pending": true
 }

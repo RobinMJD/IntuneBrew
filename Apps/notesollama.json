@@ -12,5 +12,8 @@
   "previous_version": "0.2.6",
   "category": "Productivity",
   "publisher": "Smallest",
-  "homebrew_cask": "notesollama"
+  "homebrew_cask": "notesollama",
+  "source_version": "0.2.6",
+  "source_sha256": "9b2a94e5d366686bee91942bad9967e6e00558024d78438b05efd92f3bee79b1",
+  "source_sha256_provenance": "homebrew"
 }

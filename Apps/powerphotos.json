@@ -12,5 +12,8 @@
   "category": "Utilities",
   "publisher": "Fat Cat Software",
   "previous_version": "3.4.3",
-  "homebrew_cask": "powerphotos"
+  "homebrew_cask": "powerphotos",
+  "source_version": "3.4.3",
+  "source_sha256": "no_check",
+  "packaging_pending": true
 }

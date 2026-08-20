@@ -12,5 +12,8 @@
   "category": "Productivity",
   "publisher": "The Mailspring Team",
   "previous_version": "1.23.0",
-  "homebrew_cask": "mailspring"
+  "homebrew_cask": "mailspring",
+  "source_version": "1.23.0",
+  "source_sha256": "a9f641d9dfc9a5f0a3ecb87b3492ab416c0a8cbdfcd3ec424d7ae99e180886ea",
+  "source_sha256_provenance": "homebrew"
 }

@@ -29,6 +29,7 @@ ARTIFACT_METADATA_KEYS = {
     "archive_format",
     "source_version",
     "source_sha256",
+    "source_sha256_provenance",
     "bundleId_source",
 }
 INSTALLER_ONLY_DEPRECATION_REASON = (
@@ -130,7 +131,10 @@ def select_bundle_id(existing_data, app_info):
     ):
         return app_info["bundleId"], "override"
     if is_concrete_bundle_id(existing_data.get("bundleId")):
-        return existing_data["bundleId"], "stored"
+        source = existing_data.get("bundleId_source")
+        if source in {"override", "package", "stored"}:
+            return existing_data["bundleId"], source
+        return existing_data["bundleId"], "legacy"
     if is_concrete_bundle_id(app_info.get("bundleId")):
         return app_info["bundleId"], "heuristic"
     return None, "missing"
@@ -253,7 +257,6 @@ app_urls = [
     "https://formulae.brew.sh/api/cask/screenfocus.json",
     "https://formulae.brew.sh/api/cask/teacode.json",
     "https://formulae.brew.sh/api/cask/alcove.json",
-    "https://formulae.brew.sh/api/cask/abstract.json",
     "https://formulae.brew.sh/api/cask/macpass.json",
     "https://formulae.brew.sh/api/cask/marsedit.json",
     "https://formulae.brew.sh/api/cask/neofinder.json",
@@ -434,7 +437,6 @@ app_urls = [
     "https://formulae.brew.sh/api/cask/superhuman.json",
     "https://formulae.brew.sh/api/cask/tabby.json",
     "https://formulae.brew.sh/api/cask/tidal.json",
-    "https://formulae.brew.sh/api/cask/ubar.json",
     "https://formulae.brew.sh/api/cask/unclutter.json",
     "https://formulae.brew.sh/api/cask/unite.json",
     "https://formulae.brew.sh/api/cask/wezterm.json",
@@ -1336,6 +1338,8 @@ homebrew_cask_urls = [
     "https://formulae.brew.sh/api/cask/yacreader.json",
     "https://formulae.brew.sh/api/cask/yed.json",
     "https://formulae.brew.sh/api/cask/yubico-authenticator.json",
+    "https://formulae.brew.sh/api/cask/linear.json",
+    "https://formulae.brew.sh/api/cask/rhino-app.json",
     "https://formulae.brew.sh/api/cask/zappy.json",
     "https://formulae.brew.sh/api/cask/zotero.json",
     "https://formulae.brew.sh/api/cask/zwift.json",
@@ -1980,6 +1984,11 @@ def get_homebrew_app_info(json_url, needs_packaging=False, is_pkg_in_dmg=False, 
     }
     app_info["source_version"] = source_version
     app_info["source_sha256"] = data.get("sha256") or ""
+    app_info["source_sha256_provenance"] = (
+        "unverified-no_check"
+        if app_info["source_sha256"] == "no_check"
+        else "homebrew"
+    )
     app_info["artifact_kind"] = artifact_kind
     if archive_format:
         app_info["archive_format"] = archive_format

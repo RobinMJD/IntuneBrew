@@ -12,5 +12,8 @@
   "previous_version": "14.7.1",
   "category": "Productivity",
   "publisher": "Goodsnooze",
-  "homebrew_cask": "macwhisper"
+  "homebrew_cask": "macwhisper",
+  "source_version": "14.7.1,1476",
+  "source_sha256": "8f4ba48c01dbc382bf4a86b19c46f2cadbc91a677ce972423395a41d7b0a2610",
+  "source_sha256_provenance": "homebrew"
 }

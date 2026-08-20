@@ -22,5 +22,8 @@
   },
   "category": "Utilities",
   "publisher": "folivora labs GmbH",
-  "homebrew_cask": "bettertouchtool"
+  "homebrew_cask": "bettertouchtool",
+  "source_version": "6.726,2026081403",
+  "source_sha256": "60276a7ba23b36b31ac93e3c8ea61b085eb3cf524b4c41abfd9380bd60dc42e1",
+  "source_sha256_provenance": "homebrew"
 }

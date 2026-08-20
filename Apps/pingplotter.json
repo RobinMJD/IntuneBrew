@@ -12,5 +12,8 @@
   "category": "Utilities",
   "publisher": "PingPlotter, LLC",
   "previous_version": "5.27.12",
-  "homebrew_cask": "pingplotter"
+  "homebrew_cask": "pingplotter",
+  "source_version": "5.27.12",
+  "source_sha256": "no_check",
+  "packaging_pending": true
 }

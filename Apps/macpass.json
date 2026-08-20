@@ -12,5 +12,8 @@
   "previous_version": "0.8.1",
   "category": "Security",
   "publisher": "MacPass Project",
-  "homebrew_cask": "macpass"
+  "homebrew_cask": "macpass",
+  "source_version": "0.8.1",
+  "source_sha256": "2d0d3bdc945b42c0c1fe79b1eb74e5969b5f768ffc56aa286d73d3492873b173",
+  "source_sha256_provenance": "homebrew"
 }

@@ -12,5 +12,8 @@
   "category": "Utilities",
   "publisher": "Eternal Storms Software",
   "previous_version": "3.7.6",
-  "homebrew_cask": "yoink"
+  "homebrew_cask": "yoink",
+  "source_version": "3.7.6",
+  "source_sha256": "no_check",
+  "packaging_pending": true
 }

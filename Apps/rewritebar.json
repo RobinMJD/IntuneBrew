@@ -12,5 +12,8 @@
   "category": "Productivity",
   "publisher": "RewriteBar",
   "previous_version": "2.31.0",
-  "homebrew_cask": "rewritebar"
+  "homebrew_cask": "rewritebar",
+  "source_version": "2.31.0",
+  "source_sha256": "c8a924fec8fdd435fbff43e5cf1793fd106af2d513b34e1410c77c05617fc104",
+  "source_sha256_provenance": "homebrew"
 }

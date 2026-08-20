@@ -22,14 +22,16 @@ SPEC.loader.exec_module(generator)
 
 
 class CatalogPublicationContractTests(unittest.TestCase):
-    def test_prepackaging_catalog_keeps_every_non_deprecated_manifest(self):
+    def test_progress_catalog_contains_every_currently_valid_manifest(self):
         supported = json.loads(
             (ROOT / "supported_apps.json").read_text(encoding="utf-8")
         )
         expected = {
             path.stem
             for path in (ROOT / "Apps").glob("*.json")
-            if not json.loads(path.read_text(encoding="utf-8")).get("deprecated")
+            if generator.is_publishable(
+                json.loads(path.read_text(encoding="utf-8"))
+            )
         }
         self.assertEqual(set(supported), expected)
 
@@ -143,7 +145,7 @@ class CatalogPublicationContractTests(unittest.TestCase):
                 '{"existing": "unchanged"}\n',
             )
 
-    def test_prepackaging_generator_keeps_invalid_candidate(self):
+    def test_progress_generator_excludes_invalid_candidate(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             apps = root / "Apps"
@@ -158,12 +160,12 @@ class CatalogPublicationContractTests(unittest.TestCase):
             with patch.object(generator, "APPS_DIR", apps), patch.object(
                 generator, "SUPPORTED_PATH", root / "supported_apps.json"
             ), patch.object(generator, "README_PATH", root / "README.md"):
-                generator.generate_supported_apps(allow_incomplete=True)
+                generator.generate_supported_apps(exclude_invalid=True)
 
             supported = json.loads(
                 (root / "supported_apps.json").read_text(encoding="utf-8")
             )
-            self.assertEqual(set(supported), {"candidate"})
+            self.assertEqual(set(supported), set())
 
 
 class WorkflowPackagingRegressionTests(unittest.TestCase):
@@ -232,6 +234,9 @@ class WorkflowPackagingRegressionTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         cls.workflow = WORKFLOW_PATH.read_text(encoding="utf-8")
+        cls.publisher = (
+            ROOT / ".github/workflows/publish-catalog-state.yml"
+        ).read_text(encoding="utf-8")
         cls.process = cls.workflow.split("- name: Process apps", 1)[1]
         cls.payload_helpers = cls.process.split(
             "safe_artifact_relative_path() {", 1
@@ -402,16 +407,17 @@ class WorkflowPackagingRegressionTests(unittest.TestCase):
         self.assertIn('failed_count=${#FAILED_APPS[@]}', self.process)
 
     def test_marker_is_terminal_and_workflow_never_deletes_blobs(self):
-        marker = self.workflow.index("- name: Publish catalog state")
+        marker = self.publisher.index("- name: Publish immutable catalog marker")
         self.assertNotIn("az storage blob delete", self.workflow)
         self.assertNotIn("superseded-blobs", self.workflow)
-        self.assertNotIn("- name:", self.workflow[marker + 1 :])
-        self.assertIn("git push origin HEAD:main", self.workflow[marker:])
+        self.assertNotIn("- name:", self.publisher[marker + 1 :])
+        self.assertIn("git push origin HEAD:main", self.publisher[marker:])
+        self.assertNotIn("Publish catalog state", self.workflow)
 
     def test_failed_or_unpublished_run_cannot_delete_old_blobs(self):
         require = self.workflow.index("- name: Require successful packaging")
-        marker = self.workflow.index("- name: Publish catalog state")
-        self.assertLess(require, marker)
+        provenance = self.workflow.index("- name: Create publication provenance")
+        self.assertLess(require, provenance)
         self.assertNotIn("az storage blob delete", self.workflow)
 
     def test_unmatched_partial_scope_fails_closed(self):
@@ -422,6 +428,22 @@ class WorkflowPackagingRegressionTests(unittest.TestCase):
             find_step,
         )
         self.assertNotIn("falling back to a full build", find_step)
+
+    def test_package_batches_are_bounded_resumable_and_deterministic(self):
+        self.assertIn("max_packages:", self.workflow)
+        self.assertIn('default: "25"', self.workflow)
+        self.assertIn("package_candidates.py", self.workflow)
+        self.assertIn("selected-packages.txt", self.workflow)
+        self.assertIn("- name: Revert unselected package candidates", self.workflow)
+        self.assertIn("Catalog progress committed without publication marker", self.workflow)
+        self.assertIn("steps.catalog-ready.outputs.ready == 'true'", self.workflow)
+        revert = self.workflow.split(
+            "- name: Revert unselected package candidates", 1
+        )[1].split("- name: Revert out-of-scope changes", 1)[0]
+        self.assertEqual(
+            revert.count("app|pkg_in_dmg|pkg_in_pkg"),
+            2,
+        )
 
     def test_no_prefix_listing_or_cleanup_journal_exists(self):
         self.assertNotIn("az storage blob list", self.process)
@@ -450,6 +472,16 @@ class WorkflowPackagingRegressionTests(unittest.TestCase):
         self.assertIn('--overwrite false', self.process)
         self.assertNotIn('--overwrite true', self.process)
         self.assertIn('immutable_blob_exists "$blob_name"', self.process)
+        upload = self.process.split("upload_immutable_blob() {", 1)[1].split(
+            "ERROR_LOG=()", 1
+        )[0]
+        self.assertGreaterEqual(upload.count('verify_blob_sha "$blob_name" "$expected_sha"'), 3)
+
+    def test_storage_base_must_match_account_and_container(self):
+        self.assertIn(
+            'expected_host="https://${AZURE_STORAGE_ACCOUNT}.blob.core.windows.net/${AZURE_STORAGE_CONTAINER}"',
+            self.workflow,
+        )
 
     def test_every_source_download_is_verified_before_use(self):
         self.assertIn("verify_source_file()", self.process)
@@ -491,20 +523,26 @@ class WorkflowPackagingRegressionTests(unittest.TestCase):
 
     def test_resource_guards_bound_downloads_archives_and_disk(self):
         self.assertIn("timeout-minutes: 180", self.workflow)
-        self.assertIn("MAX_SOURCE_BYTES=6442450944", self.process)
-        self.assertIn("MAX_EXPANDED_BYTES=10737418240", self.process)
+        self.assertIn("MAX_SOURCE_BYTES=3221225472", self.process)
+        self.assertIn("MAX_EXPANDED_BYTES=6442450944", self.process)
         self.assertIn("MIN_FREE_KB=2097152", self.process)
         self.assertIn("--connect-timeout 30", self.process)
-        self.assertIn("--max-time 1800", self.process)
+        self.assertIn("--max-time 300", self.process)
         self.assertIn("--max-filesize \"$MAX_SOURCE_BYTES\"", self.process)
         self.assertIn("require_archive_quota", self.process)
-        self.assertIn("zipfile.ZipFile", self.process)
-        self.assertIn("tarfile.open", self.process)
+        self.assertIn("archive_quota.py", self.process)
         self.assertIn('[ "${probe_status:-1}" -eq 0 ] || return 1', self.process)
         self.assertIn('[[ "$expanded" =~ ^[0-9]+$ ]] || return 1', self.process)
         self.assertIn("require_free_disk", self.process)
+        self.assertIn('package_bytes=$(stat -f %z "$package_path")', self.process)
 
     def test_archive_quota_algorithms_measure_real_uncompressed_bytes(self):
+        spec = importlib.util.spec_from_file_location(
+            "archive_quota",
+            ROOT / ".github/scripts/archive_quota.py",
+        )
+        archive_quota = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(archive_quota)
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             payload = root / "payload"
@@ -515,17 +553,14 @@ class WorkflowPackagingRegressionTests(unittest.TestCase):
             tar_path = root / "payload.tar.gz"
             with tarfile.open(tar_path, "w:gz") as archive:
                 archive.add(payload, arcname="payload")
+            self.assertEqual(archive_quota.archive_totals(zip_path, "zip"), (4096, 1))
             self.assertEqual(
-                sum(item.file_size for item in zipfile.ZipFile(zip_path).infolist()),
-                4096,
+                archive_quota.archive_totals(tar_path, "tar.gz"),
+                (4096, 1),
             )
-            with tarfile.open(tar_path) as archive:
-                self.assertEqual(sum(item.size for item in archive.getmembers()), 4096)
 
     def test_same_version_rebuild_does_not_touch_prior_blob_before_marker(self):
-        marker = self.workflow.index("- name: Publish catalog state")
-        before_marker = self.workflow[:marker]
-        self.assertNotIn("az storage blob delete", before_marker)
+        self.assertNotIn("az storage blob delete", self.workflow)
         self.assertIn('prior_sha=$(printf', self.process)
         self.assertIn('prior_vendor_url=$(printf', self.process)
         self.assertIn('"$prior_vendor_url" != "$url"', self.process)
@@ -618,17 +653,14 @@ class WorkflowPackagingRegressionTests(unittest.TestCase):
         self.assertIn("verified_source_identity_matches", self.process)
 
     def test_strict_index_generation_runs_after_packaging(self):
-        pre = self.workflow.index(
-            "python .github/scripts/generate_supported_apps.py --allow-incomplete"
-        )
         process = self.workflow.index("- name: Process apps")
-        final = self.workflow.index(
-            "run: python .github/scripts/generate_supported_apps.py", process
-        )
-        marker = self.workflow.index("- name: Publish catalog state")
-        self.assertLess(pre, process)
+        final = self.workflow.index("- name: Finalize catalog readiness", process)
+        provenance = self.workflow.index("- name: Create publication provenance")
         self.assertLess(process, final)
-        self.assertLess(final, marker)
+        self.assertLess(final, provenance)
+        readiness = self.workflow[final:provenance]
+        self.assertIn("generate_supported_apps.py", readiness)
+        self.assertIn("--exclude-invalid", readiness)
 
 
 if __name__ == "__main__":

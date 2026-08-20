@@ -12,5 +12,8 @@
   "sha": "2d94a3427443f2805d162d6048bcc8fd940e23b509637e4a373c32e2c95c4cac",
   "category": "Security",
   "publisher": "AppGate, Inc.",
-  "previous_version": "6.6.0"
+  "previous_version": "6.6.0",
+  "source_version": "6.6.0",
+  "source_sha256": "90cdbd253d63344860de6ddf32f975ca066d5682c404674a8443c2e654b4c890",
+  "source_sha256_provenance": "homebrew"
 }

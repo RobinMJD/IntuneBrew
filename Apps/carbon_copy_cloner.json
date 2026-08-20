@@ -12,5 +12,8 @@
   "sha": "8b3e1cfffd93d27ae220355c9399c1ef5a761091169ae91b106ec96ed43e4884",
   "category": "Utilities",
   "publisher": "Bombich Software",
-  "homebrew_cask": "carbon-copy-cloner"
+  "homebrew_cask": "carbon-copy-cloner",
+  "source_version": "7.1.6,8368",
+  "source_sha256": "4b3a70ea46ed1edc7013cc5fe0d853837f343ddcf68e4d4e645d4b98076ff248",
+  "source_sha256_provenance": "homebrew"
 }

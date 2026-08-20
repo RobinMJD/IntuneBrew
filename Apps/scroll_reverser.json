@@ -12,5 +12,8 @@
   "category": "Utilities",
   "publisher": "Pilot Moon",
   "previous_version": "1.9",
-  "homebrew_cask": "scroll-reverser"
+  "homebrew_cask": "scroll-reverser",
+  "source_version": "1.9",
+  "source_sha256": "0961dbb6f8ef4e5edd432bf0dd6e7cdd4219d8bac8b3baa3f576af9a42bbf585",
+  "source_sha256_provenance": "homebrew"
 }

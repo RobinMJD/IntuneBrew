@@ -23,5 +23,8 @@
   },
   "category": "Utilities",
   "publisher": "iterate GmbH",
-  "homebrew_cask": "cyberduck"
+  "homebrew_cask": "cyberduck",
+  "source_version": "9.5.3,45464",
+  "source_sha256": "b53092b7b7057d9782c093839bc47b19afd0987b23d7252bae435078f3e47e28",
+  "source_sha256_provenance": "homebrew"
 }

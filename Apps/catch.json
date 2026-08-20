@@ -12,5 +12,8 @@
   "sha": "10f26f9826f01c53a11999f5d0d469ad2b6c9c36d72145afacb59a18ee806972",
   "category": "Productivity",
   "publisher": "Giorgio Calderolla",
-  "homebrew_cask": "catch"
+  "homebrew_cask": "catch",
+  "source_version": "2.3",
+  "source_sha256": "8e138ec2c3e2d2a9f66eabc534f32f3ca64a3cd967b8896a3feddd438b391411",
+  "source_sha256_provenance": "homebrew"
 }

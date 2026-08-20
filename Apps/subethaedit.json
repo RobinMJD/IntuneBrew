@@ -12,5 +12,8 @@
   "category": "Developer Tools",
   "publisher": "The Coding Monkeys",
   "previous_version": "5.2.4",
-  "homebrew_cask": "subethaedit"
+  "homebrew_cask": "subethaedit",
+  "source_version": "5.2.4",
+  "source_sha256": "11f9cce3e33988a912f9c1df085ebd0d58b65fc856dc7806041b70bcd30c5043",
+  "source_sha256_provenance": "homebrew"
 }

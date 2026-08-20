@@ -12,5 +12,8 @@
   "sha": "25a79d7d319692eadf24ed436e598fee001ad275ed1d6a490bed239eeb2fdf0c",
   "category": "Developer Tools",
   "publisher": "MacStadium",
-  "previous_version": "2.4.0"
+  "previous_version": "2.4.0",
+  "source_version": "2.4.0",
+  "source_sha256": "c7f6fbd9bfca29353618f22736d1d83234239fa1a00cb4493c62a853ebaa5abb",
+  "source_sha256_provenance": "homebrew"
 }

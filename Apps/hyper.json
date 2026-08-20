@@ -13,5 +13,8 @@
   "previous_version": "3.4.1",
   "category": "Developer Tools",
   "publisher": "Vercel",
-  "homebrew_cask": "hyper"
+  "homebrew_cask": "hyper",
+  "source_version": "3.4.1",
+  "source_sha256": "7d2440fdd93fde4101e603fe2de46732b54292a868ad17dbcb55288e6f8430a8",
+  "source_sha256_provenance": "homebrew"
 }
