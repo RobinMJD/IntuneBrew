@@ -24,12 +24,16 @@ ARTIFACT_METADATA_KEYS = {
     "artifact_pkg",
     "artifact_kind",
     "archive_format",
+    "source_version",
+    "source_sha256",
 }
 
 
 def get_artifact_kind(url):
     """Classify an artifact from its authoritative URL path."""
     path = unquote(urlparse(url).path).lower()
+    if path.endswith(".dmg.gz"):
+        return "dmg_gzip"
     if path.endswith(".pkg"):
         return "pkg"
     if path.endswith(".dmg"):
@@ -116,7 +120,7 @@ def get_filename_from_url(url, app_name=None, version=None, default_ext=".dmg"):
     filename = os.path.basename(path)
 
     # Check if the filename has a valid extension
-    valid_extensions = ['.dmg', '.pkg', '.zip', '.app', '.tar.gz', '.tgz', '.tar.xz', '.tar.bz2', '.tbz']
+    valid_extensions = ['.dmg.gz', '.dmg', '.pkg', '.zip', '.app', '.tar.gz', '.tgz', '.tar.xz', '.tar.bz2', '.tbz']
     has_valid_ext = any(filename.lower().endswith(ext) for ext in valid_extensions)
 
     # If no valid extension found, try to construct a proper filename
@@ -1826,7 +1830,8 @@ def get_homebrew_app_info(json_url, needs_packaging=False, is_pkg_in_dmg=False, 
         )
 
     # Clean up version string by removing anything after the comma or underscore
-    version = data["version"]
+    source_version = data["version"]
+    version = source_version
     if ',' in version:
         version = version.split(',')[0]
     if '_' in version:
@@ -1860,6 +1865,8 @@ def get_homebrew_app_info(json_url, needs_packaging=False, is_pkg_in_dmg=False, 
         # extensionless URL would be deployed as a DMG and fail to mount (Issue #107)
         "fileName": get_filename_from_url(url, app_name=data["name"][0], version=version, default_ext=".pkg" if is_pkg else ".dmg")
     }
+    app_info["source_version"] = source_version
+    app_info["source_sha256"] = data.get("sha256") or ""
     app_info["artifact_kind"] = artifact_kind
     if archive_format:
         app_info["archive_format"] = archive_format
@@ -1879,7 +1886,7 @@ def get_homebrew_app_info(json_url, needs_packaging=False, is_pkg_in_dmg=False, 
     elif is_pkg:
         app_info["type"] = (
             "app"
-            if artifact_kind == "archive"
+            if artifact_kind in ("archive", "dmg_gzip")
             and any(installable_artifacts.values())
             else "pkg"
         )

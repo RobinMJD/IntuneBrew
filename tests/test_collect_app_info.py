@@ -164,6 +164,12 @@ class CollectAppInfoTests(unittest.TestCase):
             collect_app_info.get_archive_format("https://example.test/app.tgz"),
             "tar.gz",
         )
+        self.assertEqual(
+            collect_app_info.get_artifact_kind(
+                "https://example.test/TOSHIBA_ColorMFP.dmg.gz"
+            ),
+            "dmg_gzip",
+        )
 
     def test_declared_app_wins_over_nested_helper_apps(self):
         artifacts = collect_app_info.get_installable_artifacts(
@@ -203,6 +209,50 @@ class CollectAppInfoTests(unittest.TestCase):
         self.assertEqual(app_info["type"], "app")
         self.assertEqual(app_info["artifact_app"], "Example.app")
         self.assertEqual(app_info["sha"], "a" * 64)
+
+    def test_full_source_identity_is_persisted_without_normalization(self):
+        url = "https://formulae.brew.sh/api/cask/keybase.json"
+        payload = {
+            "name": ["Keybase"],
+            "desc": "Encrypted messaging",
+            "version": "6.6.3,20260603142618,f60f2ff97e",
+            "url": "https://example.test/Keybase.dmg",
+            "sha256": "no_check",
+            "homepage": "https://example.test/",
+            "artifacts": [{"app": ["Keybase.app"]}],
+        }
+
+        with patch.dict(collect_app_info.cask_cache, {url: payload}, clear=True):
+            app_info = collect_app_info.get_homebrew_app_info(
+                url,
+                needs_packaging=True,
+            )
+
+        self.assertEqual(app_info["version"], "6.6.3")
+        self.assertEqual(
+            app_info["source_version"],
+            "6.6.3,20260603142618,f60f2ff97e",
+        )
+        self.assertEqual(app_info["source_sha256"], "no_check")
+
+    def test_gzip_dmg_pkg_is_queued_for_safe_packaging(self):
+        url = "https://formulae.brew.sh/api/cask/toshiba-color-mfp.json"
+        payload = {
+            "name": ["TOSHIBA ColorMFP"],
+            "desc": "Printer driver",
+            "version": "7.119.4.0,21838",
+            "url": "https://example.test/TOSHIBA_ColorMFP.dmg.gz",
+            "sha256": "d" * 64,
+            "homepage": "https://example.test/",
+            "artifacts": [{"pkg": ["TOSHIBA ColorMFP.pkg"]}],
+        }
+
+        with patch.dict(collect_app_info.cask_cache, {url: payload}, clear=True):
+            app_info = collect_app_info.get_homebrew_app_info(url, is_pkg=True)
+
+        self.assertEqual(app_info["artifact_kind"], "dmg_gzip")
+        self.assertEqual(app_info["artifact_pkg"], "TOSHIBA ColorMFP.pkg")
+        self.assertEqual(app_info["type"], "app")
 
     def test_bundle_id_override_fills_cask_without_detectable_id(self):
         url = "https://formulae.brew.sh/api/cask/cmtrace-open.json"
@@ -251,6 +301,8 @@ class CollectAppInfoTests(unittest.TestCase):
             "artifact_app": "Postman.app",
             "artifact_kind": "archive",
             "archive_format": "zip",
+            "source_version": "1.0,101",
+            "source_sha256": "d" * 64,
         }
 
         collect_app_info.sync_artifact_metadata(existing, fresh)
@@ -258,6 +310,8 @@ class CollectAppInfoTests(unittest.TestCase):
         self.assertEqual(existing["artifact_app"], "Postman.app")
         self.assertEqual(existing["artifact_kind"], "archive")
         self.assertEqual(existing["archive_format"], "zip")
+        self.assertEqual(existing["source_version"], "1.0,101")
+        self.assertEqual(existing["source_sha256"], "d" * 64)
         self.assertNotIn("artifact_pkg", existing)
 
     def test_existing_manifest_drops_stale_archive_format(self):

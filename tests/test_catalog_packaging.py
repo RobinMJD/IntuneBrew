@@ -165,7 +165,9 @@ class WorkflowPackagingRegressionTests(unittest.TestCase):
         )
 
     def test_direct_xar_pkg_routes_as_pkg_without_archive_extraction(self):
-        pkg_route = self.process.split("case \"$kind\" in", 1)[1].split("dmg)", 1)[0]
+        pkg_route = self.process.split("case \"$kind\" in", 1)[1].split(
+            "dmg|dmg_gzip)", 1
+        )[0]
         self.assertIn("pkg)", pkg_route)
         self.assertIn("direct PKG", pkg_route)
         self.assertNotIn("ditto -x -k", pkg_route)
@@ -175,6 +177,14 @@ class WorkflowPackagingRegressionTests(unittest.TestCase):
         dmg_route = self.process.split("dmg)", 1)[1].split("archive)", 1)[0]
         self.assertIn("hdiutil attach", dmg_route)
         self.assertNotIn("file -b", self.process)
+
+    def test_gzip_dmg_is_decompressed_before_mounting(self):
+        route = self.process.split("dmg|dmg_gzip)", 1)[1].split("archive)", 1)[0]
+        self.assertIn('if [ "$kind" = "dmg_gzip" ]', route)
+        self.assertIn('gunzip -c "${download_path}.dmg.gz"', route)
+        self.assertIn('hdiutil attach "${download_path}.dmg"', route)
+        self.assertLess(route.index("gunzip -c"), route.index("hdiutil attach"))
+        self.assertNotIn("payload.pkg", route)
 
     def test_dmg_falls_back_to_declared_top_level_app(self):
         self.assertIn('find_app_payload "$mount_dir" "$declared_app"', self.process)
@@ -385,6 +395,44 @@ class WorkflowPackagingRegressionTests(unittest.TestCase):
                     check=False,
                 )
                 self.assertEqual(result.returncode, expected_code)
+
+    def test_reuse_requires_verified_full_source_identity(self):
+        helper = self.process.split(
+            "verified_source_identity_matches() {", 1
+        )[1].split("configured_blob_leaf() {", 1)[0]
+        helper = "verified_source_identity_matches() {" + helper
+        bash = shutil.which("bash")
+        verified_sha = "e" * 64
+        cases = (
+            (
+                ("6.6.3,build1", "6.6.3,build1", verified_sha, verified_sha),
+                0,
+            ),
+            (
+                ("6.6.3,build1", "6.6.3,build2", verified_sha, verified_sha),
+                1,
+            ),
+            (("14.4.9,14491", "14.4.9,14491", "no_check", "no_check"), 1),
+            (("", "", "", ""), 1),
+        )
+        for arguments, expected_code in cases:
+            with self.subTest(arguments=arguments):
+                result = subprocess.run(
+                    [
+                        bash,
+                        "-c",
+                        helper + '\nverified_source_identity_matches "$@"\n',
+                        "_",
+                        *arguments,
+                    ],
+                    check=False,
+                )
+                self.assertEqual(result.returncode, expected_code)
+
+    def test_reuse_condition_reads_prior_and_current_source_identity(self):
+        self.assertIn(".source_version // empty", self.process)
+        self.assertIn(".source_sha256 // empty", self.process)
+        self.assertIn("verified_source_identity_matches", self.process)
 
     def test_strict_index_generation_runs_after_packaging(self):
         pre = self.workflow.index(

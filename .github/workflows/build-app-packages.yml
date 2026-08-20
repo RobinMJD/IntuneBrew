@@ -356,6 +356,7 @@ jobs:
             path=$(printf '%s' "$path" | tr '[:upper:]' '[:lower:]')
             case "$path" in
               *.pkg) echo "pkg" ;;
+              *.dmg.gz) echo "dmg_gzip" ;;
               *.dmg) echo "dmg" ;;
               *.zip|*.tar.gz|*.tgz|*.tar.xz|*.tar.bz2|*.tbz) echo "archive" ;;
               *) echo "unknown" ;;
@@ -452,6 +453,17 @@ jobs:
 
           safe_blob_leaf() {
             [[ "$1" =~ ^[A-Za-z0-9._@+=-]+\.pkg$ ]] && [[ "$1" != .* ]]
+          }
+
+          verified_source_identity_matches() {
+            local prior_version="$1"
+            local current_version="$2"
+            local prior_sha="$3"
+            local current_sha="$4"
+            [ -n "$current_version" ] \
+              && [ "$prior_version" = "$current_version" ] \
+              && [[ "$current_sha" =~ ^[0-9a-fA-F]{64}$ ]] \
+              && [ "$prior_sha" = "$current_sha" ]
           }
 
           configured_blob_leaf() {
@@ -596,6 +608,8 @@ jobs:
             prior_vendor_url=$(printf '%s' "$prior_manifest" | jq -r '.vendor_url // empty' 2>/dev/null || true)
             prior_version=$(printf '%s' "$prior_manifest" | jq -r '.version // empty' 2>/dev/null || true)
             prior_sha=$(printf '%s' "$prior_manifest" | jq -r '.sha // empty' 2>/dev/null || true)
+            prior_source_version=$(printf '%s' "$prior_manifest" | jq -r '.source_version // empty' 2>/dev/null || true)
+            prior_source_sha=$(printf '%s' "$prior_manifest" | jq -r '.source_sha256 // empty' 2>/dev/null || true)
             prior_blob=$(reusable_blob_leaf "$prior_catalog_url" 2>/dev/null || true)
             cleanup_prior_blob=$(configured_blob_leaf "$prior_catalog_url" 2>/dev/null || true)
             prior_is_configured=false
@@ -611,6 +625,8 @@ jobs:
             
             # Get version and type from JSON file
             version=$(jq -r '.version' "$WORKSPACE_DIR/Apps/${app_name}.json")
+            source_version=$(jq -r '.source_version // empty' "$WORKSPACE_DIR/Apps/${app_name}.json")
+            source_sha=$(jq -r '.source_sha256 // empty' "$WORKSPACE_DIR/Apps/${app_name}.json")
             app_type=$(jq -r '.type' "$WORKSPACE_DIR/Apps/${app_name}.json")
             echo "📦 Version: $version"
             echo "🏷️ Type: $app_type"
@@ -623,6 +639,9 @@ jobs:
             
             reuse_existing_blob=false
             if [ "$prior_version" = "$version" ] \
+              && verified_source_identity_matches \
+                "$prior_source_version" "$source_version" \
+                "$prior_source_sha" "$source_sha" \
               && [[ "$prior_sha" =~ ^[0-9a-fA-F]{64}$ ]] \
               && [ -n "$prior_blob" ] \
               && immutable_blob_exists "$prior_blob"; then
@@ -957,8 +976,23 @@ jobs:
                     continue
                   fi
                   ;;
-                dmg)
-                  if ! curl -f -L -o "${download_path}.dmg" "$url"; then
+                dmg|dmg_gzip)
+                  if [ "$kind" = "dmg_gzip" ]; then
+                    if ! curl -f -L -o "${download_path}.dmg.gz" "$url"; then
+                      FAILED_APPS+=("$app_name")
+                      ERROR_LOG+=("$app_name: Failed to download gzip-compressed DMG from $url")
+                      rm -rf "$extract_dir"
+                      continue
+                    fi
+                    if ! gunzip -c "${download_path}.dmg.gz" > "${download_path}.dmg"; then
+                      FAILED_APPS+=("$app_name")
+                      ERROR_LOG+=("$app_name: Failed to decompress DMG from $url")
+                      rm -rf "$extract_dir"
+                      rm -f "${download_path}.dmg.gz" "${download_path}.dmg"
+                      continue
+                    fi
+                    rm -f "${download_path}.dmg.gz"
+                  elif ! curl -f -L -o "${download_path}.dmg" "$url"; then
                     FAILED_APPS+=("$app_name")
                     ERROR_LOG+=("$app_name: Failed to download DMG from $url")
                     rm -rf "$extract_dir"
