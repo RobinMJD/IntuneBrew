@@ -313,14 +313,16 @@ jobs:
             local plist=""
             local package_info=""
             local package_id=""
-            if ! expand_dir=$(mktemp -d 2>/dev/null); then
+            if [ -z "${app_temp_dir:-}" ] \
+              || ! expand_dir=$(mktemp -d "$app_temp_dir/pkg-expand.XXXXXX" 2>/dev/null); then
               echo "Could not create a temporary directory to inspect $pkg_path, bundleId left unchanged" >&2
               return 0
             fi
             # --expand-full also unpacks Payload, so .app bundles end up as real
             # directories. Packages without an .app payload (system extensions,
             # drivers) legitimately yield nothing here.
-            if pkgutil --expand-full "$pkg_path" "$expand_dir/payload" >/dev/null 2>&1; then
+            if pkgutil --expand-full "$pkg_path" "$expand_dir/payload" >/dev/null 2>&1 \
+              && require_extracted_quota "$expand_dir"; then
               # Shortest path wins so a nested helper bundle inside Frameworks
               # cannot shadow the top level app.
               plist=$(find "$expand_dir/payload" -type f -path "*.app/Contents/Info.plist" -print 2>/dev/null | awk '{ print length, $0 }' | sort -n | head -1 | cut -d" " -f2-)
@@ -519,6 +521,7 @@ jobs:
           MAX_EXPANDED_BYTES=6442450944
           MAX_ARCHIVE_MEMBERS=100000
           MIN_FREE_KB=2097152
+          HOST_WORKSPACE_KB=10485760
           WORKSPACE_CAPACITY=10g
 
           require_free_disk() {
@@ -528,29 +531,66 @@ jobs:
             [ "${free_kb:-0}" -ge "$MIN_FREE_KB" ]
           }
 
+          require_host_workspace_capacity() {
+            local backing_path="${RUNNER_TEMP:-${TMPDIR:-/tmp}}"
+            local free_kb=""
+            free_kb=$(df -Pk "$backing_path" | awk 'NR==2 {print $4}')
+            [ "${free_kb:-0}" -ge $((HOST_WORKSPACE_KB + MIN_FREE_KB)) ]
+          }
+
           destroy_app_workspace() {
-            if [ -n "${app_mount_dir:-}" ] && mount | grep -Fq " on $app_mount_dir "; then
-              hdiutil detach "$app_mount_dir" -force >/dev/null 2>&1 || true
+            if [ "${app_attached:-false}" = true ] \
+              && [ -z "${app_device:-}" ] \
+              && [ -n "${app_sparse_image:-}" ]; then
+              app_device=$(hdiutil info -plist 2>/dev/null \
+                | plutil -convert json -o - -- - 2>/dev/null \
+                | python -c 'import json,pathlib,re,sys; target=pathlib.Path(sys.argv[1]).resolve(); data=json.load(sys.stdin); devices=[item.get("dev-entry") for image in data.get("images",[]) if image.get("image-path") and pathlib.Path(image["image-path"]).resolve()==target for item in image.get("system-entities",[]) if item.get("mount-point")]; valid=sorted({value for value in devices if isinstance(value,str) and re.fullmatch(r"/dev/disk[0-9]+(?:s[0-9]+)*",value)}); assert len(valid)==1; print(valid[0])' "$app_sparse_image" 2>/dev/null || true)
             fi
-            [ -z "${app_mount_dir:-}" ] || rm -rf "$app_mount_dir"
-            [ -z "${app_sparse_image:-}" ] || rm -f "$app_sparse_image"
+            if [ "${app_attached:-false}" = true ] && [ -z "${app_device:-}" ]; then
+              echo "Bounded workspace is attached but its device is unresolved; refusing destructive cleanup" >&2
+              return 1
+            fi
+            if [ -n "${app_device:-}" ]; then
+              if ! hdiutil detach "$app_device" -force >/dev/null 2>&1; then
+                echo "Could not detach bounded workspace device $app_device" >&2
+                return 1
+              fi
+              app_attached=false
+            fi
+            [ -z "${app_mount_dir:-}" ] || rm -rf "$app_mount_dir" || return 1
+            [ -z "${app_sparse_image:-}" ] || rm -f "$app_sparse_image" || return 1
             app_temp_dir=""
             app_mount_dir=""
             app_sparse_image=""
+            app_device=""
+            app_attached=false
           }
 
           create_app_workspace() {
             local safe_app=""
-            require_free_disk "${TMPDIR:-/tmp}" || return 1
+            local attach_plist=""
+            local devices=""
+            local image_base=""
+            require_host_workspace_capacity || return 1
             safe_app=$(printf '%s' "$app_name" | tr -cd 'A-Za-z0-9._-')
-            app_sparse_image=$(mktemp -u "${TMPDIR:-/tmp}/intunebrew-${safe_app}.XXXXXX.sparseimage")
-            app_mount_dir=$(mktemp -d "${TMPDIR:-/tmp}/intunebrew-mount-${safe_app}.XXXXXX")
+            image_base=$(mktemp -u "${RUNNER_TEMP:-${TMPDIR:-/tmp}}/intunebrew-${safe_app}.XXXXXX")
+            app_sparse_image="${image_base}.sparseimage"
+            app_mount_dir=$(mktemp -d "${RUNNER_TEMP:-${TMPDIR:-/tmp}}/intunebrew-mount-${safe_app}.XXXXXX")
             hdiutil create -quiet -size "$WORKSPACE_CAPACITY" -fs APFS \
               -type SPARSE -volname "IntuneBrew-$safe_app" "$app_sparse_image" \
               || { destroy_app_workspace; return 1; }
-            hdiutil attach -quiet "$app_sparse_image" -mountpoint "$app_mount_dir" \
-              -nobrowse || { destroy_app_workspace; return 1; }
+            attach_plist=$(hdiutil attach "$app_sparse_image" \
+              -mountpoint "$app_mount_dir" -nobrowse -plist) \
+              || { destroy_app_workspace; return 1; }
+            app_attached=true
+            devices=$(printf '%s' "$attach_plist" \
+              | plutil -convert json -o - -- - 2>/dev/null \
+              | python -c 'import json,re,sys; data=json.load(sys.stdin); values={item.get("dev-entry") for item in data.get("system-entities",[]) if item.get("mount-point")}; valid=sorted(value for value in values if isinstance(value,str) and re.fullmatch(r"/dev/disk[0-9]+(?:s[0-9]+)*",value)); assert len(valid)==1; print(valid[0])') \
+              || { destroy_app_workspace; return 1; }
+            app_device="$devices"
             app_temp_dir="$app_mount_dir"
+            require_free_disk "$app_temp_dir" \
+              || { destroy_app_workspace; return 1; }
           }
 
           trap destroy_app_workspace EXIT

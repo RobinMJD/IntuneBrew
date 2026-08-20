@@ -8,6 +8,7 @@ import tarfile
 import tempfile
 import unittest
 import zipfile
+from io import BytesIO
 from pathlib import Path
 from unittest.mock import patch
 
@@ -510,9 +511,19 @@ class WorkflowPackagingRegressionTests(unittest.TestCase):
 
     def test_package_workspace_is_bounded_and_cleaned(self):
         self.assertIn("WORKSPACE_CAPACITY=10g", self.process)
+        self.assertIn("HOST_WORKSPACE_KB=10485760", self.process)
+        self.assertIn("require_host_workspace_capacity", self.process)
         self.assertIn("hdiutil create", self.process)
         self.assertIn("hdiutil attach", self.process)
-        self.assertIn("hdiutil detach", self.process)
+        self.assertIn("-plist", self.process)
+        self.assertIn('app_device="$devices"', self.process)
+        self.assertIn('hdiutil detach "$app_device" -force', self.process)
+        self.assertNotIn('hdiutil detach "$app_mount_dir"', self.process)
+        self.assertIn("app_attached=true", self.process)
+        self.assertIn(
+            "refusing destructive cleanup",
+            self.process,
+        )
         self.assertIn("trap destroy_app_workspace EXIT", self.process)
         self.assertIn('package_path="$app_temp_dir/output.pkg"', self.process)
         self.assertNotIn('$HOME/Desktop/${app_name}', self.process)
@@ -521,6 +532,14 @@ class WorkflowPackagingRegressionTests(unittest.TestCase):
         self.assertIn('[ -z "${app_mount_dir:-}" ] || rm -rf', self.process)
         self.assertIn('[ -z "${app_sparse_image:-}" ] || rm -f', self.process)
         self.assertGreaterEqual(self.process.count("destroy_app_workspace"), 4)
+
+    def test_pkg_expansion_stays_inside_bounded_workspace(self):
+        helper = self.process.split("extract_bundle_id_from_pkg() {", 1)[1].split(
+            "require_bundle_id_match() {", 1
+        )[0]
+        self.assertIn('mktemp -d "$app_temp_dir/pkg-expand.XXXXXX"', helper)
+        self.assertIn('require_extracted_quota "$expand_dir"', helper)
+        self.assertNotIn("mktemp -d 2>/dev/null", helper)
 
     def test_resource_guards_bound_downloads_archives_and_disk(self):
         self.assertIn("timeout-minutes: 180", self.workflow)
@@ -536,6 +555,16 @@ class WorkflowPackagingRegressionTests(unittest.TestCase):
         self.assertIn('[[ "$expanded" =~ ^[0-9]+$ ]] || return 1', self.process)
         self.assertIn("require_free_disk", self.process)
         self.assertIn('package_bytes=$(stat -f %z "$package_path")', self.process)
+
+    def test_streaming_blob_readback_has_no_second_disk_copy(self):
+        helper = self.process.split("verify_blob_sha() {", 1)[1].split(
+            "prior_blob_sha_matches() {", 1
+        )[0]
+        self.assertIn("az account get-access-token", helper)
+        self.assertIn("Authorization: Bearer", helper)
+        self.assertIn("| shasum -a 256", helper)
+        self.assertNotIn("az storage blob download", helper)
+        self.assertNotIn("mktemp", helper)
 
     def test_archive_quota_algorithms_measure_real_uncompressed_bytes(self):
         spec = importlib.util.spec_from_file_location(
@@ -594,6 +623,72 @@ class WorkflowPackagingRegressionTests(unittest.TestCase):
                     1024,
                     2,
                 )
+
+    def test_zip_data_descriptor_and_zip64_are_supported(self):
+        spec = importlib.util.spec_from_file_location(
+            "archive_quota_descriptor",
+            ROOT / ".github/scripts/archive_quota.py",
+        )
+        archive_quota = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(archive_quota)
+
+        class NonSeekable(BytesIO):
+            def seekable(self):
+                return False
+
+            def seek(self, *args, **kwargs):
+                raise OSError("not seekable")
+
+        descriptor = NonSeekable()
+        with zipfile.ZipFile(descriptor, "w") as archive:
+            archive.writestr("descriptor.txt", b"x" * 1024)
+
+        with tempfile.TemporaryDirectory() as directory:
+            descriptor_path = Path(directory) / "descriptor.zip"
+            descriptor_path.write_bytes(descriptor.getvalue())
+            self.assertEqual(
+                archive_quota.archive_totals(
+                    descriptor_path,
+                    "zip",
+                    2048,
+                    10,
+                ),
+                (1024, 1),
+            )
+
+            zip64_path = Path(directory) / "zip64.zip"
+            with zipfile.ZipFile(zip64_path, "w", allowZip64=True) as archive:
+                with archive.open("zip64.txt", "w", force_zip64=True) as item:
+                    item.write(b"y" * 2048)
+            self.assertEqual(
+                archive_quota.archive_totals(
+                    zip64_path,
+                    "zip",
+                    4096,
+                    10,
+                ),
+                (2048, 1),
+            )
+
+    def test_zip_central_directory_malformed_and_early_limits_fail(self):
+        spec = importlib.util.spec_from_file_location(
+            "archive_quota_malformed",
+            ROOT / ".github/scripts/archive_quota.py",
+        )
+        archive_quota = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(archive_quota)
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "many.zip"
+            with zipfile.ZipFile(path, "w") as archive:
+                for index in range(5):
+                    archive.writestr(f"item-{index}", b"x")
+            with self.assertRaises(archive_quota.QuotaExceeded):
+                archive_quota.archive_totals(path, "zip", 1024, 2)
+
+            truncated = Path(directory) / "truncated.zip"
+            truncated.write_bytes(path.read_bytes()[:-10])
+            with self.assertRaises(ValueError):
+                archive_quota.archive_totals(truncated, "zip", 1024, 10)
 
     def test_same_version_rebuild_does_not_touch_prior_blob_before_marker(self):
         self.assertNotIn("az storage blob delete", self.workflow)
