@@ -16,6 +16,9 @@ from unittest.mock import patch
 ROOT = Path(__file__).resolve().parents[1]
 WORKFLOW_PATH = ROOT / ".github/workflows/build-app-packages.yml"
 GENERATOR_PATH = ROOT / ".github/scripts/generate_supported_apps.py"
+REFERER_VALIDATOR_PATH = (
+    ROOT / ".github/scripts/validate_download_referer.py"
+)
 
 SPEC = importlib.util.spec_from_file_location("generate_supported_apps", GENERATOR_PATH)
 generator = importlib.util.module_from_spec(SPEC)
@@ -23,6 +26,31 @@ SPEC.loader.exec_module(generator)
 
 
 class CatalogPublicationContractTests(unittest.TestCase):
+    def test_download_referer_validator_is_fail_closed(self):
+        common = [
+            os.fspath(REFERER_VALIDATOR_PATH),
+            "--source",
+            "https://www.jamovi.org/downloads/jamovi.dmg",
+            "--homepage",
+            "https://www.jamovi.org/",
+        ]
+        for referer, expected in (
+            ("https://www.jamovi.org/download.html", 0),
+            ("https://attacker.test/download.html", 1),
+            ("https://www.jamovi.org/download.html?token=secret", 1),
+            ("http://www.jamovi.org/download.html", 1),
+            (
+                "https://www.jamovi.org/download.html\r\nX-Injected: yes",
+                1,
+            ),
+        ):
+            with self.subTest(referer=referer):
+                result = subprocess.run(
+                    [shutil.which("python"), *common, "--referer", referer],
+                    check=False,
+                )
+                self.assertEqual(result.returncode, expected)
+
     def test_progress_catalog_contains_every_currently_valid_manifest(self):
         supported = json.loads(
             (ROOT / "supported_apps.json").read_text(encoding="utf-8")
@@ -536,6 +564,18 @@ class WorkflowPackagingRegressionTests(unittest.TestCase):
         self.assertIn('download_user_agent=$(jq -r', self.process)
         self.assertIn('download_user_agent:-default', self.process)
         self.assertIn("Mozilla/5.0 (Macintosh;", self.process)
+        self.assertIn("Homebrew/5.0.0 (Macintosh;", self.process)
+        self.assertIn('download_referer=$(jq -r', self.process)
+        self.assertIn(
+            'referer_args=(--header "Referer: $download_referer")',
+            self.process,
+        )
+        self.assertNotIn('referer_args=(--referer', self.process)
+        self.assertIn(
+            "Rejected unsafe or cross-origin download referer",
+            self.process,
+        )
+        self.assertIn("validate_download_referer.py", self.process)
         self.assertNotIn("url_specs", self.process)
         verifier = self.process.split("verify_source_file() {", 1)[1].split(
             "MAX_SOURCE_BYTES=", 1

@@ -277,6 +277,7 @@ class CollectAppInfoTests(unittest.TestCase):
     def test_downloaded_source_hash_mismatch_is_rejected(self):
         app_info = {
             "name": "Example",
+            "homebrew_cask": "example",
             "url": "https://example.test/app.dmg",
             "source_sha256": "a" * 64,
         }
@@ -285,8 +286,13 @@ class CollectAppInfoTests(unittest.TestCase):
             "calculate_file_hash",
             return_value="b" * 64,
         ):
-            with self.assertRaises(collect_app_info.SourceHashMismatchError):
+            with self.assertRaises(collect_app_info.SourceHashMismatchError) as context:
                 collect_app_info.calculate_verified_source_hash(app_info)
+        self.assertEqual(context.exception.app_name, "Example")
+        self.assertEqual(context.exception.cask_token, "example")
+        self.assertEqual(context.exception.expected, "a" * 64)
+        self.assertEqual(context.exception.actual, "b" * 64)
+        self.assertEqual(context.exception.url, app_info["url"])
         self.assertNotIn("sha", app_info)
         self.assertTrue(app_info["source_hash_mismatch"])
         self.assertFalse(
@@ -350,6 +356,82 @@ class CollectAppInfoTests(unittest.TestCase):
                     "installer-only",
                     "bootstrap",
                 )
+
+    def test_quarantined_cask_is_rejected_with_structured_identity(self):
+        url = "https://formulae.brew.sh/api/cask/visual-paradigm.json"
+        payload = {
+            "name": ["Visual Paradigm"],
+            "version": "18.0",
+            "url": "https://example.test/Visual_Paradigm.dmg",
+        }
+        quarantine = {
+            "visual-paradigm": {
+                "reason": "Source integrity quarantine: reviewed mismatch"
+            }
+        }
+        with (
+            patch.dict(collect_app_info.cask_cache, {url: payload}, clear=True),
+            patch.object(
+                collect_app_info,
+                "load_source_integrity_quarantine",
+                return_value=quarantine,
+            ),
+            self.assertRaises(
+                collect_app_info.SourceIntegrityQuarantineError
+            ) as context,
+        ):
+            collect_app_info.get_homebrew_app_info(url)
+
+        self.assertEqual(context.exception.display_name, "Visual Paradigm")
+        self.assertEqual(context.exception.cask_token, "visual-paradigm")
+        self.assertEqual(
+            context.exception.reason,
+            "Source integrity quarantine: reviewed mismatch",
+        )
+
+    def test_quarantine_can_create_a_missing_tombstone(self):
+        with tempfile.TemporaryDirectory() as directory:
+            collect_app_info.require_deprecation_tombstone(
+                directory,
+                "Visual Paradigm",
+                "Source integrity quarantine: reviewed mismatch",
+                "visual-paradigm",
+                allow_create=True,
+            )
+
+            tombstone_path = Path(directory) / "visual_paradigm.json"
+            tombstone = json.loads(tombstone_path.read_text(encoding="utf-8"))
+            self.assertTrue(tombstone["deprecated"])
+            self.assertEqual(tombstone["homebrew_cask"], "visual-paradigm")
+            self.assertEqual(
+                tombstone["deprecation_reason"],
+                "Source integrity quarantine: reviewed mismatch",
+            )
+
+    def test_quarantine_refuses_ownerless_existing_manifest(self):
+        with tempfile.TemporaryDirectory() as directory:
+            manifest_path = Path(directory) / "visual_paradigm.json"
+            original = json.dumps(
+                {"name": "Visual Paradigm", "version": "18.0"}
+            )
+            manifest_path.write_text(original, encoding="utf-8")
+
+            with self.assertRaisesRegex(
+                RuntimeError,
+                "not conclusively owned",
+            ):
+                collect_app_info.require_deprecation_tombstone(
+                    directory,
+                    "Visual Paradigm",
+                    "Source integrity quarantine: reviewed mismatch",
+                    "visual-paradigm",
+                    allow_create=True,
+                )
+
+            self.assertEqual(
+                manifest_path.read_text(encoding="utf-8"),
+                original,
+            )
 
     def test_gzip_dmg_pkg_is_queued_for_safe_packaging(self):
         url = "https://formulae.brew.sh/api/cask/toshiba-color-mfp.json"
@@ -557,6 +639,133 @@ class CollectAppInfoTests(unittest.TestCase):
         self.assertEqual(info["download_user_agent"], "browser")
         self.assertNotIn("headers", info)
 
+    def test_warp_preserves_current_homebrew_source_identity(self):
+        api_url = "https://formulae.brew.sh/api/cask/warp.json"
+        source_url = (
+            "https://app.warp.dev/download/brew?"
+            "version=v0.2026.08.19.08.15.stable_01"
+        )
+        payload = {
+            "token": "warp",
+            "name": ["Warp"],
+            "desc": "Rust-based terminal",
+            "version": "0.2026.08.19.08.15.stable_01",
+            "url": source_url,
+            "sha256": (
+                "464dedeeb39c5b9db9f5af1698d438c04bc22be664e91bfa01fa8d77e934f617"
+            ),
+            "homepage": "https://www.warp.dev/terminal",
+            "artifacts": [{"app": ["Warp.app"]}],
+            "url_specs": {},
+        }
+
+        with patch.dict(
+            collect_app_info.cask_cache,
+            {api_url: payload},
+            clear=True,
+        ):
+            app_info = collect_app_info.get_homebrew_app_info(api_url)
+
+        self.assertEqual(app_info["url"], source_url)
+        self.assertEqual(app_info["vendor_url"], source_url)
+        self.assertEqual(
+            app_info["source_version"],
+            "0.2026.08.19.08.15.stable_01",
+        )
+        self.assertEqual(app_info["source_sha256"], payload["sha256"])
+        self.assertEqual(app_info["artifact_kind"], "dmg")
+        self.assertEqual(app_info["type"], "app")
+        self.assertEqual(app_info["download_user_agent"], "homebrew")
+        self.assertNotIn("releases.warp.dev", json.dumps(app_info))
+
+    def test_only_safe_same_origin_referers_are_persisted(self):
+        api_url = "https://formulae.brew.sh/api/cask/jamovi.json"
+        base_payload = {
+            "token": "jamovi",
+            "name": ["jamovi"],
+            "desc": "Statistical software",
+            "version": "28.2.0.0",
+            "url": "https://www.jamovi.org/downloads/jamovi.dmg",
+            "sha256": "d" * 64,
+            "homepage": "https://www.jamovi.org/",
+            "artifacts": [{"app": ["jamovi.app"]}],
+        }
+        cases = (
+            ("https://www.jamovi.org/download.html", True),
+            ("https://www.jamovi.org:443/download.html", True),
+            ("http://www.jamovi.org/download.html", False),
+            ("https://user@www.jamovi.org/download.html", False),
+            ("https://www.jamovi.org:8443/download.html", False),
+            ("https://www.jamovi.org/download.html?token=secret", False),
+            ("https://www.jamovi.org/download.html#section", False),
+            ("https://attacker.test/download.html", False),
+            (
+                "https://www.jamovi.org/download.html\r\nX-Injected: yes",
+                False,
+            ),
+            ("https://www.jamovi.org/download.html\tX-Injected: yes", False),
+        )
+
+        for referer, accepted in cases:
+            with self.subTest(referer=referer):
+                payload = dict(
+                    base_payload,
+                    url_specs={
+                        "referer": referer,
+                        "headers": {"Authorization": "secret"},
+                        "cookies": {"session": "secret"},
+                    },
+                )
+                with patch.dict(
+                    collect_app_info.cask_cache,
+                    {api_url: payload},
+                    clear=True,
+                ):
+                    app_info = collect_app_info.get_homebrew_app_info(api_url)
+                if accepted:
+                    self.assertEqual(app_info["download_referer"], referer)
+                else:
+                    self.assertNotIn("download_referer", app_info)
+                self.assertNotIn("headers", app_info)
+                self.assertNotIn("cookies", app_info)
+
+    def test_jamovi_current_metadata_persists_approved_referer(self):
+        api_url = "https://formulae.brew.sh/api/cask/jamovi.json"
+        source_url = (
+            "https://www.jamovi.org/downloads/"
+            "jamovi-28.2.0.0-macos-arm64.dmg"
+        )
+        payload = {
+            "token": "jamovi",
+            "name": ["jamovi"],
+            "desc": "Statistical software",
+            "version": "28.2.0.0",
+            "url": source_url,
+            "sha256": (
+                "d50b4040b4c4040d842c48c58b39d05a1dac0eef879f5adc189348456f19991b"
+            ),
+            "homepage": "https://www.jamovi.org/",
+            "artifacts": [{"app": ["jamovi.app"]}],
+            "url_specs": {
+                "referer": "https://www.jamovi.org/download.html",
+            },
+        }
+
+        with patch.dict(
+            collect_app_info.cask_cache,
+            {api_url: payload},
+            clear=True,
+        ):
+            app_info = collect_app_info.get_homebrew_app_info(api_url)
+
+        self.assertEqual(app_info["url"], source_url)
+        self.assertEqual(app_info["vendor_url"], source_url)
+        self.assertEqual(app_info["source_sha256"], payload["sha256"])
+        self.assertEqual(
+            app_info["download_referer"],
+            payload["url_specs"]["referer"],
+        )
+
     def test_query_bearing_dmg_is_queued_for_repackaging(self):
         url = "https://formulae.brew.sh/api/cask/raycast.json"
         payload = {
@@ -579,6 +788,7 @@ class CollectAppInfoTests(unittest.TestCase):
             "artifact_pkg": "Old.pkg",
             "artifact_kind": "archive",
             "archive_format": "tar.gz",
+            "download_referer": "https://stale.example.test/download",
         }
         fresh = {
             "artifact_app": "Postman.app",
@@ -596,6 +806,7 @@ class CollectAppInfoTests(unittest.TestCase):
         self.assertEqual(existing["source_version"], "1.0,101")
         self.assertEqual(existing["source_sha256"], "d" * 64)
         self.assertNotIn("artifact_pkg", existing)
+        self.assertNotIn("download_referer", existing)
 
     def test_existing_manifest_drops_stale_archive_format(self):
         existing = {"artifact_kind": "archive", "archive_format": "zip"}
@@ -996,6 +1207,88 @@ class PrefetchTests(unittest.TestCase):
             self.assertEqual(app_data["type"], "pkg")
             self.assertEqual(collect_app_info.filename_collisions, [])
 
+    def test_all_source_mismatches_are_reported_after_remaining_apps_run(self):
+        urls = [
+            "https://formulae.brew.sh/api/cask/tailscale.json",
+            "https://formulae.brew.sh/api/cask/tailscale-app.json",
+        ]
+
+        def mismatch(app_info):
+            raise collect_app_info.SourceHashMismatchError(
+                app_info["name"],
+                "a" * 64,
+                "b" * 64,
+                app_info["url"],
+                app_info["homebrew_cask"],
+            )
+
+        stderr = io.StringIO()
+        with tempfile.TemporaryDirectory() as directory:
+            os.makedirs(os.path.join(directory, "Apps"))
+            with (
+                run_collector(directory, urls),
+                patch.object(
+                    collect_app_info,
+                    "calculate_verified_source_hash",
+                    side_effect=mismatch,
+                ) as verify,
+                patch.object(
+                    collect_app_info,
+                    "restore_mismatched_manifest",
+                ) as restore,
+                contextlib.redirect_stderr(stderr),
+                self.assertRaisesRegex(
+                    RuntimeError,
+                    "verification failed for 2 app",
+                ),
+            ):
+                collect_app_info.main()
+
+        self.assertEqual(verify.call_count, 2)
+        self.assertEqual(restore.call_count, 2)
+        summary = stderr.getvalue()
+        self.assertIn('"cask": "tailscale"', summary)
+        self.assertIn('"cask": "tailscale-app"', summary)
+        self.assertIn('"expected_sha256": "' + "a" * 64 + '"', summary)
+        self.assertIn('"actual_sha256": "' + "b" * 64 + '"', summary)
+
+    def test_mismatch_restore_replaces_partial_manifest_with_head_bytes(self):
+        with tempfile.TemporaryDirectory(dir=ROOT) as directory:
+            apps_folder = Path(directory) / "Apps"
+            apps_folder.mkdir()
+            manifest = apps_folder / "example.json"
+            manifest.write_text(
+                json.dumps(
+                    {
+                        "name": "Example",
+                        "homebrew_cask": "example",
+                        "version": "partial",
+                    }
+                ),
+                encoding="utf-8",
+            )
+            original = b'{"name":"Example","version":"stable"}\n'
+            mismatch = collect_app_info.SourceHashMismatchError(
+                "Example",
+                "a" * 64,
+                "b" * 64,
+                "https://example.test/app.dmg",
+                "example",
+            )
+            completed = Mock(returncode=0, stdout=original)
+
+            with patch.object(
+                collect_app_info.subprocess,
+                "run",
+                return_value=completed,
+            ) as run:
+                collect_app_info.restore_mismatched_manifest(
+                    apps_folder, mismatch
+                )
+
+            self.assertEqual(manifest.read_bytes(), original)
+            self.assertIn("HEAD:", run.call_args.args[0][2])
+
 
 def download_response(body=b"", status_code=200):
     """Build a fake streaming response for one calculate_file_hash attempt."""
@@ -1040,6 +1333,68 @@ class CalculateFileHashTests(unittest.TestCase):
         self.assertEqual(
             headers["User-Agent"], collect_app_info.DOWNLOAD_USER_AGENTS[0]
         )
+        self.assertNotIn("Referer", headers)
+
+    def test_jamovi_referer_reaches_redirected_hash_download(self):
+        payload = b"koly" + b"\x00" * 64
+        referer = "https://www.jamovi.org/download.html"
+
+        def get(_url, **kwargs):
+            if kwargs["headers"].get("Referer") != referer:
+                return download_response(b"<html>not found</html>")
+            response = download_response(payload)
+            response.url = "https://dl-cdn.jamovi.org/releases/jamovi.dmg"
+            return response
+
+        request = Mock(side_effect=get)
+        with patch.object(collect_app_info.requests, "get", request):
+            digest = collect_app_info.calculate_file_hash(
+                "https://www.jamovi.org/downloads/jamovi.dmg",
+                referer=referer,
+            )
+
+        self.assertEqual(digest, hashlib.sha256(payload).hexdigest())
+        self.assertEqual(
+            request.call_args.kwargs["headers"]["Referer"],
+            referer,
+        )
+
+    def test_verified_hash_passes_only_persisted_referer(self):
+        app_info = {
+            "name": "jamovi",
+            "url": "https://www.jamovi.org/downloads/jamovi.dmg",
+            "download_referer": "https://www.jamovi.org/download.html",
+            "source_sha256": "a" * 64,
+        }
+        with patch.object(
+            collect_app_info,
+            "calculate_file_hash",
+            return_value="a" * 64,
+        ) as calculate:
+            collect_app_info.calculate_verified_source_hash(app_info)
+
+        calculate.assert_called_once_with(
+            app_info["url"],
+            referer=app_info["download_referer"],
+            user_agent_mode="default",
+        )
+
+    def test_warp_hash_uses_fixed_homebrew_user_agent(self):
+        payload = b"koly" + b"\x00" * 64
+        request = Mock(return_value=download_response(payload))
+
+        with patch.object(collect_app_info.requests, "get", request):
+            digest = collect_app_info.calculate_file_hash(
+                "https://app.warp.dev/download/brew?version=v1",
+                user_agent_mode="homebrew",
+            )
+
+        self.assertEqual(digest, hashlib.sha256(payload).hexdigest())
+        self.assertEqual(
+            request.call_args.kwargs["headers"]["User-Agent"],
+            collect_app_info.HOMEBREW_DOWNLOAD_USER_AGENT,
+        )
+        request.assert_called_once()
 
     def test_rejected_agent_falls_through_to_the_next_one(self):
         payload = b"the real installer"
@@ -1114,6 +1469,35 @@ class CalculateFileHashTests(unittest.TestCase):
 
 
 class CatalogConsistencyTests(unittest.TestCase):
+    def test_visual_paradigm_quarantine_evidence_and_tombstone_are_consistent(self):
+        quarantine = json.loads(
+            (
+                ROOT / ".github/data/source-integrity-quarantine.json"
+            ).read_text(encoding="utf-8")
+        )["visual-paradigm"]
+        manifest = json.loads(
+            (ROOT / "Apps/visual_paradigm.json").read_text(encoding="utf-8")
+        )
+        supported = json.loads(
+            (ROOT / "supported_apps.json").read_text(encoding="utf-8")
+        )
+
+        self.assertEqual(
+            quarantine["expected_sha256"],
+            "725c3c81d254d32c7a9f920d23d14a7694be30c52c99d28d09c457f2a24ddd24",
+        )
+        self.assertEqual(
+            quarantine["actual_sha256"],
+            "fc3c40f94cf88841170e2fad78f85f3c3465ff6b5f502aa60c23c0262708f19b",
+        )
+        self.assertEqual(quarantine["url"], manifest["url"])
+        self.assertTrue(manifest["deprecated"])
+        self.assertEqual(
+            manifest["deprecation_reason"],
+            quarantine["reason"],
+        )
+        self.assertNotIn("visual_paradigm", supported)
+
     def test_unowned_catalog_entries_have_deterministic_disposition(self):
         configured = (
             collect_app_info.app_urls

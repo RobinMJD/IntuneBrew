@@ -1,0 +1,10 @@
+{
+  "visual-paradigm": {
+    "actual_sha256": "fc3c40f94cf88841170e2fad78f85f3c3465ff6b5f502aa60c23c0262708f19b",
+    "expected_sha256": "725c3c81d254d32c7a9f920d23d14a7694be30c52c99d28d09c457f2a24ddd24",
+    "observed_at": "2026-08-20",
+    "reason": "Source integrity quarantine: Homebrew SHA256 did not match bytes returned by the vendor URL in workflow run 32355543573",
+    "url": "https://www.visual-paradigm.com/downloads/vp18.0/20260521/Visual_Paradigm_18_0_20260521_OSX_AArch64.dmg",
+    "workflow_run_id": 32355543573
+  }
+}
