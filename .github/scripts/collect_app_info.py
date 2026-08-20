@@ -15,7 +15,10 @@ from urllib.parse import urlparse, unquote
 
 ARCHIVE_EXTENSIONS = (".zip", ".tar.gz", ".tgz", ".tar.xz", ".tar.bz2", ".tbz")
 ARTIFACT_KIND_OVERRIDES = {
+    "expandrive": ("dmg", None),
     "postman": ("archive", "zip"),
+    "raycast": ("dmg", None),
+    "tenable-nessus-agent": ("dmg", None),
     "visual-studio-code": ("archive", "zip"),
     "whatsapp": ("archive", "zip"),
 }
@@ -26,19 +29,29 @@ ARTIFACT_METADATA_KEYS = {
     "archive_format",
     "source_version",
     "source_sha256",
+    "bundleId_source",
 }
+INSTALLER_ONLY_DEPRECATION_REASON = (
+    "Bootstrap installer only; no directly deployable app or package artifact"
+)
+NO_DEPLOYABLE_PAYLOAD_REASON = (
+    "No directly deployable app or package artifact"
+)
 
 
 def get_artifact_kind(url):
     """Classify an artifact from its authoritative URL path."""
-    path = unquote(urlparse(url).path).lower()
-    if path.endswith(".dmg.gz"):
+    parsed = urlparse(url)
+    path = unquote(parsed.path).lower()
+    query = unquote(parsed.query).lower()
+    values = (path, query)
+    if any(value.endswith(".dmg.gz") or ".dmg.gz&" in value for value in values):
         return "dmg_gzip"
-    if path.endswith(".pkg"):
+    if any(value.endswith(".pkg") or ".pkg&" in value for value in values):
         return "pkg"
-    if path.endswith(".dmg"):
+    if any(value.endswith(".dmg") or ".dmg&" in value for value in values):
         return "dmg"
-    if path.endswith(ARCHIVE_EXTENSIONS):
+    if any(value.endswith(ARCHIVE_EXTENSIONS) for value in values):
         return "archive"
     return "unknown"
 
@@ -91,16 +104,41 @@ def sync_artifact_metadata(existing_data, app_info):
 
 
 def merge_fresh_bundle_id(existing_data, app_info):
-    if app_info.get("bundleId"):
-        existing_data["bundleId"] = app_info["bundleId"]
+    value, source = select_bundle_id(existing_data, app_info)
+    existing_data["bundleId"] = value
+    existing_data["bundleId_source"] = source
 
 
 def preserve_existing_bundle_id(app_info, existing_data):
-    if not app_info.get("bundleId") and existing_data.get("bundleId"):
-        app_info["bundleId"] = existing_data["bundleId"]
+    value, source = select_bundle_id(existing_data, app_info)
+    app_info["bundleId"] = value
+    app_info["bundleId_source"] = source
+
+
+def is_concrete_bundle_id(value):
+    return bool(
+        isinstance(value, str)
+        and re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._-]*", value)
+        and not any(char in value for char in "*?[]")
+    )
+
+
+def select_bundle_id(existing_data, app_info):
+    if (
+        app_info.get("bundleId_source") == "override"
+        and is_concrete_bundle_id(app_info.get("bundleId"))
+    ):
+        return app_info["bundleId"], "override"
+    if is_concrete_bundle_id(existing_data.get("bundleId")):
+        return existing_data["bundleId"], "stored"
+    if is_concrete_bundle_id(app_info.get("bundleId")):
+        return app_info["bundleId"], "heuristic"
+    return None, "missing"
 
 
 def can_reuse_source_hash(existing_data, app_info):
+    if app_info.get("source_hash_mismatch"):
+        return False
     source_sha = app_info.get("source_sha256", "")
     verified_identity = (
         bool(app_info.get("source_version"))
@@ -1599,6 +1637,10 @@ def calculate_file_hash(url):
                 print(f"Warning: Could not delete temporary file: {str(e)}")
 
 
+class SourceHashMismatchError(ValueError):
+    pass
+
+
 def calculate_verified_source_hash(app_info):
     digest = calculate_file_hash(app_info["url"])
     expected = app_info.get("source_sha256", "")
@@ -1607,11 +1649,12 @@ def calculate_verified_source_hash(app_info):
         and re.fullmatch(r"[0-9a-fA-F]{64}", expected)
         and digest.lower() != expected.lower()
     ):
-        print(
+        app_info.pop("sha", None)
+        app_info["source_hash_mismatch"] = True
+        raise SourceHashMismatchError(
             f"Source SHA256 mismatch for {app_info['name']}: "
             f"expected {expected}, got {digest}"
         )
-        return None
     return digest
 
 def find_bundle_id(json_string):
@@ -1881,11 +1924,18 @@ def get_homebrew_app_info(json_url, needs_packaging=False, is_pkg_in_dmg=False, 
 
     json_string = json.dumps(data)
 
-    bundle_id = get_bundle_id_override(cask_token) or find_bundle_id(json_string)
+    override_bundle_id = get_bundle_id_override(cask_token)
+    bundle_id = override_bundle_id or find_bundle_id(json_string)
+    if not is_concrete_bundle_id(bundle_id):
+        bundle_id = None
     installable_artifacts = get_installable_artifacts(data)
-    if has_installer_artifact(data) and not any(installable_artifacts.values()):
+    if not any(installable_artifacts.values()):
         raise CaskUnavailableError(
-            "installer-only bootstrap has no directly deployable app or package artifact",
+            (
+                INSTALLER_ONLY_DEPRECATION_REASON
+                if has_installer_artifact(data)
+                else NO_DEPLOYABLE_PAYLOAD_REASON
+            ),
             display_name=data["name"][0],
             cask_token=cask_token,
         )
@@ -1919,6 +1969,7 @@ def get_homebrew_app_info(json_url, needs_packaging=False, is_pkg_in_dmg=False, 
         "url": url,
         "vendor_url": vendor_url,
         "bundleId": bundle_id,
+        "bundleId_source": "override" if override_bundle_id else "heuristic",
         "homepage": data["homepage"],
         "homebrew_cask": cask_token,
         # Direct PKG apps must never fall back to a .dmg filename: the uploader derives
@@ -1949,11 +2000,23 @@ def get_homebrew_app_info(json_url, needs_packaging=False, is_pkg_in_dmg=False, 
     elif is_pkg:
         app_info["type"] = (
             "app"
-            if artifact_kind in ("archive", "dmg_gzip")
+            if (
+                artifact_kind in ("archive", "dmg_gzip")
+                or not is_concrete_bundle_id(bundle_id)
+                or urlparse(url).query
+                or urlparse(url).fragment
+            )
             and any(installable_artifacts.values())
             else "pkg"
         )
-    elif artifact_kind == "archive" and any(installable_artifacts.values()):
+    elif (
+        (
+            artifact_kind == "archive"
+            or urlparse(url).query
+            or urlparse(url).fragment
+        )
+        and any(installable_artifacts.values())
+    ):
         app_info["type"] = "app"
 
     return app_info
@@ -2205,8 +2268,8 @@ def main():
                     # if it saw the refreshed value.
                     existing_data["type"] = "app"
                     existing_data["vendor_url"] = app_info["vendor_url"]
-                    merge_fresh_bundle_id(existing_data, app_info)
                     sync_artifact_metadata(existing_data, app_info)
+                    merge_fresh_bundle_id(existing_data, app_info)
 
                     # Calculate new hash if version changed
                     if version_changed:
@@ -2216,7 +2279,9 @@ def main():
                             existing_data["sha"] = file_hash
                             print(f"✅ New SHA256 hash calculated: {file_hash}")
                         else:
-                            print(f"⚠️ Could not calculate SHA256 hash for {display_name}")
+                            raise RuntimeError(
+                                f"Could not verify source SHA256 for {display_name}"
+                            )
                     
                     # Update app_info with all existing data
                     app_info = existing_data
@@ -2262,12 +2327,15 @@ def main():
 
             if needs_hash:
                 print(f"🔍 Calculating SHA256 hash for {display_name}...")
+                app_info.pop("sha", None)
                 file_hash = calculate_verified_source_hash(app_info)
                 if file_hash:
                     app_info["sha"] = file_hash
                     print(f"✅ SHA256 hash calculated: {file_hash}")
                 else:
-                    print(f"⚠️ Could not calculate SHA256 hash for {display_name}")
+                    raise RuntimeError(
+                        f"Could not verify source SHA256 for {display_name}"
+                    )
 
             # For existing files, preserve existing data and update necessary fields
             if os.path.exists(file_path):
@@ -2399,12 +2467,15 @@ def main():
 
             if needs_hash:
                 print(f"🔍 Calculating SHA256 hash for {display_name}...")
+                app_info.pop("sha", None)
                 file_hash = calculate_verified_source_hash(app_info)
                 if file_hash:
                     app_info["sha"] = file_hash
                     print(f"✅ SHA256 hash calculated: {file_hash}")
                 else:
-                    print(f"⚠️ Could not calculate SHA256 hash for {display_name}")
+                    raise RuntimeError(
+                        f"Could not verify source SHA256 for {display_name}"
+                    )
 
             # For existing files, preserve existing data and update necessary fields
             if os.path.exists(file_path):

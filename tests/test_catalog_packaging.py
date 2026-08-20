@@ -66,6 +66,39 @@ class CatalogPublicationContractTests(unittest.TestCase):
         }
         self.assertIn("legacy package URL", generator.publication_errors(app))
 
+    def test_runtime_url_contract_rejects_query_fragment_and_userinfo(self):
+        base = {
+            "name": "Example",
+            "version": "1",
+            "bundleId": "com.example.app",
+            "fileName": "example.dmg",
+            "sha": "a" * 64,
+        }
+        cases = (
+            ("https://example.test/app.dmg?token=x", "URL contains query"),
+            ("https://example.test/app.dmg#fragment", "URL contains fragment"),
+            ("https://user@example.test/app.dmg", "URL contains userinfo"),
+            ("https://example.test:8443/app.dmg", "non-default URL port"),
+        )
+        for url, error in cases:
+            with self.subTest(url=url):
+                self.assertIn(
+                    error,
+                    generator.publication_errors(dict(base, url=url)),
+                )
+
+    def test_current_query_urls_are_blocked_until_repackaged(self):
+        query_manifests = []
+        for path in (ROOT / "Apps").glob("*.json"):
+            app = json.loads(path.read_text(encoding="utf-8"))
+            if not app.get("deprecated") and "?" in app.get("url", ""):
+                query_manifests.append(path.name)
+                self.assertIn(
+                    "URL contains query",
+                    generator.publication_errors(app),
+                )
+        self.assertEqual(len(query_manifests), 20)
+
     def test_strict_generator_fails_without_rewriting_index(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
@@ -172,6 +205,8 @@ class WorkflowPackagingRegressionTests(unittest.TestCase):
         self.assertIn("direct PKG", pkg_route)
         self.assertNotIn("ditto -x -k", pkg_route)
         self.assertNotIn("unzip", pkg_route)
+        self.assertIn('direct_pkg_file="$extract_dir/payload.pkg"', self.process)
+        self.assertIn('pkg_file="$direct_pkg_file"', self.process)
 
     def test_compressed_dmg_routes_by_url_and_mounts(self):
         dmg_route = self.process.split("dmg)", 1)[1].split("archive)", 1)[0]
@@ -324,6 +359,17 @@ class WorkflowPackagingRegressionTests(unittest.TestCase):
         cleanup_step = self.workflow[cleanup:]
         self.assertIn("if ! az storage blob delete", cleanup_step)
         self.assertIn("::warning::Could not delete superseded blob", cleanup_step)
+        self.assertIn("blob_referenced_by_marker_parent", cleanup_step)
+        self.assertIn("Keeping marker-referenced blob", cleanup_step)
+
+    def test_unmatched_partial_scope_fails_closed(self):
+        find_step = self.workflow.split("- name: Find apps needing packaging", 1)[1]
+        find_step = find_step.split("- name: Log in to Azure", 1)[0]
+        self.assertIn(
+            "::error::No manifest matched requested partial casks",
+            find_step,
+        )
+        self.assertNotIn("falling back to a full build", find_step)
 
     def test_cleanup_uses_exact_prior_manifest_blob_without_prefix_listing(self):
         self.assertNotIn("az storage blob list", self.process)

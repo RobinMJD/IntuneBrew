@@ -285,9 +285,21 @@ class CollectAppInfoTests(unittest.TestCase):
             "calculate_file_hash",
             return_value="b" * 64,
         ):
-            self.assertIsNone(
+            with self.assertRaises(collect_app_info.SourceHashMismatchError):
                 collect_app_info.calculate_verified_source_hash(app_info)
+        self.assertNotIn("sha", app_info)
+        self.assertTrue(app_info["source_hash_mismatch"])
+        self.assertFalse(
+            collect_app_info.can_reuse_source_hash(
+                {
+                    "source_version": "1",
+                    "source_sha256": "a" * 64,
+                    "url": app_info["url"],
+                    "sha": "a" * 64,
+                },
+                dict(app_info, source_version="1"),
             )
+        )
 
     def test_downloaded_no_check_source_keeps_calculated_hash(self):
         app_info = {
@@ -398,7 +410,10 @@ class CollectAppInfoTests(unittest.TestCase):
 
     def test_existing_null_bundle_id_cannot_replace_fresh_override(self):
         existing = {"bundleId": None}
-        fresh = {"bundleId": "com.cmtrace.open"}
+        fresh = {
+            "bundleId": "com.cmtrace.open",
+            "bundleId_source": "override",
+        }
         collect_app_info.merge_fresh_bundle_id(existing, fresh)
         self.assertEqual(existing["bundleId"], "com.cmtrace.open")
 
@@ -407,6 +422,53 @@ class CollectAppInfoTests(unittest.TestCase):
         existing = {"bundleId": "com.example.valid"}
         collect_app_info.preserve_existing_bundle_id(fresh, existing)
         self.assertEqual(fresh["bundleId"], "com.example.valid")
+
+    def test_bundle_id_precedence_matrix(self):
+        cases = (
+            (
+                {"bundleId": "com.figma.Desktop"},
+                {"bundleId": "com.figma.agent", "bundleId_source": "heuristic"},
+                ("com.figma.Desktop", "stored"),
+            ),
+            (
+                {"bundleId": "com.figma.Desktop"},
+                {"bundleId": "com.override", "bundleId_source": "override"},
+                ("com.override", "override"),
+            ),
+            (
+                {"bundleId": "com.example.*"},
+                {"bundleId": "com.heuristic", "bundleId_source": "heuristic"},
+                ("com.heuristic", "heuristic"),
+            ),
+            (
+                {"bundleId": "com.example.*"},
+                {"bundleId": "other.*", "bundleId_source": "heuristic"},
+                (None, "missing"),
+            ),
+        )
+        for existing, fresh, expected in cases:
+            with self.subTest(existing=existing, fresh=fresh):
+                self.assertEqual(
+                    collect_app_info.select_bundle_id(existing, fresh),
+                    expected,
+                )
+
+    def test_metadata_sync_cannot_downgrade_stored_bundle_authority(self):
+        existing = {"bundleId": "com.figma.Desktop"}
+        fresh = {
+            "bundleId": "com.figma.agent",
+            "bundleId_source": "heuristic",
+            "artifact_kind": "archive",
+        }
+        collect_app_info.sync_artifact_metadata(existing, fresh)
+        collect_app_info.merge_fresh_bundle_id(existing, fresh)
+        self.assertEqual(existing["bundleId"], "com.figma.Desktop")
+        self.assertEqual(existing["bundleId_source"], "stored")
+
+    def test_wildcard_bundle_ids_are_never_concrete(self):
+        self.assertFalse(collect_app_info.is_concrete_bundle_id("com.example.*"))
+        self.assertFalse(collect_app_info.is_concrete_bundle_id("org.r-project?"))
+        self.assertTrue(collect_app_info.is_concrete_bundle_id("com.figma.Desktop"))
 
     def test_extensionless_archive_override_is_persisted(self):
         url = "https://formulae.brew.sh/api/cask/postman.json"
@@ -425,6 +487,22 @@ class CollectAppInfoTests(unittest.TestCase):
 
         self.assertEqual(app_info["artifact_kind"], "archive")
         self.assertEqual(app_info["archive_format"], "zip")
+        self.assertEqual(app_info["type"], "app")
+
+    def test_query_bearing_dmg_is_queued_for_repackaging(self):
+        url = "https://formulae.brew.sh/api/cask/raycast.json"
+        payload = {
+            "name": ["Raycast"],
+            "desc": "Launcher",
+            "version": "1.0",
+            "url": "https://example.test/download?build=arm",
+            "sha256": "c" * 64,
+            "homepage": "https://example.test/",
+            "artifacts": [{"app": ["Raycast.app"]}],
+        }
+        with patch.dict(collect_app_info.cask_cache, {url: payload}, clear=True):
+            app_info = collect_app_info.get_homebrew_app_info(url)
+        self.assertEqual(app_info["artifact_kind"], "dmg")
         self.assertEqual(app_info["type"], "app")
 
     def test_existing_manifest_receives_fresh_routing_metadata(self):
@@ -489,7 +567,10 @@ class CollectAppInfoTests(unittest.TestCase):
             with self.assertRaises(collect_app_info.CaskUnavailableError) as context:
                 collect_app_info.get_homebrew_app_info(url, needs_packaging=True)
 
-        self.assertIn("installer-only bootstrap", context.exception.reason)
+        self.assertEqual(
+            context.exception.reason,
+            collect_app_info.INSTALLER_ONLY_DEPRECATION_REASON,
+        )
 
 
 CASK_INFO = {
@@ -743,6 +824,10 @@ TAILSCALE_PAYLOAD = {
     "version": "1.80.0",
     "url": "https://example.com/tailscale-1.80.0.dmg",
     "homepage": "https://tailscale.com/",
+    "artifacts": [
+        {"app": ["Tailscale.app"]},
+        {"uninstall": [{"quit": "io.tailscale.ipn.macos"}]},
+    ],
 }
 
 
@@ -1024,7 +1109,10 @@ class CatalogConsistencyTests(unittest.TestCase):
                 )
                 self.assertEqual(app["homebrew_cask"], token)
                 self.assertTrue(app["deprecated"])
-                self.assertIn("Bootstrap installer only", app["deprecation_reason"])
+                self.assertEqual(
+                    app["deprecation_reason"],
+                    collect_app_info.INSTALLER_ONLY_DEPRECATION_REASON,
+                )
                 self.assertNotIn(Path(filename).stem, supported)
 
     def test_supported_catalog_matches_non_deprecated_apps(self):

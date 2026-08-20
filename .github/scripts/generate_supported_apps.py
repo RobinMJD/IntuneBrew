@@ -28,6 +28,13 @@ def publication_errors(app):
     for field in REQUIRED_FIELDS:
         if not app.get(field):
             errors.append(f"missing {field}")
+    bundle_id = app.get("bundleId")
+    if (
+        not isinstance(bundle_id, str)
+        or not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._-]*", bundle_id)
+        or any(char in bundle_id for char in "*?[]")
+    ):
+        errors.append("invalid bundleId")
     if not re.fullmatch(r"[0-9a-fA-F]{64}", str(app.get("sha", ""))):
         errors.append("invalid sha")
 
@@ -38,6 +45,19 @@ def publication_errors(app):
         errors.append("non-deployable filename")
 
     parsed_url = urlparse(str(app.get("url", "")))
+    if parsed_url.scheme != "https":
+        errors.append("non-HTTPS URL")
+    if parsed_url.username or parsed_url.password:
+        errors.append("URL contains userinfo")
+    try:
+        if parsed_url.port not in (None, 443):
+            errors.append("non-default URL port")
+    except ValueError:
+        errors.append("invalid URL port")
+    if parsed_url.query:
+        errors.append("URL contains query")
+    if parsed_url.fragment:
+        errors.append("URL contains fragment")
     if parsed_url.hostname in LEGACY_PACKAGE_HOSTS and parsed_url.path.lower().endswith(".pkg"):
         errors.append("legacy package URL")
     return errors

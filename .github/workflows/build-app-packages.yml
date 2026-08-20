@@ -248,9 +248,8 @@ jobs:
               apps_to_build=()
               echo "Scoped build: added apps need no packaging, nothing to build"
             else
-              # The added cask produced no app file at all, usually a display
-              # name collision. Build everything rather than silently skipping.
-              echo "No app file matched the added casks ($SCOPE_TOKENS), falling back to a full build"
+              echo "::error::No manifest matched requested partial casks: $SCOPE_TOKENS"
+              exit 1
             fi
           fi
 
@@ -307,6 +306,8 @@ jobs:
             local pkg_path="$1"
             local expand_dir=""
             local plist=""
+            local package_info=""
+            local package_id=""
             if ! expand_dir=$(mktemp -d 2>/dev/null); then
               echo "Could not create a temporary directory to inspect $pkg_path, bundleId left unchanged" >&2
               return 0
@@ -321,7 +322,18 @@ jobs:
               if [ -n "$plist" ]; then
                 extract_bundle_id_from_plist "$plist"
               else
-                echo "No .app payload inside $pkg_path, bundleId left unchanged" >&2
+                package_info=$(find "$expand_dir/payload" -type f -name PackageInfo \
+                  -print 2>/dev/null | awk '{ print length, $0 }' | sort -n \
+                  | head -1 | cut -d" " -f2-)
+                if [ -n "$package_info" ]; then
+                  package_id=$(sed -n 's/.*identifier="\([^"]*\)".*/\1/p' \
+                    "$package_info" | head -1)
+                fi
+                if [ -n "$package_id" ]; then
+                  echo "$package_id"
+                else
+                  echo "No app or package identifier inside $pkg_path" >&2
+                fi
               fi
             else
               echo "Could not expand $pkg_path, bundleId left unchanged" >&2
@@ -334,9 +346,25 @@ jobs:
             local json_path="$1"
             local actual_id="$2"
             local expected_id=""
+            local expected_source=""
             expected_id=$(jq -r '.bundleId // empty' "$json_path")
-            if [ -z "$actual_id" ] || [ -z "$expected_id" ] || [ "$actual_id" != "$expected_id" ]; then
+            expected_source=$(jq -r '.bundleId_source // "stored"' "$json_path")
+            if [ -z "$actual_id" ] || [[ "$actual_id" == *[\*\?\[\]]* ]]; then
               echo "Bundle ID validation failed: expected ${expected_id:-missing}, got ${actual_id:-missing}" >&2
+              return 1
+            fi
+            if [ "$expected_source" = "override" ] || [ "$expected_source" = "stored" ]; then
+              if [ -z "$expected_id" ] || [ "$actual_id" != "$expected_id" ]; then
+                echo "Bundle ID validation failed: expected ${expected_id:-missing}, got $actual_id" >&2
+                return 1
+              fi
+              return 0
+            fi
+            if ! jq --arg bundleid "$actual_id" \
+              '.bundleId = $bundleid | .bundleId_source = "package"' \
+              "$json_path" > "$json_path.bundle.tmp" \
+              || ! mv "$json_path.bundle.tmp" "$json_path"; then
+              echo "Could not persist package-validated bundle ID: $actual_id" >&2
               return 1
             fi
           }
@@ -1010,6 +1038,7 @@ jobs:
               kind=$(jq -r '.artifact_kind // empty' "$WORKSPACE_DIR/Apps/${app_name}.json")
               archive_format=$(jq -r '.archive_format // empty' "$WORKSPACE_DIR/Apps/${app_name}.json")
               [ -n "$kind" ] || kind=$(artifact_kind "$url")
+              direct_pkg_file=""
 
               case "$kind" in
                 pkg)
@@ -1026,6 +1055,7 @@ jobs:
                     continue
                   fi
                   cp "$source_path" "$extract_dir/payload.pkg"
+                  direct_pkg_file="$extract_dir/payload.pkg"
                   ;;
                 dmg|dmg_gzip)
                   if [ "$kind" = "dmg_gzip" ]; then
@@ -1163,7 +1193,8 @@ jobs:
               
               if [ -z "$app_file" ]; then
                 echo "❌ No .app file found, searching for .pkg file..."
-                pkg_file=$(find_pkg_payload "$extract_dir" "$declared_pkg")
+                pkg_file="$direct_pkg_file"
+                [ -n "$pkg_file" ] || pkg_file=$(find_pkg_payload "$extract_dir" "$declared_pkg")
                 
                 if [ -n "$pkg_file" ]; then
                   echo "✅ Found .pkg file: $pkg_file"
@@ -1657,16 +1688,38 @@ jobs:
         env:
           AZURE_STORAGE_ACCOUNT: ${{ vars.AZURE_STORAGE_ACCOUNT }}
           AZURE_STORAGE_CONTAINER: ${{ vars.AZURE_STORAGE_CONTAINER }}
+          AZURE_STORAGE_BASE_URL: ${{ vars.AZURE_STORAGE_BASE_URL }}
         run: |
           [ -s superseded-blobs.txt ] || {
             echo "No superseded package blobs to delete"
             exit 0
           }
 
+          STORAGE_BASE_URL="${AZURE_STORAGE_BASE_URL%/}"
+          marker_parent=$(git rev-parse HEAD^)
+
+          blob_referenced_by_marker_parent() {
+            local candidate="$1"
+            local manifest=""
+            local manifest_url=""
+            while IFS= read -r manifest; do
+              manifest_url=$(git show "$marker_parent:$manifest" 2>/dev/null \
+                | jq -r '.url // empty' 2>/dev/null || true)
+              if [ "$manifest_url" = "$STORAGE_BASE_URL/$candidate" ]; then
+                return 0
+              fi
+            done < <(git ls-tree -r --name-only "$marker_parent" -- Apps)
+            return 1
+          }
+
           sort -u superseded-blobs.txt | while IFS= read -r blob_name; do
             [ -n "$blob_name" ] || continue
             if ! [[ "$blob_name" =~ ^[A-Za-z0-9._@+=-]+\.pkg$ ]] || [[ "$blob_name" = .* ]]; then
               echo "::warning::Skipping unsafe cleanup candidate: $blob_name"
+              continue
+            fi
+            if blob_referenced_by_marker_parent "$blob_name"; then
+              echo "::warning::Keeping marker-referenced blob: $blob_name"
               continue
             fi
             echo "Deleting superseded package blob: $blob_name"
