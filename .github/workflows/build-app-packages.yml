@@ -262,7 +262,7 @@ jobs:
         uses: azure/login@v3
         env:
           AZURE_LOGIN_PRE_CLEANUP: true
-          AZURE_LOGIN_POST_CLEANUP: true
+          AZURE_LOGIN_POST_CLEANUP: false
         with:
           client-id: ${{ vars.AZURE_CLIENT_ID }}
           tenant-id: ${{ vars.AZURE_TENANT_ID }}
@@ -504,6 +504,18 @@ jobs:
             [ "$actual_sha" = "$(printf '%s' "$expected_sha" | tr 'A-F' 'a-f')" ]
           }
 
+          record_observed_source_digest() {
+            local source_path="$1"
+            local json_path="$2"
+            local observed=""
+            [ "$source_sha" = "no_check" ] || return 0
+            observed=$(shasum -a 256 "$source_path" | awk '{print $1}')
+            jq --arg digest "$observed" \
+              '.source_observed_sha256 = $digest | .source_sha256_provenance = "observed-no_check"' \
+              "$json_path" > "$json_path.source.tmp" \
+              && mv "$json_path.source.tmp" "$json_path"
+          }
+
           configured_blob_leaf() {
             local blob_url="$1"
             local leaf=""
@@ -600,17 +612,6 @@ jobs:
             immutable_blob_exists "$blob_name"
           }
 
-          record_prior_blob_cleanup() {
-            local prior_blob="$1"
-            local new_blob="$2"
-            [ -n "$prior_blob" ] || return 0
-            safe_blob_leaf "$prior_blob" || return 1
-            [ "$prior_blob" != "$new_blob" ] || return 0
-            printf '%s\n' "$prior_blob" >> "$WORKSPACE_DIR/superseded-blobs.txt"
-            return 0
-          }
-
-          : > "$WORKSPACE_DIR/superseded-blobs.txt"
           ERROR_LOG=()  # Track errors for summary
           FAILED_APPS=()  # Track which apps failed
           SUCCESSFUL_APPS=()  # Track successful apps
@@ -741,6 +742,7 @@ jobs:
                   ERROR_LOG+=("$app_name: Source ZIP SHA256 mismatch")
                   continue
                 fi
+                record_observed_source_digest "${download_path}.zip" "$WORKSPACE_DIR/Apps/${app_name}.json"
 
                 # Extract ZIP to find the PKG inside
                 zip_extract_dir="${download_path}_zip_extracted"
@@ -769,6 +771,7 @@ jobs:
                 # Direct PKG download
                 if curl -f -L -o "$outer_pkg_path" "$url"; then
                   if verify_source_file "$outer_pkg_path" "$source_sha"; then
+                    record_observed_source_digest "$outer_pkg_path" "$WORKSPACE_DIR/Apps/${app_name}.json"
                     outer_pkg_ready=true
                   else
                     ERROR_LOG+=("$app_name: Source PKG SHA256 mismatch")
@@ -854,7 +857,6 @@ jobs:
 
                   if upload_immutable_blob "$package_path" "$new_blob_name"; then
                     echo "✅ Upload successful"
-                    record_prior_blob_cleanup "$cleanup_prior_blob" "$new_blob_name"
 
                     # Update JSON with Azure URL and SHA256
                     echo "📝 Updating JSON file with new Azure URL and SHA256..."
@@ -922,6 +924,7 @@ jobs:
                 rm -f "${download_path}.dmg"
                 continue
               fi
+              record_observed_source_digest "${download_path}.dmg" "$WORKSPACE_DIR/Apps/${app_name}.json"
               
               # Create mount point
               echo "📂 Creating mount point at ${download_path}_mount"
@@ -994,7 +997,6 @@ jobs:
 
                 if upload_immutable_blob "$package_path" "$new_blob_name"; then
                   echo "✅ Upload successful"
-                  record_prior_blob_cleanup "$cleanup_prior_blob" "$new_blob_name"
 
                   # Update JSON with Azure URL and SHA256
                   echo "📝 Updating JSON file with new Azure URL and SHA256..."
@@ -1054,6 +1056,7 @@ jobs:
                     ERROR_LOG+=("$app_name: Direct source PKG SHA256 mismatch")
                     continue
                   fi
+                  record_observed_source_digest "$source_path" "$WORKSPACE_DIR/Apps/${app_name}.json"
                   cp "$source_path" "$extract_dir/payload.pkg"
                   direct_pkg_file="$extract_dir/payload.pkg"
                   ;;
@@ -1071,6 +1074,7 @@ jobs:
                       rm -f "${download_path}.dmg.gz"
                       continue
                     fi
+                    record_observed_source_digest "${download_path}.dmg.gz" "$WORKSPACE_DIR/Apps/${app_name}.json"
                     if ! gunzip -c "${download_path}.dmg.gz" > "${download_path}.dmg"; then
                       FAILED_APPS+=("$app_name")
                       ERROR_LOG+=("$app_name: Failed to decompress DMG from $url")
@@ -1091,6 +1095,7 @@ jobs:
                     rm -f "${download_path}.dmg"
                     continue
                   fi
+                  [ "$kind" != "dmg" ] || record_observed_source_digest "${download_path}.dmg" "$WORKSPACE_DIR/Apps/${app_name}.json"
                   mkdir -p "$mount_dir"
                   if ! hdiutil attach "${download_path}.dmg" -mountpoint "$mount_dir" -nobrowse >/dev/null; then
                     FAILED_APPS+=("$app_name")
@@ -1124,6 +1129,7 @@ jobs:
                     rm -f "$archive_path"
                     continue
                   fi
+                  record_observed_source_digest "$archive_path" "$WORKSPACE_DIR/Apps/${app_name}.json"
                   if [ -z "$archive_format" ]; then
                     url_path="${url%%\?*}"
                     url_path=$(printf '%s' "$url_path" | tr '[:upper:]' '[:lower:]')
@@ -1225,7 +1231,6 @@ jobs:
 
                   if upload_immutable_blob "$package_path" "$new_blob_name"; then
                     echo "✅ Upload successful"
-                    record_prior_blob_cleanup "$cleanup_prior_blob" "$new_blob_name"
 
                     # Update JSON with Azure URL and SHA256
                     echo "📝 Updating JSON file with new Azure URL and SHA256..."
@@ -1311,8 +1316,6 @@ jobs:
                 continue
               fi
 
-              # Defer deletion until the catalog marker has been published.
-              record_prior_blob_cleanup "$cleanup_prior_blob" "$new_blob_name"
 
               # Update the JSON file with Azure URL, filename and SHA256
               # The package is already uploaded at this point, so a failed
@@ -1673,61 +1676,3 @@ jobs:
 
           # Never force: a concurrent main update must reject this publication.
           git push origin HEAD:main
-
-      - name: Refresh Azure login for package cleanup
-        uses: azure/login@v3
-        env:
-          AZURE_LOGIN_PRE_CLEANUP: true
-          AZURE_LOGIN_POST_CLEANUP: true
-        with:
-          client-id: ${{ vars.AZURE_CLIENT_ID }}
-          tenant-id: ${{ vars.AZURE_TENANT_ID }}
-          subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
-
-      - name: Delete superseded package blobs
-        env:
-          AZURE_STORAGE_ACCOUNT: ${{ vars.AZURE_STORAGE_ACCOUNT }}
-          AZURE_STORAGE_CONTAINER: ${{ vars.AZURE_STORAGE_CONTAINER }}
-          AZURE_STORAGE_BASE_URL: ${{ vars.AZURE_STORAGE_BASE_URL }}
-        run: |
-          [ -s superseded-blobs.txt ] || {
-            echo "No superseded package blobs to delete"
-            exit 0
-          }
-
-          STORAGE_BASE_URL="${AZURE_STORAGE_BASE_URL%/}"
-          marker_parent=$(git rev-parse HEAD^)
-
-          blob_referenced_by_marker_parent() {
-            local candidate="$1"
-            local manifest=""
-            local manifest_url=""
-            while IFS= read -r manifest; do
-              manifest_url=$(git show "$marker_parent:$manifest" 2>/dev/null \
-                | jq -r '.url // empty' 2>/dev/null || true)
-              if [ "$manifest_url" = "$STORAGE_BASE_URL/$candidate" ]; then
-                return 0
-              fi
-            done < <(git ls-tree -r --name-only "$marker_parent" -- Apps)
-            return 1
-          }
-
-          sort -u superseded-blobs.txt | while IFS= read -r blob_name; do
-            [ -n "$blob_name" ] || continue
-            if ! [[ "$blob_name" =~ ^[A-Za-z0-9._@+=-]+\.pkg$ ]] || [[ "$blob_name" = .* ]]; then
-              echo "::warning::Skipping unsafe cleanup candidate: $blob_name"
-              continue
-            fi
-            if blob_referenced_by_marker_parent "$blob_name"; then
-              echo "::warning::Keeping marker-referenced blob: $blob_name"
-              continue
-            fi
-            echo "Deleting superseded package blob: $blob_name"
-            if ! az storage blob delete \
-              --account-name "$AZURE_STORAGE_ACCOUNT" \
-              --container-name "$AZURE_STORAGE_CONTAINER" \
-              --auth-mode login \
-              --name "$blob_name"; then
-              echo "::warning::Could not delete superseded blob $blob_name; leaving it in storage"
-            fi
-          done

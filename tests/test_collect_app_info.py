@@ -1045,6 +1045,31 @@ class CalculateFileHashTests(unittest.TestCase):
 
 
 class CatalogConsistencyTests(unittest.TestCase):
+    def test_formula_api_urls_are_not_configured_as_apps(self):
+        configured = (
+            collect_app_info.app_urls
+            + collect_app_info.homebrew_cask_urls
+            + collect_app_info.pkg_in_pkg_urls
+            + collect_app_info.pkg_urls
+            + collect_app_info.pkg_in_dmg_urls
+        )
+        self.assertFalse(any("/api/formula/" in url for url in configured))
+
+    def test_dmg_with_declared_pkg_routes_to_pkg_in_dmg(self):
+        url = "https://formulae.brew.sh/api/cask/example-driver.json"
+        payload = {
+            "name": ["Example Driver"],
+            "desc": "Driver",
+            "version": "1",
+            "url": "https://example.test/driver.dmg",
+            "sha256": "a" * 64,
+            "homepage": "https://example.test/",
+            "artifacts": [{"pkg": ["Driver.pkg"]}],
+        }
+        with patch.dict(collect_app_info.cask_cache, {url: payload}, clear=True):
+            info = collect_app_info.get_homebrew_app_info(url)
+        self.assertEqual(info["type"], "pkg_in_dmg")
+
     def test_codex_uses_desktop_cask_instead_of_cli_cask(self):
         desktop_url = "https://formulae.brew.sh/api/cask/codex-app.json"
         cli_url = "https://formulae.brew.sh/api/cask/codex.json"

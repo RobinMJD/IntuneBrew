@@ -18,6 +18,11 @@ def cask_data(url, artifacts):
 
 
 class CaskArtifactValidationTests(unittest.TestCase):
+    def test_formula_api_url_is_rejected(self):
+        with self.assertRaisesRegex(ValueError, "formula URLs are unsupported"):
+            add_new_app.extract_casks_from_urls(
+                "https://formulae.brew.sh/api/formula/vim.json"
+            )
     def test_codex_cli_is_rejected(self):
         codex = cask_data(
             "https://example.test/codex-package-aarch64-apple-darwin.tar.gz",
@@ -316,7 +321,7 @@ class CatalogStorageWorkflowTests(unittest.TestCase):
         login = self.workflow.index("uses: azure/login@v3", build)
         first_storage_operation = self.workflow.index("az storage blob", build)
         self.assertLess(login, first_storage_operation)
-        self.assertIn("AZURE_LOGIN_POST_CLEANUP: true", self.workflow)
+        self.assertIn("AZURE_LOGIN_POST_CLEANUP: false", self.workflow)
 
         for variable, login_input in (
             ("AZURE_CLIENT_ID", "client-id"),

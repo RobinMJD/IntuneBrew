@@ -320,7 +320,6 @@ app_urls = [
     "https://formulae.brew.sh/api/cask/gitkraken.json",
     "https://formulae.brew.sh/api/cask/godot.json",
     "https://formulae.brew.sh/api/cask/hp-easy-admin.json",
-    "https://formulae.brew.sh/api/formula/vim.json",
     "https://formulae.brew.sh/api/cask/notion-calendar.json",
     "https://formulae.brew.sh/api/cask/ollama-app.json",
     "https://formulae.brew.sh/api/cask/pdf-expert.json",
@@ -337,7 +336,6 @@ app_urls = [
     "https://formulae.brew.sh/api/cask/mountain-duck.json",
     "https://formulae.brew.sh/api/cask/acorn.json",
     "https://formulae.brew.sh/api/cask/menubar-stats.json",
-    "https://formulae.brew.sh/api/formula/neovim.json",
     "https://formulae.brew.sh/api/cask/sketch.json",
     "https://formulae.brew.sh/api/cask/jumpcut.json",
     "https://formulae.brew.sh/api/cask/daisydisk.json",
@@ -370,7 +368,6 @@ app_urls = [
     "https://formulae.brew.sh/api/cask/jumpshare.json",
     "https://formulae.brew.sh/api/cask/keybase.json",
     "https://formulae.brew.sh/api/cask/keyclu.json",
-    "https://formulae.brew.sh/api/formula/antigen.json",
     "https://formulae.brew.sh/api/cask/nucleo.json",
     "https://formulae.brew.sh/api/cask/spline.json",
     "https://formulae.brew.sh/api/cask/mac-mouse-fix.json",
@@ -1615,6 +1612,8 @@ def calculate_file_hash(url):
                 except _OversizedDownload as e:
                     print(str(e))
                     return None
+                except SourceHashMismatchError:
+                    raise
                 except Exception as e:
                     print(f"❌ Error calculating hash: {str(e)}")
                     continue
@@ -1633,6 +1632,8 @@ def calculate_file_hash(url):
             # Clean up the temporary file
             try:
                 os.unlink(temp_file.name)
+            except SourceHashMismatchError:
+                raise
             except Exception as e:
                 print(f"Warning: Could not delete temporary file: {str(e)}")
 
@@ -2001,14 +2002,22 @@ def get_homebrew_app_info(json_url, needs_packaging=False, is_pkg_in_dmg=False, 
         app_info["type"] = (
             "app"
             if (
-                artifact_kind in ("archive", "dmg_gzip")
-                or not is_concrete_bundle_id(bundle_id)
-                or urlparse(url).query
-                or urlparse(url).fragment
+                (
+                    artifact_kind in ("archive", "dmg_gzip")
+                    or not is_concrete_bundle_id(bundle_id)
+                    or urlparse(url).query
+                    or urlparse(url).fragment
+                )
+                and any(installable_artifacts.values())
             )
-            and any(installable_artifacts.values())
             else "pkg"
         )
+    elif (
+        artifact_kind == "dmg"
+        and installable_artifacts["pkg"]
+        and not installable_artifacts["app"]
+    ):
+        app_info["type"] = "pkg_in_dmg"
     elif (
         (
             artifact_kind == "archive"
@@ -2068,6 +2077,8 @@ def update_readme_apps(apps_list):
                     'version': data['version'],
                     'logo': logo_file
                 })
+            except SourceHashMismatchError:
+                raise
             except Exception as e:
                 print(f"Error reading {app_json}: {e}")
 
@@ -2156,6 +2167,8 @@ def update_readme_with_latest_changes(apps_info):
                         'old_version': current_data['previous_version'],
                         'new_version': current_data['version']
                     })
+        except SourceHashMismatchError:
+            raise
         except Exception as e:
             print(f"Error checking version history for {app['name']}: {e}")
 
@@ -2294,6 +2307,8 @@ def main():
             print(f"Saved app information for {display_name} to {file_path}")
         except CaskUnavailableError as e:
             require_deprecation_tombstone(apps_folder, e.display_name, e.reason, e.cask_token)
+        except SourceHashMismatchError:
+            raise
         except Exception as e:
             print(f"Error processing special app {url}: {str(e)}")
             print(f"Full error details: ", e)
@@ -2380,6 +2395,8 @@ def main():
             print(f"Saved app information for {display_name} to {file_path}")
         except CaskUnavailableError as e:
             require_deprecation_tombstone(apps_folder, e.display_name, e.reason, e.cask_token)
+        except SourceHashMismatchError:
+            raise
         except Exception as e:
             print(f"Error processing {url}: {str(e)}")
 
@@ -2521,6 +2538,8 @@ def main():
             print(f"Saved app information for {display_name} to {file_path}")
         except CaskUnavailableError as e:
             require_deprecation_tombstone(apps_folder, e.display_name, e.reason, e.cask_token)
+        except SourceHashMismatchError:
+            raise
         except Exception as e:
             print(f"Error processing direct PKG app {url}: {str(e)}")
 
@@ -2581,16 +2600,13 @@ def main():
 
     # Run custom scrapers and update apps_info accordingly
     for scraper in custom_scrapers:
-        try:
-            subprocess.run([scraper], check=True)
-            # Get the app name from the JSON file created by the scraper
-            json_file = os.path.join(apps_folder, os.path.basename(scraper).replace('.sh', '.json'))
-            if os.path.exists(json_file):
-                with open(json_file, 'r') as f:
-                    app_data = json.load(f)
-                    supported_apps.append(app_data['name'])
-        except Exception as e:
-            print(f"Error running scraper {scraper}: {str(e)}")
+        subprocess.run([scraper], check=True)
+        json_file = os.path.join(apps_folder, os.path.basename(scraper).replace('.sh', '.json'))
+        if not os.path.exists(json_file):
+            raise RuntimeError(f"Scraper {scraper} produced no manifest")
+        with open(json_file, 'r') as f:
+            app_data = json.load(f)
+            supported_apps.append(app_data['name'])
 
     # After custom scrapers run, calculate hashes for direct downloads
     print("\n📊 Checking custom scraper outputs for missing hashes...")

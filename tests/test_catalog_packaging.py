@@ -165,6 +165,19 @@ class CatalogPublicationContractTests(unittest.TestCase):
 
 
 class WorkflowPackagingRegressionTests(unittest.TestCase):
+    def test_remote_help_scraper_emits_verified_package_metadata(self):
+        scraper = (
+            ROOT / ".github/scripts/scrapers/remotehelp.sh"
+        ).read_text(encoding="utf-8")
+        self.assertIn("set -euo pipefail", scraper)
+        self.assertIn("url_effective", scraper)
+        self.assertIn("shasum -a 256", scraper)
+        self.assertIn("pkgutil --expand-full", scraper)
+        self.assertIn('name PackageInfo', scraper)
+        self.assertNotIn("--pkg-info-plist", scraper)
+        self.assertIn('"artifact_kind": "pkg"', scraper)
+        self.assertIn('"source_sha256": "$sha"', scraper)
+
     @classmethod
     def setUpClass(cls):
         cls.workflow = WORKFLOW_PATH.read_text(encoding="utf-8")
@@ -337,30 +350,18 @@ class WorkflowPackagingRegressionTests(unittest.TestCase):
         )
         self.assertIn('failed_count=${#FAILED_APPS[@]}', self.process)
 
-    def test_blob_deletion_is_deferred_until_after_marker_publication(self):
+    def test_marker_is_terminal_and_workflow_never_deletes_blobs(self):
         marker = self.workflow.index("- name: Publish catalog state")
-        refresh_login = self.workflow.index(
-            "- name: Refresh Azure login for package cleanup"
-        )
-        cleanup = self.workflow.index("- name: Delete superseded package blobs")
-        self.assertNotIn("az storage blob delete", self.workflow[:marker])
-        self.assertLess(marker, refresh_login)
-        self.assertLess(refresh_login, cleanup)
-        self.assertIn("uses: azure/login@v3", self.workflow[refresh_login:cleanup])
-        self.assertLess(marker, cleanup)
-        self.assertIn("git push origin HEAD:main", self.workflow[marker:cleanup])
+        self.assertNotIn("az storage blob delete", self.workflow)
+        self.assertNotIn("superseded-blobs", self.workflow)
+        self.assertNotIn("- name:", self.workflow[marker + 1 :])
+        self.assertIn("git push origin HEAD:main", self.workflow[marker:])
 
     def test_failed_or_unpublished_run_cannot_delete_old_blobs(self):
         require = self.workflow.index("- name: Require successful packaging")
         marker = self.workflow.index("- name: Publish catalog state")
-        cleanup = self.workflow.index("- name: Delete superseded package blobs")
         self.assertLess(require, marker)
-        self.assertLess(marker, cleanup)
-        cleanup_step = self.workflow[cleanup:]
-        self.assertIn("if ! az storage blob delete", cleanup_step)
-        self.assertIn("::warning::Could not delete superseded blob", cleanup_step)
-        self.assertIn("blob_referenced_by_marker_parent", cleanup_step)
-        self.assertIn("Keeping marker-referenced blob", cleanup_step)
+        self.assertNotIn("az storage blob delete", self.workflow)
 
     def test_unmatched_partial_scope_fails_closed(self):
         find_step = self.workflow.split("- name: Find apps needing packaging", 1)[1]
@@ -371,18 +372,10 @@ class WorkflowPackagingRegressionTests(unittest.TestCase):
         )
         self.assertNotIn("falling back to a full build", find_step)
 
-    def test_cleanup_uses_exact_prior_manifest_blob_without_prefix_listing(self):
+    def test_no_prefix_listing_or_cleanup_journal_exists(self):
         self.assertNotIn("az storage blob list", self.process)
         self.assertNotIn("--prefix", self.process)
-        self.assertIn(
-            'prior_catalog_url=$(printf \'%s\' "$prior_manifest"',
-            self.process,
-        )
-        self.assertIn(
-            'record_prior_blob_cleanup "$cleanup_prior_blob" "$new_blob_name"',
-            self.process,
-        )
-        self.assertIn('safe_blob_leaf "$prior_blob"', self.process)
+        self.assertNotIn("record_prior_blob_cleanup", self.process)
 
     def test_prefix_collision_names_cannot_be_cleanup_candidates(self):
         for shorter, longer in (

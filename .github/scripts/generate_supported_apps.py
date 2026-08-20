@@ -37,6 +37,15 @@ def publication_errors(app):
         errors.append("invalid bundleId")
     if not re.fullmatch(r"[0-9a-fA-F]{64}", str(app.get("sha", ""))):
         errors.append("invalid sha")
+    if (
+        app.get("type") in {"app", "pkg_in_dmg", "pkg_in_pkg"}
+        and app.get("source_sha256") == "no_check"
+        and not re.fullmatch(
+            r"[0-9a-fA-F]{64}",
+            str(app.get("source_observed_sha256", "")),
+        )
+    ):
+        errors.append("missing observed source digest")
 
     filename = unquote(str(app.get("fileName", "")))
     if "/" in filename or "\\" in filename:

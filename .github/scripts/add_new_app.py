@@ -217,6 +217,8 @@ def extract_casks_from_comment(comment_body):
 def extract_casks_from_urls(issue_body):
     """Extract all cask names from Homebrew URLs in the issue body."""
     casks = []
+    if re.search(r'formulae\.brew\.sh/api/formula/', issue_body):
+        raise ValueError("Homebrew formula URLs are unsupported; request a macOS cask")
     # Homebrew API URLs
     for match in re.finditer(r'formulae\.brew\.sh/api/cask/([^/\s.]+)\.json', issue_body):
         if match.group(1) not in casks:
