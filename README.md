@@ -20,7 +20,7 @@
     </a>
                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 <p>
     <a href="#-supported-applications">
-      <img src="https://img.shields.io/badge/Apps_Available-1051-2ea44f?style=flat" alt="TotalApps"/>
+      <img src="https://img.shields.io/badge/Apps_Available-1050-2ea44f?style=flat" alt="TotalApps"/>
     </a>
   </p>
 </div>
@@ -739,7 +739,6 @@ This project uses publicly available metadata from Homebrew’s JSON API. Homebr
 | <img src='Logos/betaflightconfigurator.png' width='32' height='32'> Betaflight-Configurator | 10.10.0 |
 | <img src='Logos/betterdisplay.png' width='32' height='32'> BetterDisplay | 4.3.6 |
 | <img src='Logos/bettermouse.png' width='32' height='32'> BetterMouse | 1.6 |
-| <img src='Logos/bettertouchtool.png' width='32' height='32'> BetterTouchTool | 6.726 |
 | <img src='Logos/betterzip.png' width='32' height='32'> BetterZip | 6.0.4 |
 | <img src='Logos/beyond_compare.png' width='32' height='32'> Beyond Compare | 5.2.5.32528 |
 | <img src='Logos/bezel.png' width='32' height='32'> Bezel | 4.7.0 |
@@ -807,7 +806,6 @@ This project uses publicly available metadata from Homebrew’s JSON API. Homebr
 | <img src='Logos/capto.png' width='32' height='32'> Capto | 2.1.6 |
 | <img src='Logos/carbon_copy_cloner.png' width='32' height='32'> Carbon Copy Cloner | 7.1.6 |
 | <img src='Logos/cardhop.png' width='32' height='32'> Cardhop | 2.4.9 |
-| ❌ cardPresso | 1.7.140 |
 | <img src='Logos/castr.png' width='32' height='32'> castr | 3.1.0 |
 | <img src='Logos/catch.png' width='32' height='32'> Catch | 2.3 |
 | <img src='Logos/cellprofiler.png' width='32' height='32'> CellProfiler | 4.2.8 |

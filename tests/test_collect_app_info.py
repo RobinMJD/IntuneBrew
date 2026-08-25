@@ -22,7 +22,7 @@ SPEC.loader.exec_module(collect_app_info)
 
 def cask_response(payload=None, status_code=200):
     """Build a fake requests response for one cask JSON fetch."""
-    response = Mock(status_code=status_code)
+    response = Mock(status_code=status_code, headers={})
     if status_code >= 400:
         response.raise_for_status.side_effect = collect_app_info.requests.HTTPError(
             response=response
@@ -69,12 +69,18 @@ class CollectAppInfoTests(unittest.TestCase):
     def test_non_404_homebrew_error_is_not_treated_as_deprecation(self):
         response = Mock(status_code=503)
         response.raise_for_status.side_effect = collect_app_info.requests.HTTPError(response=response)
+        session = Mock(get=Mock(return_value=response))
 
-        with patch.object(collect_app_info, "cask_session", Mock(get=Mock(return_value=response))):
+        with (
+            patch.object(collect_app_info, "cask_session", session),
+            patch.object(collect_app_info.time, "sleep"),
+        ):
             with self.assertRaises(collect_app_info.requests.HTTPError):
                 collect_app_info.get_homebrew_app_info(
                     "https://formulae.brew.sh/api/cask/temporarily-unavailable.json"
                 )
+
+        self.assertEqual(session.get.call_count, collect_app_info.CASK_MAX_ATTEMPTS)
 
     def test_disabled_cask_preserves_display_name_and_token(self):
         response = Mock(status_code=200)
@@ -322,6 +328,41 @@ class CollectAppInfoTests(unittest.TestCase):
                 collect_app_info.calculate_verified_source_hash(app_info),
                 "b" * 64,
             )
+
+    def test_readme_generation_excludes_deprecated_tombstones(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / ".github/scripts").mkdir(parents=True)
+            apps = root / "Apps"
+            logos = root / "Logos"
+            apps.mkdir()
+            logos.mkdir()
+            (apps / "healthy.json").write_text(
+                json.dumps({"name": "Healthy", "version": "1.0"}),
+                encoding="utf-8",
+            )
+            (apps / "quarantined.json").write_text(
+                json.dumps(
+                    {
+                        "name": "Quarantined",
+                        "version": "1.0",
+                        "deprecated": True,
+                    }
+                ),
+                encoding="utf-8",
+            )
+            readme = root / "README.md"
+            readme.write_text(
+                f"before\n{collect_app_info.README_APPS_START_MARKER}\nold\n"
+                f"{collect_app_info.README_APPS_END_MARKER}\nafter\n",
+                encoding="utf-8",
+            )
+            with contextlib.redirect_stdout(io.StringIO()):
+                collect_app_info.update_readme_apps([], root)
+
+            content = readme.read_text(encoding="utf-8")
+            self.assertIn("Healthy", content)
+            self.assertNotIn("Quarantined", content)
 
     def test_wireshark_declared_app_takes_precedence_over_auxiliary_pkgs(self):
         url = "https://formulae.brew.sh/api/cask/wireshark-app.json"
@@ -1163,6 +1204,86 @@ class PrefetchTests(unittest.TestCase):
         self.assertEqual(session.requested, [url])
         self.assertEqual(app_info["version"], "1.80.0")
 
+    def test_colorwell_style_503_retries_then_succeeds(self):
+        url = "https://formulae.brew.sh/api/cask/colorwell.json"
+        unavailable = cask_response(status_code=503)
+        unavailable.headers = {"Retry-After": "999"}
+        session = Mock(
+            get=Mock(
+                side_effect=[
+                    unavailable,
+                    cask_response(TAILSCALE_PAYLOAD),
+                ]
+            )
+        )
+
+        with (
+            patch.object(collect_app_info, "cask_session", session),
+            patch.object(collect_app_info.time, "sleep") as sleep,
+        ):
+            payload = collect_app_info.fetch_cask_data(url)
+
+        self.assertEqual(payload, TAILSCALE_PAYLOAD)
+        self.assertEqual(session.get.call_count, 2)
+        sleep.assert_called_once_with(
+            collect_app_info.CASK_MAX_RETRY_DELAY_SECONDS
+        )
+
+    def test_connection_timeout_retries_then_succeeds(self):
+        url = "https://formulae.brew.sh/api/cask/example.json"
+        session = Mock(
+            get=Mock(
+                side_effect=[
+                    collect_app_info.requests.Timeout("timed out"),
+                    cask_response(TAILSCALE_PAYLOAD),
+                ]
+            )
+        )
+
+        with (
+            patch.object(collect_app_info, "cask_session", session),
+            patch.object(collect_app_info.time, "sleep") as sleep,
+        ):
+            payload = collect_app_info.fetch_cask_data(url)
+
+        self.assertEqual(payload, TAILSCALE_PAYLOAD)
+        self.assertEqual(session.get.call_count, 2)
+        sleep.assert_called_once_with(collect_app_info.CASK_BACKOFF_SECONDS)
+
+    def test_deterministic_400_is_not_retried(self):
+        url = "https://formulae.brew.sh/api/cask/bad-request.json"
+        session = Mock(get=Mock(return_value=cask_response(status_code=400)))
+
+        with (
+            patch.object(collect_app_info, "cask_session", session),
+            patch.object(collect_app_info.time, "sleep") as sleep,
+            self.assertRaises(collect_app_info.requests.HTTPError),
+        ):
+            collect_app_info.fetch_cask_data(url)
+
+        session.get.assert_called_once_with(url)
+        sleep.assert_not_called()
+
+    def test_retry_exhaustion_is_aggregated_and_does_not_write_manifest(self):
+        url = "https://formulae.brew.sh/api/cask/colorwell.json"
+        session = CountingSession({url: cask_response(status_code=503)})
+
+        with tempfile.TemporaryDirectory() as directory:
+            apps_folder = Path(directory) / "Apps"
+            apps_folder.mkdir()
+            with (
+                run_collector(directory, [url], session),
+                patch.object(collect_app_info.time, "sleep"),
+                self.assertRaisesRegex(
+                    RuntimeError,
+                    "1 configured apps failed collection",
+                ),
+            ):
+                collect_app_info.main()
+
+            self.assertEqual(session.requested, [url] * 3)
+            self.assertEqual(list(apps_folder.iterdir()), [])
+
     def test_prefetched_404_still_deprecates_through_the_loop(self):
         with tempfile.TemporaryDirectory() as directory:
             apps_folder = os.path.join(directory, "Apps")
@@ -1469,34 +1590,94 @@ class CalculateFileHashTests(unittest.TestCase):
 
 
 class CatalogConsistencyTests(unittest.TestCase):
-    def test_visual_paradigm_quarantine_evidence_and_tombstone_are_consistent(self):
+    def test_quarantine_evidence_and_tombstones_are_consistent(self):
         quarantine = json.loads(
-            (
-                ROOT / ".github/data/source-integrity-quarantine.json"
-            ).read_text(encoding="utf-8")
-        )["visual-paradigm"]
-        manifest = json.loads(
-            (ROOT / "Apps/visual_paradigm.json").read_text(encoding="utf-8")
+            (ROOT / ".github/data/source-integrity-quarantine.json").read_text(
+                encoding="utf-8"
+            )
         )
         supported = json.loads(
             (ROOT / "supported_apps.json").read_text(encoding="utf-8")
         )
+        readme = (ROOT / "README.md").read_text(encoding="utf-8")
+        expected = {
+            "bettertouchtool": {
+                "filename": "bettertouchtool.json",
+                "display_name": "BetterTouchTool",
+                "expected_sha256": "e42fef1d83b5364b289e7fd4194b2a77a9783a4e0fd061cd35893082e8435688",
+                "actual_sha256": "e35e3e501368dc48479134b30ae7e98baa67035f2e5d0efb7f815567337f4059",
+                "url": "https://folivora.ai/releases/btt6.754-2026082402.zip",
+                "run": 32850110311,
+                "date": "2026-08-25",
+            },
+            "cardpresso": {
+                "filename": "cardpresso.json",
+                "display_name": "cardPresso",
+                "expected_sha256": "fccb6c5de6de364136b49d84bbac9e337ab220a7e53846304cb85e6e81dcfc4c",
+                "actual_sha256": "4b251d7c469f1e9aae01c4d83b7d8c1209e228151750d9b696a25dc551ea16bb",
+                "url": "https://www.cardpressodownloads.com/downloads/cardpresso_releases/for_mac_osx/cardPresso1.7.140.zip",
+                "run": 32850110311,
+                "date": "2026-08-25",
+            },
+            "visual-paradigm": {
+                "filename": "visual_paradigm.json",
+                "display_name": "Visual Paradigm",
+                "expected_sha256": "725c3c81d254d32c7a9f920d23d14a7694be30c52c99d28d09c457f2a24ddd24",
+                "actual_sha256": "fc3c40f94cf88841170e2fad78f85f3c3465ff6b5f502aa60c23c0262708f19b",
+                "url": "https://www.visual-paradigm.com/downloads/vp18.0/20260521/Visual_Paradigm_18_0_20260521_OSX_AArch64.dmg",
+                "run": 32355543573,
+                "date": "2026-08-20",
+            },
+        }
 
-        self.assertEqual(
-            quarantine["expected_sha256"],
-            "725c3c81d254d32c7a9f920d23d14a7694be30c52c99d28d09c457f2a24ddd24",
+        self.assertEqual(set(quarantine), set(expected))
+        for token, evidence in expected.items():
+            with self.subTest(token=token):
+                entry = quarantine[token]
+                manifest = json.loads(
+                    (ROOT / "Apps" / evidence["filename"]).read_text(
+                        encoding="utf-8"
+                    )
+                )
+                self.assertEqual(entry["expected_sha256"], evidence["expected_sha256"])
+                self.assertEqual(entry["actual_sha256"], evidence["actual_sha256"])
+                self.assertEqual(entry["url"], evidence["url"])
+                self.assertEqual(entry["workflow_run_id"], evidence["run"])
+                self.assertEqual(entry["observed_at"], evidence["date"])
+                self.assertIn(str(evidence["run"]), entry["reason"])
+                self.assertEqual(manifest["homebrew_cask"], token)
+                self.assertTrue(manifest["deprecated"])
+                self.assertEqual(manifest["deprecation_reason"], entry["reason"])
+                self.assertNotIn(Path(evidence["filename"]).stem, supported)
+                self.assertNotIn(evidence["display_name"], readme)
+
+    def test_repaired_warp_and_jamovi_are_not_quarantined(self):
+        quarantine = json.loads(
+            (ROOT / ".github/data/source-integrity-quarantine.json").read_text(
+                encoding="utf-8"
+            )
         )
-        self.assertEqual(
-            quarantine["actual_sha256"],
-            "fc3c40f94cf88841170e2fad78f85f3c3465ff6b5f502aa60c23c0262708f19b",
+        configured = (
+            collect_app_info.app_urls
+            + collect_app_info.homebrew_cask_urls
+            + collect_app_info.pkg_in_pkg_urls
+            + collect_app_info.pkg_urls
+            + collect_app_info.pkg_in_dmg_urls
         )
-        self.assertEqual(quarantine["url"], manifest["url"])
-        self.assertTrue(manifest["deprecated"])
-        self.assertEqual(
-            manifest["deprecation_reason"],
-            quarantine["reason"],
-        )
-        self.assertNotIn("visual_paradigm", supported)
+        readme = (ROOT / "README.md").read_text(encoding="utf-8")
+
+        for token in ("warp", "jamovi"):
+            with self.subTest(token=token):
+                manifest = json.loads(
+                    (ROOT / "Apps" / f"{token}.json").read_text(encoding="utf-8")
+                )
+                self.assertNotIn(token, quarantine)
+                self.assertFalse(manifest.get("deprecated", False))
+                self.assertIn(
+                    f"https://formulae.brew.sh/api/cask/{token}.json",
+                    configured,
+                )
+                self.assertIn(manifest["name"], readme)
 
     def test_unowned_catalog_entries_have_deterministic_disposition(self):
         configured = (

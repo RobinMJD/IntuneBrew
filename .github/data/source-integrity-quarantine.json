@@ -1,4 +1,20 @@
 {
+  "bettertouchtool": {
+    "actual_sha256": "e35e3e501368dc48479134b30ae7e98baa67035f2e5d0efb7f815567337f4059",
+    "expected_sha256": "e42fef1d83b5364b289e7fd4194b2a77a9783a4e0fd061cd35893082e8435688",
+    "observed_at": "2026-08-25",
+    "reason": "Source integrity quarantine: Homebrew SHA256 did not match bytes returned by the vendor URL in workflow run 32850110311",
+    "url": "https://folivora.ai/releases/btt6.754-2026082402.zip",
+    "workflow_run_id": 32850110311
+  },
+  "cardpresso": {
+    "actual_sha256": "4b251d7c469f1e9aae01c4d83b7d8c1209e228151750d9b696a25dc551ea16bb",
+    "expected_sha256": "fccb6c5de6de364136b49d84bbac9e337ab220a7e53846304cb85e6e81dcfc4c",
+    "observed_at": "2026-08-25",
+    "reason": "Source integrity quarantine: Homebrew SHA256 did not match bytes returned by the vendor URL in workflow run 32850110311",
+    "url": "https://www.cardpressodownloads.com/downloads/cardpresso_releases/for_mac_osx/cardPresso1.7.140.zip",
+    "workflow_run_id": 32850110311
+  },
   "visual-paradigm": {
     "actual_sha256": "fc3c40f94cf88841170e2fad78f85f3c3465ff6b5f502aa60c23c0262708f19b",
     "expected_sha256": "725c3c81d254d32c7a9f920d23d14a7694be30c52c99d28d09c457f2a24ddd24",

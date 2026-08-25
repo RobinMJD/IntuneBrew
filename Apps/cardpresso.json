@@ -11,5 +11,7 @@
   "sha": "5e8ca104db9a16aa8ae446d9e882b74e9feaf07ff29da5418e526ec46e9045d1",
   "category": "Design",
   "publisher": "CardPresso",
-  "previous_version": "1.7.140"
+  "previous_version": "1.7.140",
+  "deprecated": true,
+  "deprecation_reason": "Source integrity quarantine: Homebrew SHA256 did not match bytes returned by the vendor URL in workflow run 32850110311"
 }

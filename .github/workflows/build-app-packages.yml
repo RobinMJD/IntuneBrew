@@ -109,12 +109,14 @@ jobs:
         run: python .github/scripts/collect_app_info.py
 
       - name: Create collection patch
+        if: ${{ success() }}
         run: |
           git add -A -- Apps README.md supported_apps.json
           git diff --cached --binary --full-index > catalog-collection.patch
           git reset
 
       - name: Upload collection patch
+        if: ${{ success() }}
         uses: actions/upload-artifact@v4
         with:
           name: catalog-collection-${{ github.run_id }}

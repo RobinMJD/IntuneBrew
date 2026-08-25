@@ -25,5 +25,7 @@
   "homebrew_cask": "bettertouchtool",
   "source_version": "6.726,2026081403",
   "source_sha256": "60276a7ba23b36b31ac93e3c8ea61b085eb3cf524b4c41abfd9380bd60dc42e1",
-  "source_sha256_provenance": "homebrew"
+  "source_sha256_provenance": "homebrew",
+  "deprecated": true,
+  "deprecation_reason": "Source integrity quarantine: Homebrew SHA256 did not match bytes returned by the vendor URL in workflow run 32850110311"
 }
