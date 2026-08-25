@@ -77,6 +77,7 @@ class CaskArtifactValidationTests(unittest.TestCase):
         expected_runs = {
             "bettertouchtool": "32850110311",
             "cardpresso": "32850110311",
+            "mendeley-reference-manager": "32861938278",
             "visual-paradigm": "32355543573",
         }
         for token, run_id in expected_runs.items():
@@ -94,9 +95,9 @@ class CaskArtifactValidationTests(unittest.TestCase):
 
     def test_removing_quarantine_entry_permits_deliberate_recovery(self):
         data = {
-            "token": "bettertouchtool",
-            "url": "https://example.test/BetterTouchTool.zip",
-            "artifacts": [{"app": ["BetterTouchTool.app"]}],
+            "token": "mendeley-reference-manager",
+            "url": "https://example.test/Mendeley.dmg",
+            "artifacts": [{"app": ["Mendeley Reference Manager.app"]}],
         }
 
         with patch.object(
@@ -175,7 +176,7 @@ class CaskArtifactValidationTests(unittest.TestCase):
                             "ISSUE_TITLE": "Add Valid apps",
                             "ISSUE_BODY": "",
                             "COMMENT_BODY": (
-                                "/approve valid, bettertouchtool, cardpresso"
+                                "/approve valid, mendeley-reference-manager"
                             ),
                         },
                         clear=True,

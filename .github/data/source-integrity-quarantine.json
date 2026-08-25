@@ -15,6 +15,24 @@
     "url": "https://www.cardpressodownloads.com/downloads/cardpresso_releases/for_mac_osx/cardPresso1.7.140.zip",
     "workflow_run_id": 32850110311
   },
+  "mendeley-reference-manager": {
+    "cask": "mendeley-reference-manager",
+    "expected_sha256": "97c5dba3fd0152e8f2a63f3fd828dff4b9d3730b6ae79e382ef7381ab8efb9d0",
+    "failure_type": "access_denied",
+    "observed_at": "2026-08-25",
+    "reason": "Source integrity quarantine: vendor source returned HTTP 403 for all supported user agents in GitHub-hosted workflow run 32861938278 attempts 1 and 2; source SHA256 could not be verified",
+    "url": "https://static.mendeley.com/bin/desktop/mendeley-reference-manager-2.149.0-universal.dmg",
+    "workflow_runs": [
+      {
+        "attempt": 1,
+        "run_id": 32861938278
+      },
+      {
+        "attempt": 2,
+        "run_id": 32861938278
+      }
+    ]
+  },
   "visual-paradigm": {
     "actual_sha256": "fc3c40f94cf88841170e2fad78f85f3c3465ff6b5f502aa60c23c0262708f19b",
     "expected_sha256": "725c3c81d254d32c7a9f920d23d14a7694be30c52c99d28d09c457f2a24ddd24",
