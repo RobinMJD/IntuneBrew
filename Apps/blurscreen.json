@@ -2,12 +2,20 @@
   "name": "BlurScreen",
   "description": "Blur any part of your screen",
   "version": "1.0",
-  "url": "https://intcybintunebrewprd01st.blob.core.windows.net/pkg/blurscreen_1.0.pkg",
+  "url": "https://intcybintunebrewprd01st.blob.core.windows.net/pkg/blurscreen_1.0_cb583e93b7d263c2f23188a8d811c89b0225b3c8a112352ab25e09fb6fc141e6.pkg",
   "vendor_url": "https://www.blurscreen.app/assets/BlurScreen-v2.pkg",
-  "bundleId": "com.blurscreen",
+  "bundleId": "com.sanskar.blurscreen",
+  "bundleId_source": "package",
   "homepage": "https://www.blurscreen.app/",
   "homebrew_cask": "blurscreen",
-  "fileName": "blurscreen_1.0.pkg",
+  "fileName": "blurscreen_1.0_cb583e93b7d263c2f23188a8d811c89b0225b3c8a112352ab25e09fb6fc141e6.pkg",
+  "source_version": "1.0",
+  "source_sha256": "no_check",
+  "source_sha256_provenance": "observed-no_check",
+  "artifact_kind": "pkg",
+  "sha": "cb583e93b7d263c2f23188a8d811c89b0225b3c8a112352ab25e09fb6fc141e6",
+  "artifact_pkg": "BlurScreen-v2.pkg",
+  "download_user_agent": "default",
   "type": "pkg_in_pkg",
   "qa_info": {
     "qa_timestamp": "2025-05-12T11:27:16Z",
@@ -19,11 +27,9 @@
     "bundle_id_status": "verified",
     "installed_version": "1.0"
   },
-  "sha": "2f1fc1a6796d1f3b10dcffeaf79804c75b8c53cba75282c2b11ceb101334d83e",
   "category": "Utilities",
   "publisher": "Unknown",
   "previous_version": "1.0",
-  "source_version": "1.0",
-  "source_sha256": "no_check",
-  "packaging_pending": true
+  "source_observed_sha256": "0e496eaa4c110d6c425d1b949ea4bfdb6288e4b5553fa90cc34f0d677eb73f74",
+  "source_checked_at": "2026-08-25T17:51:32Z"
 }

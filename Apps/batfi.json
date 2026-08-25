@@ -2,13 +2,13 @@
   "name": "BatFi",
   "description": "App for managing battery charging",
   "version": "3.1.1",
-  "url": "https://intcybintunebrewprd01st.blob.core.windows.net/pkg/batfi_3.1.1.pkg",
+  "url": "https://intcybintunebrewprd01st.blob.core.windows.net/pkg/batfi_3.1.1_220496c3cc75b9a0af68d48cafb70fb1fdfd3841aa4c7ce0b06281a911cb4d54.pkg",
   "vendor_url": "https://files.micropixels.software/batfi/BatFi-latest.zip",
   "bundleId": "software.micropixels.BatFi",
   "homepage": "https://micropixels.software/batfi",
-  "fileName": "batfi_3.1.1.pkg",
+  "fileName": "batfi_3.1.1_220496c3cc75b9a0af68d48cafb70fb1fdfd3841aa4c7ce0b06281a911cb4d54.pkg",
   "type": "app",
-  "sha": "c4beba0f33d9eaad30e78533ad2c4afd3cee14d0a95bf44769b448508772d99a",
+  "sha": "220496c3cc75b9a0af68d48cafb70fb1fdfd3841aa4c7ce0b06281a911cb4d54",
   "previous_version": "3.1.1",
   "qa_info": {
     "qa_timestamp": "2025-05-16T13:21:39Z",
@@ -25,5 +25,12 @@
   "homebrew_cask": "batfi",
   "source_version": "3.1.1",
   "source_sha256": "no_check",
-  "packaging_pending": true
+  "source_sha256_provenance": "observed-no_check",
+  "artifact_app": "BatFi.app",
+  "download_user_agent": "default",
+  "archive_format": "zip",
+  "artifact_kind": "archive",
+  "bundleId_source": "package",
+  "source_observed_sha256": "d5c8f6c695d0c00cbaf6cf8012b433c3399ae7460f76757878ccbd9c1f1b1f45",
+  "source_checked_at": "2026-08-25T17:51:32Z"
 }

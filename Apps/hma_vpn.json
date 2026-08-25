@@ -11,5 +11,7 @@
   "sha": "8e394d115d9ff05ce68549031e01a29235ca28f9b251065b994780150183e147",
   "category": "Security",
   "publisher": "Hide My Ass! Ltd.",
-  "previous_version": "latest"
+  "previous_version": "latest",
+  "deprecated": true,
+  "deprecation_reason": "Bootstrap installer only; no directly deployable app or package artifact"
 }

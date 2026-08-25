@@ -11,5 +11,7 @@
   "sha": "aad6812460df8c670999691e244b111bfad19c2544180093ecf2019ca45cb7fe",
   "category": "Productivity",
   "publisher": "Many Tricks",
-  "previous_version": "4.7.0"
+  "previous_version": "4.7.0",
+  "deprecated": true,
+  "deprecation_reason": "No directly deployable app or package artifact"
 }

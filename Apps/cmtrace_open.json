@@ -9,6 +9,12 @@
   "homepage": "https://cmtraceopen.com/",
   "homebrew_cask": "cmtrace-open",
   "fileName": "CMTrace.Open_1.5.2_aarch64.dmg",
+  "source_version": "1.5.2",
+  "source_sha256": "d4b5783fb8b2f6942d88c489dd8b94c35684590f161c36e0f802ddcf9354883e",
+  "source_sha256_provenance": "homebrew",
+  "artifact_kind": "dmg",
   "sha": "d4b5783fb8b2f6942d88c489dd8b94c35684590f161c36e0f802ddcf9354883e",
+  "artifact_app": "CMTrace Open.app",
+  "download_user_agent": "default",
   "previous_version": "1.5.2"
 }

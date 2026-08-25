@@ -2,13 +2,21 @@
   "name": "AdGuard",
   "description": "Stand alone ad blocker",
   "version": "2.19.0.2258",
-  "url": "https://static.adguard.com/mac/release/AdGuard-2.19.0.2258.dmg",
+  "url": "https://intcybintunebrewprd01st.blob.core.windows.net/pkg/adguard_2.19.0.2258_4970d3b6cd3fab4c238ef77690e24b7617ed7daa0be2cf96a140c823cf07531a.pkg",
   "vendor_url": "https://static.adguard.com/mac/release/AdGuard-2.19.0.2258.dmg",
   "bundleId": "com.adguard.mac.adguard",
+  "bundleId_source": "package",
   "homepage": "https://adguard.com/",
   "homebrew_cask": "adguard",
-  "fileName": "AdGuard-2.19.0.2258.dmg",
-  "sha": "149344c273968ab48ceac5de6025fb5219480899fb3520c101e1ce86e83d3804",
+  "fileName": "adguard_2.19.0.2258_4970d3b6cd3fab4c238ef77690e24b7617ed7daa0be2cf96a140c823cf07531a.pkg",
+  "source_version": "2.19.0.2258",
+  "source_sha256": "149344c273968ab48ceac5de6025fb5219480899fb3520c101e1ce86e83d3804",
+  "source_sha256_provenance": "homebrew",
+  "artifact_kind": "dmg",
+  "artifact_pkg": "AdGuard.pkg",
+  "download_user_agent": "default",
+  "type": "pkg_in_dmg",
+  "sha": "4970d3b6cd3fab4c238ef77690e24b7617ed7daa0be2cf96a140c823cf07531a",
   "qa_info": {
     "qa_timestamp": "2025-05-19T07:58:58Z",
     "qa_result": "No .app found in DMG",
@@ -20,5 +28,6 @@
   },
   "category": "Security",
   "publisher": "AdGuard Software Ltd.",
-  "previous_version": "2.19.0.2258"
+  "previous_version": "2.19.0.2258",
+  "source_checked_at": "2026-08-25T17:51:32Z"
 }

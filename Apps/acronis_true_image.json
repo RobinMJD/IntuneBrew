@@ -2,13 +2,21 @@
   "name": "Acronis True Image",
   "description": "Full image backup and cloning software",
   "version": "29.2",
-  "url": "https://dl.acronis.com/u/AcronisTrueImage_42065.dmg",
+  "url": "https://intcybintunebrewprd01st.blob.core.windows.net/pkg/acronis_true_image_29.2_aeeb5d8a1e3cbd0b156dfcb671a44c6ed13b50d917c1f04442b8635efbbd1c66.pkg",
   "vendor_url": "https://dl.acronis.com/u/AcronisTrueImage_42065.dmg",
-  "bundleId": "com.acronis.backup",
+  "bundleId": "com.acronis.CyberProtectHomeOffice.installer",
+  "bundleId_source": "package",
   "homepage": "https://www.acronis.com/products/true-image/",
   "homebrew_cask": "acronis-true-image",
-  "fileName": "AcronisTrueImage_42065.dmg",
-  "sha": "c9ceaac10458342db211f91a18c776f9cba24f75a6828c72e425f0afecf632c2",
+  "fileName": "acronis_true_image_29.2_aeeb5d8a1e3cbd0b156dfcb671a44c6ed13b50d917c1f04442b8635efbbd1c66.pkg",
+  "source_version": "29.2,42065",
+  "source_sha256": "0bee00e25cf777d2ff059fadae300699dc062adbc0b995819da17897104afffa",
+  "source_sha256_provenance": "homebrew",
+  "artifact_kind": "dmg",
+  "artifact_pkg": "Installer.pkg",
+  "download_user_agent": "default",
+  "type": "pkg_in_dmg",
+  "sha": "aeeb5d8a1e3cbd0b156dfcb671a44c6ed13b50d917c1f04442b8635efbbd1c66",
   "qa_info": {
     "qa_timestamp": "2025-05-12T10:15:49Z",
     "qa_result": "Installation successful and verified",
@@ -21,5 +29,6 @@
   },
   "category": "Utilities",
   "publisher": "Acronis International GmbH",
-  "previous_version": "29.2"
+  "previous_version": "29.2",
+  "source_checked_at": "2026-08-25T17:51:32Z"
 }

@@ -1,14 +1,14 @@
 {
   "name": "BetterZip",
   "description": "Utility to create and modify archives",
-  "version": "6.0.4",
-  "url": "https://intcybintunebrewprd01st.blob.core.windows.net/pkg/betterzip_6.0.4.pkg",
-  "vendor_url": "https://macitbetter.com/dl/BetterZip-6.0.4.zip",
+  "version": "6.0.5",
+  "url": "https://intcybintunebrewprd01st.blob.core.windows.net/pkg/betterzip_6.0.5_8ce81c16d8b0a622e743aea630cbe22cfd3bdf1c2765aa3deb90948fdc855f72.pkg",
+  "vendor_url": "https://macitbetter.com/dl/BetterZip-6.0.5.zip",
   "bundleId": "com.macitbetter.betterzip",
   "homepage": "https://macitbetter.com/",
-  "fileName": "betterzip_6.0.4.pkg",
+  "fileName": "betterzip_6.0.5_8ce81c16d8b0a622e743aea630cbe22cfd3bdf1c2765aa3deb90948fdc855f72.pkg",
   "type": "app",
-  "sha": "4129eed447f5abd7dde13023220f9df413cf72fbebedb19132b97033edcb1a8b",
+  "sha": "8ce81c16d8b0a622e743aea630cbe22cfd3bdf1c2765aa3deb90948fdc855f72",
   "previous_version": "6.0.4",
   "qa_info": {
     "qa_timestamp": "2025-05-12T11:23:43Z",
@@ -23,7 +23,13 @@
   "category": "Utilities",
   "publisher": "MacItBetter",
   "homebrew_cask": "betterzip",
-  "source_version": "6.0.4",
-  "source_sha256": "b37f810f1fb73bcb61b9c8165cb4eea690b59cedc3584736e9ff776b0a06b90c",
-  "source_sha256_provenance": "homebrew"
+  "source_version": "6.0.5",
+  "source_sha256": "79ebb89f9e7d1424feba04e6fa0e2351c25bce4f45759463900232f91652abea",
+  "source_sha256_provenance": "homebrew",
+  "artifact_app": "BetterZip.app",
+  "download_user_agent": "default",
+  "archive_format": "zip",
+  "artifact_kind": "archive",
+  "bundleId_source": "package",
+  "source_checked_at": "2026-08-25T17:51:32Z"
 }

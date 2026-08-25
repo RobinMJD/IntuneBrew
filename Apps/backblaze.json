@@ -11,5 +11,7 @@
   "sha": "21c7501391c3f28c13fd49c7e4eae24ea2780b708ef690cdc70464a88e141d57",
   "category": "Utilities",
   "publisher": "Backblaze, Inc.",
-  "previous_version": "10.0.2.1048"
+  "previous_version": "10.0.2.1048",
+  "deprecated": true,
+  "deprecation_reason": "Bootstrap installer only; no directly deployable app or package artifact"
 }

@@ -2,13 +2,13 @@
   "name": "Alcove",
   "description": "Utility to add Dynamic Island like features to notch area",
   "version": "1.7.7",
-  "url": "https://download.tryalcove.com/Alcove.dmg",
+  "url": "https://intcybintunebrewprd01st.blob.core.windows.net/pkg/alcove_1.7.7_bd6f3565f126c294368f8770bbb47be585beecf05b4f48bf90d050a4830be470.pkg",
   "vendor_url": "https://download.tryalcove.com/Alcove.dmg",
   "bundleId": "com.henrikruscon.Alcove",
   "homepage": "https://tryalcove.com/",
-  "fileName": "alcove_1.7.2.pkg",
+  "fileName": "alcove_1.7.7_bd6f3565f126c294368f8770bbb47be585beecf05b4f48bf90d050a4830be470.pkg",
   "type": "app",
-  "sha": "17c481ffa9af91fc76e2ba9995f96750538bf171e5eb2be602c07255f4d944e5",
+  "sha": "bd6f3565f126c294368f8770bbb47be585beecf05b4f48bf90d050a4830be470",
   "previous_version": "1.7.7",
   "qa_info": {
     "qa_timestamp": "2025-05-12T10:30:05Z",
@@ -22,5 +22,14 @@
   },
   "category": "Utilities",
   "publisher": "Try Alcove",
-  "homebrew_cask": "alcove"
+  "homebrew_cask": "alcove",
+  "source_sha256_provenance": "observed-no_check",
+  "artifact_app": "Alcove.app",
+  "download_user_agent": "default",
+  "source_sha256": "no_check",
+  "artifact_kind": "dmg",
+  "source_version": "1.7.7",
+  "bundleId_source": "package",
+  "source_observed_sha256": "17c481ffa9af91fc76e2ba9995f96750538bf171e5eb2be602c07255f4d944e5",
+  "source_checked_at": "2026-08-25T17:51:32Z"
 }

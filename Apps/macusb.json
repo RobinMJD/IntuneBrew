@@ -5,9 +5,16 @@
   "url": "https://github.com/Kruszoneq/macUSB/releases/download/v2.4/macUSB.2.4.dmg",
   "vendor_url": "https://github.com/Kruszoneq/macUSB/releases/download/v2.4/macUSB.2.4.dmg",
   "bundleId": "com.kruszoneq.macUSB",
+  "bundleId_source": "legacy",
   "homepage": "https://www.macusb.app/",
   "homebrew_cask": "macusb",
   "fileName": "macUSB.2.4.dmg",
+  "source_version": "2.4",
+  "source_sha256": "fe3f25cb03c0b6437a148977e36a6e00fbbfcb1d2c868a041812e2b769fde1ae",
+  "source_sha256_provenance": "homebrew",
+  "artifact_kind": "dmg",
   "sha": "fe3f25cb03c0b6437a148977e36a6e00fbbfcb1d2c868a041812e2b769fde1ae",
+  "artifact_app": "macUSB.app",
+  "download_user_agent": "default",
   "previous_version": "2.4"
 }

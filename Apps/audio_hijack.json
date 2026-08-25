@@ -2,13 +2,13 @@
   "name": "Audio Hijack",
   "description": "Records audio from any application",
   "version": "4.5.9",
-  "url": "https://intcybintunebrewprd01st.blob.core.windows.net/pkg/audio_hijack_4.5.9.pkg",
+  "url": "https://intcybintunebrewprd01st.blob.core.windows.net/pkg/audio_hijack_4.5.9_eeb7ab07fe073d49d03994e3214f4de89de57256b0fd5d01204f8f6486b4f0af.pkg",
   "vendor_url": "https://cdn.rogueamoeba.com/audiohijack/download/AudioHijack.zip",
   "bundleId": "com.rogueamoeba.audiohijack",
   "homepage": "https://rogueamoeba.com/audiohijack/",
-  "fileName": "audio_hijack_4.5.9.pkg",
+  "fileName": "audio_hijack_4.5.9_eeb7ab07fe073d49d03994e3214f4de89de57256b0fd5d01204f8f6486b4f0af.pkg",
   "type": "app",
-  "sha": "e9d37f0333adb53d99458024888945aa7649bf780f12e1bfa50fe1d58a00db61",
+  "sha": "eeb7ab07fe073d49d03994e3214f4de89de57256b0fd5d01204f8f6486b4f0af",
   "previous_version": "4.5.9",
   "qa_info": {
     "qa_timestamp": "2025-05-12T10:34:29Z",
@@ -25,5 +25,12 @@
   "homebrew_cask": "audio-hijack",
   "source_version": "4.5.9",
   "source_sha256": "no_check",
-  "packaging_pending": true
+  "source_sha256_provenance": "observed-no_check",
+  "artifact_app": "Audio Hijack.app",
+  "download_user_agent": "default",
+  "archive_format": "zip",
+  "artifact_kind": "archive",
+  "bundleId_source": "package",
+  "source_observed_sha256": "5f7852989c9f4b9d5e48f574e0d9bf06d28314b01eddbc8d8c8d6259e4f8c496",
+  "source_checked_at": "2026-08-25T17:51:32Z"
 }

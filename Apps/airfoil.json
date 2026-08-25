@@ -2,13 +2,13 @@
   "name": "Airfoil",
   "description": "Sends audio from computer to outputs",
   "version": "5.12.7",
-  "url": "https://intcybintunebrewprd01st.blob.core.windows.net/pkg/airfoil_5.12.7.pkg",
+  "url": "https://intcybintunebrewprd01st.blob.core.windows.net/pkg/airfoil_5.12.7_f9caf3f1edbbd0bc1e83a4024074aa2e7272eb9980a6449eac9172b2f7a0fd91.pkg",
   "vendor_url": "https://cdn.rogueamoeba.com/airfoil/mac/download/Airfoil.zip",
   "bundleId": "com.rogueamoeba.Airfoil",
   "homepage": "https://rogueamoeba.com/airfoil/mac/",
-  "fileName": "airfoil_5.12.7.pkg",
+  "fileName": "airfoil_5.12.7_f9caf3f1edbbd0bc1e83a4024074aa2e7272eb9980a6449eac9172b2f7a0fd91.pkg",
   "type": "app",
-  "sha": "b78a42a9a1e8adebf51299663a5a23245f20b957dcaba7e39548abee6690d48c",
+  "sha": "f9caf3f1edbbd0bc1e83a4024074aa2e7272eb9980a6449eac9172b2f7a0fd91",
   "previous_version": "5.12.7",
   "qa_info": {
     "qa_timestamp": "2025-05-12T10:29:48Z",
@@ -25,5 +25,12 @@
   "homebrew_cask": "airfoil",
   "source_version": "5.12.7",
   "source_sha256": "no_check",
-  "packaging_pending": true
+  "source_sha256_provenance": "observed-no_check",
+  "artifact_app": "Airfoil/Airfoil.app",
+  "download_user_agent": "default",
+  "archive_format": "zip",
+  "artifact_kind": "archive",
+  "bundleId_source": "package",
+  "source_observed_sha256": "6ce12a64218d267ec758d6fed08aabb872edb9ae0bcb01fbf62874e9b0f7d393",
+  "source_checked_at": "2026-08-25T17:51:32Z"
 }

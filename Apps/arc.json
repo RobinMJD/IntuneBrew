@@ -1,14 +1,14 @@
 {
   "name": "Arc",
   "description": "Chromium based browser",
-  "version": "1.160.0",
-  "url": "https://intcybintunebrewprd01st.blob.core.windows.net/pkg/arc_1.160.0.pkg",
-  "vendor_url": "https://releases.arc.net/release/Arc-1.160.0-85122.zip",
+  "version": "1.161.1",
+  "url": "https://intcybintunebrewprd01st.blob.core.windows.net/pkg/arc_1.161.1_d531e733ec8733a2f39cc4034782cfc1bbaf3867375bf66f36fd022c41b65755.pkg",
+  "vendor_url": "https://releases.arc.net/release/Arc-1.161.1-85803.zip",
   "bundleId": "company.thebrowser.Browser",
   "homepage": "https://arc.net/",
-  "fileName": "arc_1.160.0.pkg",
+  "fileName": "arc_1.161.1_d531e733ec8733a2f39cc4034782cfc1bbaf3867375bf66f36fd022c41b65755.pkg",
   "type": "app",
-  "sha": "bd61b6dac782b5de43d17f8f477c5c91c4aa759a2cec30970498f36ed8429668",
+  "sha": "d531e733ec8733a2f39cc4034782cfc1bbaf3867375bf66f36fd022c41b65755",
   "previous_version": "1.160.0",
   "qa_info": {
     "qa_timestamp": "2025-05-16T13:19:57Z",
@@ -23,7 +23,13 @@
   "category": "Browsers",
   "publisher": "The Browser Company, LLC",
   "homebrew_cask": "arc",
-  "source_version": "1.160.0,85122",
-  "source_sha256": "12bc9de1803c39a72486a02f5b4701377123d224dfb4d7d1952359b14045e204",
-  "source_sha256_provenance": "homebrew"
+  "source_version": "1.161.1,85803",
+  "source_sha256": "06e241de8f8aef42b358a113de2e77199a66e46f7092f83c4df0fb68217f6969",
+  "source_sha256_provenance": "homebrew",
+  "artifact_app": "Arc.app",
+  "download_user_agent": "default",
+  "archive_format": "zip",
+  "artifact_kind": "archive",
+  "bundleId_source": "package",
+  "source_checked_at": "2026-08-25T17:51:32Z"
 }

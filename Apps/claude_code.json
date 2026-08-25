@@ -11,5 +11,7 @@
   "sha": "43484b1352cef03a08346f36ef0437755b1aad646ab9313ce187857b794b7247",
   "category": "Developer Tools",
   "publisher": "Anthropic",
-  "previous_version": "2.1.227"
+  "previous_version": "2.1.227",
+  "deprecated": true,
+  "deprecation_reason": "No directly deployable app or package artifact"
 }

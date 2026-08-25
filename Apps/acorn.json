@@ -1,14 +1,14 @@
 {
   "name": "Acorn",
   "description": "Image editor focused on simplicity",
-  "version": "8.6.1",
-  "url": "https://intcybintunebrewprd01st.blob.core.windows.net/pkg/acorn_8.6.1.pkg",
-  "vendor_url": "https://flyingmeat.com/download/Acorn-8.6.1.zip",
+  "version": "8.6.2",
+  "url": "https://intcybintunebrewprd01st.blob.core.windows.net/pkg/acorn_8.6.2_5d3494ae2045d4c68ad05990421d9ffdb71aa189951aed53b40677c98b8491d3.pkg",
+  "vendor_url": "https://flyingmeat.com/download/Acorn-8.6.2.zip",
   "bundleId": "com.flyingmeat.Acorn8",
   "homepage": "https://flyingmeat.com/acorn/",
-  "fileName": "acorn_8.6.1.pkg",
+  "fileName": "acorn_8.6.2_5d3494ae2045d4c68ad05990421d9ffdb71aa189951aed53b40677c98b8491d3.pkg",
   "type": "app",
-  "sha": "398b535e829676431538cee3db7dbbd890cb721187f8193b6f20f668be921e24",
+  "sha": "5d3494ae2045d4c68ad05990421d9ffdb71aa189951aed53b40677c98b8491d3",
   "previous_version": "8.6.1",
   "qa_info": {
     "qa_timestamp": "2025-05-12T07:44:24Z",
@@ -23,7 +23,13 @@
   "category": "Design",
   "publisher": "Flying Meat",
   "homebrew_cask": "acorn",
-  "source_version": "8.6.1",
-  "source_sha256": "8784aa59f29e7451776054ee21ec69dbe433298195bfc21ca47574f50573ecf4",
-  "source_sha256_provenance": "homebrew"
+  "source_version": "8.6.2",
+  "source_sha256": "ab1fe1d1c18b74a2686c44c366e13f6ae4450d20e227dbb56b04fbd1df5c83f8",
+  "source_sha256_provenance": "homebrew",
+  "artifact_app": "Acorn.app",
+  "download_user_agent": "default",
+  "archive_format": "zip",
+  "artifact_kind": "archive",
+  "bundleId_source": "package",
+  "source_checked_at": "2026-08-25T17:51:32Z"
 }

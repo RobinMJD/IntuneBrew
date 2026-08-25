@@ -1,14 +1,14 @@
 {
   "name": "Beeper",
   "description": "Universal chat app powered by Matrix",
-  "version": "4.3.34",
-  "url": "https://intcybintunebrewprd01st.blob.core.windows.net/pkg/beeper_4.3.34.pkg",
-  "vendor_url": "https://beeper-desktop.download.beeper.com/builds/Beeper-4.3.34-arm64-mac.zip",
+  "version": "4.3.57",
+  "url": "https://intcybintunebrewprd01st.blob.core.windows.net/pkg/beeper_4.3.57_25ac6d8de715d00438e0e8338aaf47e25e2b1d7ef0596954e3accd95b02a4278.pkg",
+  "vendor_url": "https://beeper-desktop.download.beeper.com/builds/Beeper-4.3.57-arm64-mac.zip",
   "bundleId": "com.automattic.beeper.desktop",
   "homepage": "https://www.beeper.com/",
-  "fileName": "beeper_4.3.34.pkg",
+  "fileName": "beeper_4.3.57_25ac6d8de715d00438e0e8338aaf47e25e2b1d7ef0596954e3accd95b02a4278.pkg",
   "type": "app",
-  "sha": "b0f221ac1a0ce4575ff26f1142c4d41322e46f124913371bac2ae6a061b506d4",
+  "sha": "25ac6d8de715d00438e0e8338aaf47e25e2b1d7ef0596954e3accd95b02a4278",
   "previous_version": "4.3.34",
   "qa_info": {
     "qa_timestamp": "2025-05-16T13:21:44Z",
@@ -23,7 +23,13 @@
   "category": "Communication",
   "publisher": "Beeper",
   "homebrew_cask": "beeper",
-  "source_version": "4.3.34",
-  "source_sha256": "9ac64e0f220e351e54faa7410a471ba6766d8d86642a6a235c05eda47aa982b0",
-  "source_sha256_provenance": "homebrew"
+  "source_version": "4.3.57",
+  "source_sha256": "1bdd5fee6d0e89a81e334506e1d200256177f4db85e523853f7c6ae689c002eb",
+  "source_sha256_provenance": "homebrew",
+  "artifact_app": "Beeper Desktop.app",
+  "download_user_agent": "default",
+  "archive_format": "zip",
+  "artifact_kind": "archive",
+  "bundleId_source": "package",
+  "source_checked_at": "2026-08-25T17:51:32Z"
 }
