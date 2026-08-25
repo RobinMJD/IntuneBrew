@@ -184,6 +184,10 @@ class CatalogWorkflowTests(unittest.TestCase):
     def test_quarantine_data_change_triggers_immediate_collection(self):
         trigger = self.workflow.split("  schedule:", 1)[0]
         self.assertIn(
+            "'.github/scripts/source_integrity_quarantine.py'",
+            trigger,
+        )
+        self.assertIn(
             "'.github/data/source-integrity-quarantine.json'",
             trigger,
         )
