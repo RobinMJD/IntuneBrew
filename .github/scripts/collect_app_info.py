@@ -6,7 +6,9 @@ import re
 import fileinput
 from pathlib import Path
 import subprocess
+import time
 from datetime import datetime
+from email.utils import parsedate_to_datetime
 import hashlib
 import tempfile
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -54,6 +56,8 @@ NO_DEPLOYABLE_PAYLOAD_REASON = (
 SOURCE_INTEGRITY_QUARANTINE_PATH = (
     Path(__file__).resolve().parents[1] / "data" / "source-integrity-quarantine.json"
 )
+README_APPS_START_MARKER = "### 📱 Supported Applications"
+README_APPS_END_MARKER = "## 🔧 Configuration"
 
 
 def load_source_integrity_quarantine():
@@ -2059,9 +2063,13 @@ def raise_collected_source_hash_mismatches(mismatches):
     )
 
 
-# Cask JSON is a few kilobytes: 10s to connect, 30s to read is generous, and a
-# stalled endpoint must not hold a worker for the whole run.
-CASK_TIMEOUT = (10, 30)
+# Cask JSON is a few kilobytes. Three bounded attempts cover short Homebrew
+# outages without allowing one endpoint to hold a worker indefinitely.
+CASK_TIMEOUT = (5, 15)
+CASK_MAX_ATTEMPTS = 3
+CASK_BACKOFF_SECONDS = 1
+CASK_MAX_RETRY_DELAY_SECONDS = 10
+CASK_TRANSIENT_STATUS_CODES = frozenset({408, 429, 500, 502, 503, 504})
 # The connection pool must be at least as large as the worker count, otherwise
 # threads queue on the pool instead of on the network.
 CASK_WORKERS = 16
@@ -2076,8 +2084,7 @@ class TimeoutSession(requests.Session):
 
 
 def build_cask_session():
-    """Connection-reusing session for the Homebrew API. No retries: the nightly run
-    reruns anyway, and a retrying adapter multiplies the stall of a dead endpoint."""
+    """Build the connection-reusing Homebrew API session."""
     session = TimeoutSession()
     adapter = requests.adapters.HTTPAdapter(
         pool_connections=CASK_WORKERS,
@@ -2098,17 +2105,68 @@ cask_cache = {}
 
 def fetch_cask_data(json_url):
     """Fetch one cask JSON. Raises CaskUnavailableError when Homebrew no longer serves it."""
-    response = cask_session.get(json_url)
-    try:
-        response.raise_for_status()
-    except requests.HTTPError as error:
+    for attempt in range(1, CASK_MAX_ATTEMPTS + 1):
+        try:
+            response = cask_session.get(json_url)
+        except (requests.ConnectionError, requests.Timeout):
+            if attempt == CASK_MAX_ATTEMPTS:
+                raise
+            delay = min(
+                CASK_BACKOFF_SECONDS * (2 ** (attempt - 1)),
+                CASK_MAX_RETRY_DELAY_SECONDS,
+            )
+            print(
+                f"Transient Homebrew API connection failure for {json_url}; "
+                f"retrying in {delay}s ({attempt}/{CASK_MAX_ATTEMPTS})"
+            )
+            time.sleep(delay)
+            continue
+
         if response.status_code == 404:
-            raise CaskUnavailableError(
-                "cask removed from Homebrew",
-                cask_token=get_cask_token(json_url),
-            ) from error
-        raise
-    return response.json()
+            try:
+                response.raise_for_status()
+            except requests.HTTPError as error:
+                raise CaskUnavailableError(
+                    "cask removed from Homebrew",
+                    cask_token=get_cask_token(json_url),
+                ) from error
+
+        if (
+            response.status_code in CASK_TRANSIENT_STATUS_CODES
+            and attempt < CASK_MAX_ATTEMPTS
+        ):
+            delay = retry_delay_seconds(response, attempt)
+            print(
+                f"Transient Homebrew API HTTP {response.status_code} for "
+                f"{json_url}; retrying in {delay}s "
+                f"({attempt}/{CASK_MAX_ATTEMPTS})"
+            )
+            time.sleep(delay)
+            continue
+
+        response.raise_for_status()
+        return response.json()
+
+    raise AssertionError("Homebrew API retry loop exited unexpectedly")
+
+
+def retry_delay_seconds(response, attempt):
+    """Return capped Retry-After or exponential backoff for a transient response."""
+    retry_after = response.headers.get("Retry-After")
+    delay = None
+    if isinstance(retry_after, str):
+        try:
+            delay = max(0, int(retry_after))
+        except ValueError:
+            try:
+                retry_at = parsedate_to_datetime(retry_after)
+                now = datetime.now(retry_at.tzinfo)
+                delay = max(0, (retry_at - now).total_seconds())
+            except (TypeError, ValueError, OverflowError):
+                delay = None
+    if delay is None:
+        delay = CASK_BACKOFF_SECONDS * (2 ** (attempt - 1))
+    return min(delay, CASK_MAX_RETRY_DELAY_SECONDS)
 
 
 def prefetch_cask_data(json_urls):
@@ -2303,9 +2361,14 @@ def sanitize_filename(name):
     sanitized = re.sub(r'[^\w_]', '', sanitized)
     return sanitized.lower()
 
-def update_readme_apps(apps_list):
-    readme_path = Path(__file__).parent.parent.parent / "README.md"
-    logos_path = Path(__file__).parent.parent.parent / "Logos"
+def update_readme_apps(apps_list, repository_root=None):
+    repository_root = (
+        Path(repository_root)
+        if repository_root is not None
+        else Path(__file__).parent.parent.parent
+    )
+    readme_path = repository_root / "README.md"
+    logos_path = repository_root / "Logos"
     if not readme_path.exists():
         print("README.md not found")
         return
@@ -2314,15 +2377,17 @@ def update_readme_apps(apps_list):
     print(f"Looking in: {logos_path}\n")
 
     # Read all app JSON files to get versions
-    apps_folder = Path(__file__).parent.parent.parent / "Apps"
+    apps_folder = repository_root / "Apps"
     apps_info = []
     missing_logos = []
     
     for app_json in apps_folder.glob("*.json"):
         # Read the JSON file to get the display name
-        with open(app_json, 'r') as f:
+        with open(app_json, 'r', encoding="utf-8") as f:
             try:
                 data = json.load(f)
+                if data.get("deprecated"):
+                    continue
                 display_name = data['name']
                 # Convert display name to filename format
                 logo_name = sanitize_filename(display_name)
@@ -2383,12 +2448,12 @@ def update_readme_apps(apps_list):
     table_content += "(https://github.com/ugurkocde/IntuneBrew/issues/new?labels=app-request) by creating an issue!\n"
 
     # Read the entire README
-    with open(readme_path, 'r') as f:
+    with open(readme_path, 'r', encoding="utf-8") as f:
         content = f.read()
 
     # Find the supported applications section using the correct marker
-    start_marker = "### 📱 Supported Applications"
-    end_marker = "## 🔧 Configuration"
+    start_marker = README_APPS_START_MARKER
+    end_marker = README_APPS_END_MARKER
     
     start_idx = content.find(start_marker)
     end_idx = content.find(end_marker)
@@ -2408,7 +2473,7 @@ def update_readme_apps(apps_list):
     )
 
     # Write the updated content back to README.md
-    with open(readme_path, 'w') as f:
+    with open(readme_path, 'w', encoding="utf-8") as f:
         f.write(new_content)
     print("README.md has been updated with the new table format including logos")
 

@@ -73,17 +73,38 @@ class CaskArtifactValidationTests(unittest.TestCase):
         }
         self.assertIsNone(add_new_app.unsupported_cask_reason(data))
 
-    def test_source_integrity_quarantine_rejects_cask(self):
+    def test_source_integrity_quarantine_rejects_all_casks(self):
+        expected_runs = {
+            "bettertouchtool": "32850110311",
+            "cardpresso": "32850110311",
+            "visual-paradigm": "32355543573",
+        }
+        for token, run_id in expected_runs.items():
+            with self.subTest(token=token):
+                data = {
+                    "token": token,
+                    "url": f"https://example.test/{token}.zip",
+                    "artifacts": [{"app": [f"{token}.app"]}],
+                }
+
+                reason = add_new_app.unsupported_cask_reason(data)
+
+                self.assertIn("Source integrity quarantine", reason)
+                self.assertIn(run_id, reason)
+
+    def test_removing_quarantine_entry_permits_deliberate_recovery(self):
         data = {
-            "token": "visual-paradigm",
-            "url": "https://example.test/Visual_Paradigm.dmg",
-            "artifacts": [{"app": ["Visual Paradigm.app"]}],
+            "token": "bettertouchtool",
+            "url": "https://example.test/BetterTouchTool.zip",
+            "artifacts": [{"app": ["BetterTouchTool.app"]}],
         }
 
-        reason = add_new_app.unsupported_cask_reason(data)
-
-        self.assertIn("Source integrity quarantine", reason)
-        self.assertIn("32355543573", reason)
+        with patch.object(
+            add_new_app,
+            "load_source_integrity_quarantine",
+            return_value={},
+        ):
+            self.assertIsNone(add_new_app.unsupported_cask_reason(data))
 
     def test_request_processor_does_not_write_quarantined_cask(self):
         visual_paradigm = {
@@ -120,6 +141,49 @@ class CaskArtifactValidationTests(unittest.TestCase):
                         add_new_app,
                         "fetch_homebrew_info",
                         return_value=visual_paradigm,
+                    ),
+                    self.assertRaises(SystemExit) as context,
+                ):
+                    add_new_app.main()
+            finally:
+                os.chdir(previous_cwd)
+
+            self.assertEqual(context.exception.code, 1)
+            self.assertEqual(script_path.read_text(encoding="utf-8"), original)
+
+    def test_mixed_request_rejects_new_quarantines_atomically(self):
+        valid = {
+            "token": "valid",
+            "name": ["Valid"],
+            "url": "https://example.test/Valid.zip",
+            "artifacts": [{"app": ["Valid.app"]}],
+        }
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = pathlib.Path(temp_dir)
+            script_path = root / ".github" / "scripts" / "collect_app_info.py"
+            script_path.parent.mkdir(parents=True)
+            original = "app_urls = []\n"
+            script_path.write_text(original, encoding="utf-8")
+
+            previous_cwd = os.getcwd()
+            try:
+                os.chdir(root)
+                with (
+                    patch.dict(
+                        os.environ,
+                        {
+                            "ISSUE_TITLE": "Add Valid apps",
+                            "ISSUE_BODY": "",
+                            "COMMENT_BODY": (
+                                "/approve valid, bettertouchtool, cardpresso"
+                            ),
+                        },
+                        clear=True,
+                    ),
+                    patch.object(
+                        add_new_app,
+                        "fetch_homebrew_info",
+                        return_value=valid,
                     ),
                     self.assertRaises(SystemExit) as context,
                 ):
@@ -400,6 +464,18 @@ class ApprovalWorkflowTests(unittest.TestCase):
         self.assertIn("contents: read", collect_job)
         self.assertNotIn("contents: write", collect_job)
         self.assertIn("actions/upload-artifact@v4", collect_job)
+        collector = collect_job.index(
+            "python .github/scripts/collect_app_info.py"
+        )
+        create_patch = collect_job.index("- name: Create collection patch")
+        upload_patch = collect_job.index("- name: Upload collection patch")
+        self.assertLess(collector, create_patch)
+        self.assertLess(create_patch, upload_patch)
+        self.assertEqual(
+            collect_job.count("if: ${{ success() }}"),
+            2,
+        )
+        self.assertNotIn("if: always()", collect_job)
         self.assertIn("needs: collect", workflow[build:])
         self.assertIn("runs-on: macos-latest", workflow[build:])
         self.assertIn("actions/download-artifact@v4", workflow[build:])
