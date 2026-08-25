@@ -111,14 +111,14 @@ cleanup_image() {
   local attachment=""
   local status=0
   [ -f "$image_path" ] || return 0
-  if attachment=$(resolve_test_attachment "$image_path"); then
+  attachment=$(resolve_test_attachment "$image_path") || status=$?
+  if [ "$status" -eq 0 ]; then
     force_unmount_attachment "$attachment" || true
     sync
     detach_test_image "$image_path" "$(printf '%s' "$attachment" | jq -r \
       '.backing_device // .whole_device // empty')"
     return
   fi
-  status=$?
   [ "$status" -eq 1 ]
 }
 
@@ -127,8 +127,11 @@ cleanup() {
   local cleanup_status=0
   trap - EXIT
   cd "$TEST_ROOT" 2>/dev/null || cd "${RUNNER_TEMP:-${TMPDIR:-/tmp}}"
-  cleanup_image "$INNER_IMAGE" || cleanup_status=1
-  cleanup_image "$OUTER_IMAGE" || cleanup_status=1
+  if cleanup_image "$INNER_IMAGE"; then
+    cleanup_image "$OUTER_IMAGE" || cleanup_status=1
+  else
+    cleanup_status=1
+  fi
   if [ "$cleanup_status" -eq 0 ]; then
     rm -rf "$TEST_ROOT"
   else

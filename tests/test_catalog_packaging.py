@@ -9,7 +9,7 @@ import tarfile
 import tempfile
 import unittest
 import zipfile
-from io import BytesIO
+from io import BytesIO, StringIO
 from pathlib import Path
 from unittest.mock import patch
 
@@ -18,6 +18,7 @@ ROOT = Path(__file__).resolve().parents[1]
 WORKFLOW_PATH = ROOT / ".github/workflows/build-app-packages.yml"
 GENERATOR_PATH = ROOT / ".github/scripts/generate_supported_apps.py"
 DISK_IMAGE_HELPER_PATH = ROOT / ".github/scripts/macos_disk_image.py"
+BOUNDED_LSOF_PATH = ROOT / ".github/scripts/bounded_lsof.py"
 HDIUTIL_FIXTURES = ROOT / "tests/fixtures/hdiutil"
 REFERER_VALIDATOR_PATH = (
     ROOT / ".github/scripts/validate_download_referer.py"
@@ -32,6 +33,12 @@ DISK_IMAGE_SPEC = importlib.util.spec_from_file_location(
 )
 disk_image = importlib.util.module_from_spec(DISK_IMAGE_SPEC)
 DISK_IMAGE_SPEC.loader.exec_module(disk_image)
+
+BOUNDED_LSOF_SPEC = importlib.util.spec_from_file_location(
+    "bounded_lsof", BOUNDED_LSOF_PATH
+)
+bounded_lsof = importlib.util.module_from_spec(BOUNDED_LSOF_SPEC)
+BOUNDED_LSOF_SPEC.loader.exec_module(bounded_lsof)
 
 
 class CatalogPublicationContractTests(unittest.TestCase):
@@ -207,6 +214,40 @@ class CatalogPublicationContractTests(unittest.TestCase):
 
 
 class WorkflowPackagingRegressionTests(unittest.TestCase):
+    def test_bounded_lsof_kills_only_timed_out_child_and_caps_output(self):
+        process = unittest.mock.Mock()
+        process.communicate.side_effect = [
+            subprocess.TimeoutExpired(["lsof"], 10),
+            ("\n".join(f"line-{index}" for index in range(150)), None),
+        ]
+        stdout = StringIO()
+        stderr = StringIO()
+        with patch.object(
+            bounded_lsof.subprocess, "Popen", return_value=process
+        ) as popen:
+            status = bounded_lsof.run_lsof(
+                "/private/tmp/workspace", 10, 100, stdout, stderr
+            )
+        self.assertEqual(status, 124)
+        popen.assert_called_once_with(
+            [
+                "lsof",
+                "-nP",
+                "+f",
+                "--",
+                "/private/tmp/workspace",
+            ],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+        )
+        process.kill.assert_called_once_with()
+        self.assertEqual(len(stdout.getvalue().splitlines()), 100)
+        self.assertIn("output truncated after 100 lines", stderr.getvalue())
+        self.assertIn("timed out after 10 seconds", stderr.getvalue())
+
     def test_workspace_attach_parser_retains_whole_and_mounted_devices(self):
         with (HDIUTIL_FIXTURES / "workspace-attach.plist").open("rb") as handle:
             attachment = disk_image.parse_attach_plist(
@@ -881,8 +922,8 @@ class WorkflowPackagingRegressionTests(unittest.TestCase):
         )[1].split("device_is_unmounted() {", 1)[0]
         self.assertIn("mount >&2 || true", diagnostics)
         self.assertIn("hdiutil info >&2 || true", diagnostics)
-        self.assertIn("lsof -nP +f --", diagnostics)
-        self.assertIn("head -100", diagnostics)
+        self.assertIn("bounded_lsof.py", diagnostics)
+        self.assertIn("--timeout 10 --max-lines 100", diagnostics)
         self.assertIn(
             'if [ "${cleanup_error_reported:-false}" != true ]', diagnostics
         )
@@ -944,6 +985,28 @@ class WorkflowPackagingRegressionTests(unittest.TestCase):
             harness.index('detach_test_image "$OUTER_IMAGE" "$OUTER_DEVICE"'),
         )
         self.assertIn("source\\nworkspace", harness)
+        cleanup_image = harness.split("cleanup_image() {", 1)[1].split(
+            "cleanup() {", 1
+        )[0]
+        self.assertIn(
+            'attachment=$(resolve_test_attachment "$image_path") || status=$?',
+            cleanup_image,
+        )
+        self.assertLess(
+            cleanup_image.index('resolve_test_attachment "$image_path"'),
+            cleanup_image.index('[ "$status" -eq 1 ]'),
+        )
+        cleanup = harness.split("cleanup() {", 1)[1].split(
+            "trap cleanup EXIT", 1
+        )[0]
+        self.assertIn('if cleanup_image "$INNER_IMAGE"; then', cleanup)
+        self.assertIn(
+            'cleanup_image "$OUTER_IMAGE" || cleanup_status=1', cleanup
+        )
+        self.assertLess(
+            cleanup.index('cleanup_image "$INNER_IMAGE"'),
+            cleanup.index('cleanup_image "$OUTER_IMAGE"'),
+        )
         self.assertNotIn("git push", harness)
         self.assertNotIn("az ", harness)
 

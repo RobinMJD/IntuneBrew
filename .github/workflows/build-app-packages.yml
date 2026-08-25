@@ -674,7 +674,8 @@ jobs:
             hdiutil info >&2 || true
             for mount_point in "$@"; do
               [ -n "$mount_point" ] && [ -e "$mount_point" ] || continue
-              lsof -nP +f -- "$mount_point" 2>&1 | head -100 >&2 || true
+              python "$WORKSPACE_DIR/.github/scripts/bounded_lsof.py" \
+                --timeout 10 --max-lines 100 --path "$mount_point" >&2 || true
             done
           }
 
