@@ -213,6 +213,8 @@ class WorkflowPackagingRegressionTests(unittest.TestCase):
                 plistlib.load(handle)
             )
         self.assertEqual(attachment["whole_device"], "/dev/disk9")
+        self.assertEqual(attachment["backing_device"], "/dev/disk9")
+        self.assertEqual(attachment["synthesized_devices"], ["/dev/disk10"])
         self.assertEqual(
             attachment["mounted_entities"],
             [
@@ -238,6 +240,58 @@ class WorkflowPackagingRegressionTests(unittest.TestCase):
         self.assertEqual(
             attachment["mounted_entities"][0]["mount_point"],
             "/Volumes/Azul Zulu JDK 26",
+        )
+        self.assertEqual(attachment["synthesized_devices"], [])
+
+    def test_busy_apfs_info_retains_backing_and_synthesized_topology(self):
+        fixture = HDIUTIL_FIXTURES / "busy-apfs-info.plist"
+        with fixture.open("rb") as handle:
+            attachment = disk_image.find_image_attachment(
+                plistlib.load(handle),
+                "/Users/runner/work/_temp/../_temp/"
+                "intunebrew-AdLock.4Hf7xQ.sparseimage",
+            )
+        self.assertEqual(attachment["backing_device"], "/dev/disk8")
+        self.assertEqual(attachment["whole_device"], "/dev/disk8")
+        self.assertEqual(
+            attachment["mounted_entities"],
+            [
+                {
+                    "device": "/dev/disk9s1",
+                    "mount_point": (
+                        "/private/tmp/intunebrew-mount-AdLock.9pLm2N"
+                    ),
+                }
+            ],
+        )
+        self.assertEqual(attachment["synthesized_devices"], ["/dev/disk9"])
+
+    def test_synthesized_devices_only_come_from_mounted_partitions(self):
+        attachment = disk_image.parse_attach_plist(
+            {
+                "system-entities": [
+                    {
+                        "dev-entry": "/dev/disk8",
+                        "content-hint": "GUID_partition_scheme",
+                    },
+                    {"dev-entry": "/dev/disk8s2", "content-hint": "Apple_APFS"},
+                    {"dev-entry": "/dev/disk9"},
+                    {
+                        "dev-entry": "/dev/disk9s1",
+                        "mount-point": "/private/tmp/workspace",
+                    },
+                    {"dev-entry": "/dev/disk77"},
+                    {
+                        "dev-entry": "/dev/disk78s3",
+                        "mount-point": "/private/tmp/second-workspace-volume",
+                    },
+                ]
+            }
+        )
+        self.assertEqual(attachment["backing_device"], "/dev/disk8")
+        self.assertEqual(
+            attachment["synthesized_devices"],
+            ["/dev/disk9", "/dev/disk78"],
         )
 
     def test_hdiutil_info_maps_canonical_image_path_to_whole_device(self):
@@ -286,6 +340,30 @@ class WorkflowPackagingRegressionTests(unittest.TestCase):
     def test_hdiutil_info_distinguishes_absent_image(self):
         with self.assertRaises(disk_image.DiskImageNotFoundError):
             disk_image.find_image_attachment({"images": []}, ROOT / "missing.dmg")
+
+    def test_malformed_plist_cannot_signal_verified_detachment(self):
+        with tempfile.TemporaryDirectory() as directory:
+            bad_plist = Path(directory) / "truncated.plist"
+            bad_plist.write_text(
+                '<?xml version="1.0"?><plist><dict><key>images</key>',
+                encoding="utf-8",
+            )
+            result = subprocess.run(
+                [
+                    shutil.which("python"),
+                    os.fspath(DISK_IMAGE_HELPER_PATH),
+                    "info",
+                    "--plist",
+                    os.fspath(bad_plist),
+                    "--image",
+                    os.fspath(ROOT / "workspace.sparseimage"),
+                ],
+                check=False,
+                capture_output=True,
+                text=True,
+            )
+        self.assertEqual(result.returncode, 2)
+        self.assertNotIn("Traceback", result.stderr)
 
     def test_remote_help_scraper_emits_verified_package_metadata(self):
         scraper = (
@@ -692,8 +770,11 @@ class WorkflowPackagingRegressionTests(unittest.TestCase):
         self.assertIn("hdiutil create", self.process)
         self.assertIn("hdiutil attach", self.process)
         self.assertIn("-plist", self.process)
-        self.assertIn('app_device=$(printf', self.process)
-        self.assertIn('hdiutil detach "$app_device" -force', self.process)
+        self.assertIn("load_app_attachment", self.process)
+        self.assertIn(
+            'detach_image_with_retry "$app_sparse_image" "$app_device"',
+            self.process,
+        )
         self.assertNotIn('hdiutil detach "$app_mount_dir"', self.process)
         self.assertIn("app_attached=true", self.process)
         self.assertIn(
@@ -705,8 +786,8 @@ class WorkflowPackagingRegressionTests(unittest.TestCase):
         self.assertNotIn('$HOME/Desktop/${app_name}', self.process)
         self.assertNotIn('${app_name}_extracted', self.process)
         self.assertNotIn('cd "$HOME/Desktop"', self.process)
-        self.assertIn('[ -z "${app_mount_dir:-}" ] || rm -rf', self.process)
-        self.assertIn('[ -z "${app_sparse_image:-}" ] || rm -f', self.process)
+        self.assertIn('rm -rf "$app_mount_dir"', self.process)
+        self.assertIn('rm -f "$app_sparse_image"', self.process)
         self.assertGreaterEqual(self.process.count("destroy_app_workspace"), 4)
 
     def test_source_images_mount_read_only_without_forced_mountpoint(self):
@@ -717,7 +798,11 @@ class WorkflowPackagingRegressionTests(unittest.TestCase):
         self.assertNotIn("-mountpoint", helper)
         self.assertIn("attach.stderr", helper)
         self.assertIn("cat \"$attach_stderr\"", helper)
-        self.assertIn("mounted_entities", helper)
+        self.assertIn("load_source_attachment", helper)
+        loader = self.process.split("load_source_attachment() {", 1)[1].split(
+            "load_app_attachment() {", 1
+        )[0]
+        self.assertIn("mounted_entities", loader)
 
     def test_all_mounted_payload_copies_are_guarded_and_quota_checked(self):
         self.assertIn(
@@ -743,12 +828,94 @@ class WorkflowPackagingRegressionTests(unittest.TestCase):
         )[0]
         self.assertIn("detach_source_image", cleanup)
         self.assertIn('cd "$WORKSPACE_DIR"', cleanup)
-        self.assertIn('hdiutil detach "$app_device" -force', cleanup)
-        self.assertIn("cleanup_error_reported", cleanup)
+        self.assertIn(
+            'retry_force_unmount unmount "$mounted_device"', cleanup
+        )
+        self.assertIn(
+            'retry_force_unmount unmountDisk "$synthesized_device"', cleanup
+        )
+        self.assertIn(
+            'detach_image_with_retry "$app_sparse_image" "$app_device"',
+            cleanup,
+        )
+        self.assertIn("report_workspace_cleanup_error", cleanup)
         self.assertNotIn("hdiutil detach \"$app_mount_dir\"", cleanup)
         self.assertLess(
-            cleanup.index('app_device=""'),
+            cleanup.index("detach_source_image"),
+            cleanup.index('rm -f "$app_temp_dir/source-image-attach.plist"'),
+        )
+        self.assertLess(
+            cleanup.index("if ! sync; then"),
+            cleanup.index('retry_force_unmount unmount "$mounted_device"'),
+        )
+        self.assertLess(
             cleanup.index('rm -rf "$app_mount_dir"'),
+            cleanup.index('rm -f "$app_sparse_image"'),
+        )
+        self.assertLess(
+            cleanup.index('rm -f "$app_sparse_image"'),
+            cleanup.index("clear_app_workspace_state"),
+        )
+
+    def test_detach_retry_is_bounded_and_verifies_image_path(self):
+        helper = self.process.split("detach_image_with_retry() {", 1)[1].split(
+            "detach_source_image() {", 1
+        )[0]
+        self.assertIn(
+            'while [ "$attempt" -le "$DISK_CLEANUP_ATTEMPTS" ]', helper
+        )
+        self.assertIn(
+            'hdiutil detach "$disk_detach_device" -force', helper
+        )
+        self.assertIn('resolve_image_from_info "$image_path"', helper)
+        self.assertIn('grep -qi "Resource busy"', helper)
+        self.assertIn('sleep "$DISK_CLEANUP_SLEEP_SECONDS"', helper)
+        self.assertLess(
+            helper.index('hdiutil detach "$disk_detach_device" -force'),
+            helper.index('resolve_image_from_info "$image_path"'),
+        )
+
+    def test_cleanup_failure_diagnostics_are_bounded_and_not_duplicated(self):
+        diagnostics = self.process.split(
+            "emit_disk_cleanup_diagnostics() {", 1
+        )[1].split("device_is_unmounted() {", 1)[0]
+        self.assertIn("mount >&2 || true", diagnostics)
+        self.assertIn("hdiutil info >&2 || true", diagnostics)
+        self.assertIn("lsof -nP +f --", diagnostics)
+        self.assertIn("head -100", diagnostics)
+        self.assertIn(
+            'if [ "${cleanup_error_reported:-false}" != true ]', diagnostics
+        )
+        self.assertIn(
+            'if [ "${source_cleanup_error_reported:-false}" != true ]',
+            diagnostics,
+        )
+        self.assertNotIn("kill", diagnostics)
+
+    def test_source_cleanup_uses_bounded_unmount_and_verified_detach(self):
+        helper = self.process.split("detach_source_image() {", 1)[1].split(
+            "attach_source_image() {", 1
+        )[0]
+        self.assertIn(
+            'retry_force_unmount unmount "$mounted_device"', helper
+        )
+        self.assertIn(
+            'retry_force_unmount unmountDisk "$synthesized_device"', helper
+        )
+        self.assertIn(
+            '"$source_image_path" "$source_image_device"', helper
+        )
+        self.assertLess(
+            helper.index('cd "$WORKSPACE_DIR"'),
+            helper.index("retry_force_unmount"),
+        )
+        self.assertLess(
+            helper.index("if ! sync; then"),
+            helper.index("retry_force_unmount"),
+        )
+        self.assertLess(
+            helper.index("detach_image_with_retry"),
+            helper.rindex("clear_source_image_state"),
         )
 
     def test_manual_macos_lifecycle_harness_cannot_publish(self):
@@ -763,13 +930,22 @@ class WorkflowPackagingRegressionTests(unittest.TestCase):
         self.assertNotIn("azure", workflow.lower())
         self.assertNotIn("git push", workflow)
         self.assertIn("nested.dmg", harness)
-        self.assertIn("hdiutil detach \"$INNER_DEVICE\" -force", harness)
-        self.assertIn(
-            'if [ "$cleanup_status" -eq 0 ] \\\n'
-            '    && [ -n "$OUTER_DEVICE" ]',
-            harness,
+        self.assertIn("bs=1m count=256", harness)
+        self.assertIn("pkgbuild --root", harness)
+        self.assertIn('shasum -a 256 "$OUTER_MOUNT/recent-activity.pkg"', harness)
+        self.assertIn("diskutil \"$operation\" force \"$device\"", harness)
+        self.assertIn(".synthesized_devices[]?", harness)
+        self.assertIn('detach_test_image "$INNER_IMAGE" "$INNER_DEVICE"', harness)
+        self.assertIn('assert_image_detached "$INNER_IMAGE"', harness)
+        self.assertIn('detach_test_image "$OUTER_IMAGE" "$OUTER_DEVICE"', harness)
+        self.assertIn('assert_image_detached "$OUTER_IMAGE"', harness)
+        self.assertLess(
+            harness.index('detach_test_image "$INNER_IMAGE" "$INNER_DEVICE"'),
+            harness.index('detach_test_image "$OUTER_IMAGE" "$OUTER_DEVICE"'),
         )
-        self.assertNotIn("resolve_test_device \"$OUTER_IMAGE\" 2>/dev/null || true", harness)
+        self.assertIn("source\\nworkspace", harness)
+        self.assertNotIn("git push", harness)
+        self.assertNotIn("az ", harness)
 
     def test_pkg_expansion_stays_inside_bounded_workspace(self):
         helper = self.process.split("extract_bundle_id_from_pkg() {", 1)[1].split(

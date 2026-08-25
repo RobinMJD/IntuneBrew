@@ -7,6 +7,7 @@ import os
 import plistlib
 import re
 import sys
+from xml.parsers.expat import ExpatError
 from pathlib import PurePosixPath
 
 
@@ -24,6 +25,10 @@ class DiskImageNotFoundError(DiskImageParseError):
 
 def _canonical_path(path):
     return os.path.realpath(os.path.abspath(os.fspath(path)))
+
+
+def _whole_device(device):
+    return re.sub(r"s[0-9]+(?:s[0-9]+)*$", "", device)
 
 
 def _attachment(system_entities, require_mounts=True):
@@ -68,7 +73,7 @@ def _attachment(system_entities, require_mounts=True):
         whole_device = whole_entities[0][0]
     elif not whole_entities:
         roots = {
-            re.sub(r"s[0-9]+(?:s[0-9]+)*$", "", device)
+            _whole_device(device)
             for device in devices
         }
         if len(roots) != 1:
@@ -84,9 +89,20 @@ def _attachment(system_entities, require_mounts=True):
     if require_mounts and not mounted_entities:
         raise DiskImageParseError("disk image has no mounted entities")
 
+    synthesized_devices = []
+    for entity in mounted_entities:
+        mounted_root = _whole_device(entity["device"])
+        if (
+            mounted_root != whole_device
+            and mounted_root not in synthesized_devices
+        ):
+            synthesized_devices.append(mounted_root)
+
     return {
+        "backing_device": whole_device,
         "whole_device": whole_device,
         "mounted_entities": mounted_entities,
+        "synthesized_devices": synthesized_devices,
     }
 
 
@@ -149,7 +165,13 @@ def main():
     except DiskImageNotFoundError as error:
         print(f"Could not parse hdiutil {args.command} plist: {error}", file=sys.stderr)
         return 1
-    except (DiskImageParseError, OSError, plistlib.InvalidFileException) as error:
+    except (
+        DiskImageParseError,
+        ExpatError,
+        OSError,
+        ValueError,
+        plistlib.InvalidFileException,
+    ) as error:
         print(f"Could not parse hdiutil {args.command} plist: {error}", file=sys.stderr)
         return 2
 

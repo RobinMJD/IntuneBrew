@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>images</key>
+  <array>
+    <dict>
+      <key>image-path</key>
+      <string>/Users/runner/work/_temp/intunebrew-AdLock.4Hf7xQ.sparseimage</string>
+      <key>system-entities</key>
+      <array>
+        <dict>
+          <key>content-hint</key>
+          <string>GUID_partition_scheme</string>
+          <key>dev-entry</key>
+          <string>/dev/disk8</string>
+        </dict>
+        <dict>
+          <key>content-hint</key>
+          <string>Apple_APFS</string>
+          <key>dev-entry</key>
+          <string>/dev/disk8s2</string>
+        </dict>
+        <dict>
+          <key>content-hint</key>
+          <string>EF57347C-0000-11AA-AA11-00306543ECAC</string>
+          <key>dev-entry</key>
+          <string>/dev/disk9</string>
+        </dict>
+        <dict>
+          <key>content-hint</key>
+          <string>41504653-0000-11AA-AA11-00306543ECAC</string>
+          <key>dev-entry</key>
+          <string>/dev/disk9s1</string>
+          <key>mount-point</key>
+          <string>/private/tmp/intunebrew-mount-AdLock.9pLm2N</string>
+        </dict>
+      </array>
+    </dict>
+  </array>
+</dict>
+</plist>

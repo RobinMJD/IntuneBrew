@@ -568,20 +568,28 @@ jobs:
           app_mount_dir=""
           app_sparse_image=""
           app_device=""
+          app_mounts=()
+          app_mounted_devices=()
+          app_synthesized_devices=()
           app_attached=false
           source_image_path=""
           source_image_device=""
           source_image_mounts=()
           source_image_mounted_devices=()
+          source_image_synthesized_devices=()
           source_image_attached=false
           cleanup_error_reported=false
           source_cleanup_error_reported=false
+          DISK_CLEANUP_ATTEMPTS=4
+          DISK_CLEANUP_SLEEP_SECONDS=1
 
           resolve_image_from_info() {
             local image_path="$1"
-            local info_plist="${RUNNER_TEMP:-${TMPDIR:-/tmp}}/intunebrew-hdiutil-info.plist"
+            local info_plist=""
             local result=""
             local status=0
+            info_plist=$(mktemp "${RUNNER_TEMP:-${TMPDIR:-/tmp}}/intunebrew-hdiutil-info.XXXXXX") \
+              || return 3
             if ! hdiutil info -plist > "$info_plist" 2>/dev/null; then
               rm -f "$info_plist"
               return 3
@@ -593,40 +601,234 @@ jobs:
             [ -z "$result" ] || printf '%s\n' "$result"
           }
 
-          report_source_cleanup_error() {
-            if [ "${source_cleanup_error_reported:-false}" != true ]; then
-              echo "$1" >&2
-              source_cleanup_error_reported=true
-            fi
+          load_source_attachment() {
+            local attachment="$1"
+            local value=""
+            source_image_device=$(printf '%s' "$attachment" | jq -r \
+              '.backing_device // .whole_device // empty' 2>/dev/null || true)
+            source_image_mounts=()
+            source_image_mounted_devices=()
+            source_image_synthesized_devices=()
+            while IFS= read -r value; do
+              [ -z "$value" ] || source_image_mounts+=("$value")
+            done < <(printf '%s' "$attachment" | jq -r \
+              '.mounted_entities[]?.mount_point' 2>/dev/null)
+            while IFS= read -r value; do
+              [ -z "$value" ] || source_image_mounted_devices+=("$value")
+            done < <(printf '%s' "$attachment" | jq -r \
+              '.mounted_entities[]?.device' 2>/dev/null)
+            while IFS= read -r value; do
+              [ -z "$value" ] || source_image_synthesized_devices+=("$value")
+            done < <(printf '%s' "$attachment" | jq -r \
+              '.synthesized_devices[]?' 2>/dev/null)
           }
 
-          detach_source_image() {
-            local attachment=""
-            local detach_output=""
-            [ "${source_image_attached:-false}" = true ] || return 0
-            cd "$WORKSPACE_DIR" || return 1
-            if [ -z "${source_image_device:-}" ] \
-              && [ -n "${source_image_path:-}" ]; then
-              attachment=$(resolve_image_from_info "$source_image_path" 2>/dev/null || true)
-              source_image_device=$(printf '%s' "$attachment" | jq -r '.whole_device // empty' 2>/dev/null || true)
-            fi
-            if [ -z "${source_image_device:-}" ]; then
-              report_source_cleanup_error \
-                "Source disk image is attached but its whole device is unresolved; refusing workspace cleanup"
-              return 1
-            fi
-            if ! detach_output=$(hdiutil detach "$source_image_device" -force 2>&1); then
-              report_source_cleanup_error \
-                "Could not detach source disk image whole device $source_image_device: $detach_output"
-              hdiutil info >&2 || true
-              return 1
-            fi
+          load_app_attachment() {
+            local attachment="$1"
+            local value=""
+            app_device=$(printf '%s' "$attachment" | jq -r \
+              '.backing_device // .whole_device // empty' 2>/dev/null || true)
+            app_mounts=()
+            app_mounted_devices=()
+            app_synthesized_devices=()
+            while IFS= read -r value; do
+              [ -z "$value" ] || app_mounts+=("$value")
+            done < <(printf '%s' "$attachment" | jq -r \
+              '.mounted_entities[]?.mount_point' 2>/dev/null)
+            while IFS= read -r value; do
+              [ -z "$value" ] || app_mounted_devices+=("$value")
+            done < <(printf '%s' "$attachment" | jq -r \
+              '.mounted_entities[]?.device' 2>/dev/null)
+            while IFS= read -r value; do
+              [ -z "$value" ] || app_synthesized_devices+=("$value")
+            done < <(printf '%s' "$attachment" | jq -r \
+              '.synthesized_devices[]?' 2>/dev/null)
+          }
+
+          clear_source_image_state() {
             source_image_path=""
             source_image_device=""
             source_image_mounts=()
             source_image_mounted_devices=()
+            source_image_synthesized_devices=()
             source_image_attached=false
             source_cleanup_error_reported=false
+          }
+
+          clear_app_workspace_state() {
+            app_temp_dir=""
+            app_mount_dir=""
+            app_sparse_image=""
+            app_device=""
+            app_mounts=()
+            app_mounted_devices=()
+            app_synthesized_devices=()
+            app_attached=false
+            cleanup_error_reported=false
+          }
+
+          emit_disk_cleanup_diagnostics() {
+            local mount_point=""
+            echo "Disk cleanup diagnostics:" >&2
+            mount >&2 || true
+            hdiutil info >&2 || true
+            for mount_point in "$@"; do
+              [ -n "$mount_point" ] && [ -e "$mount_point" ] || continue
+              lsof -nP +f -- "$mount_point" 2>&1 | head -100 >&2 || true
+            done
+          }
+
+          report_source_cleanup_error() {
+            if [ "${source_cleanup_error_reported:-false}" != true ]; then
+              echo "$1" >&2
+              source_cleanup_error_reported=true
+              emit_disk_cleanup_diagnostics "${source_image_mounts[@]}"
+            fi
+          }
+
+          report_workspace_cleanup_error() {
+            if [ "${cleanup_error_reported:-false}" != true ]; then
+              echo "$1" >&2
+              cleanup_error_reported=true
+              emit_disk_cleanup_diagnostics \
+                "${app_mounts[@]}" "${app_mount_dir:-}"
+            fi
+          }
+
+          device_is_unmounted() {
+            local device="$1"
+            local mount_output=""
+            mount_output=$(mount) || return 1
+            ! printf '%s\n' "$mount_output" | awk -v device="$device" '
+              $1 == device || index($1, device "s") == 1 { found=1 }
+              END { exit(found ? 0 : 1) }
+            '
+          }
+
+          disk_unmount_error=""
+          retry_force_unmount() {
+            local operation="$1"
+            local device="$2"
+            local attempt=1
+            local output=""
+            disk_unmount_error=""
+            while [ "$attempt" -le "$DISK_CLEANUP_ATTEMPTS" ]; do
+              if output=$(diskutil "$operation" force "$device" 2>&1); then
+                return 0
+              fi
+              if device_is_unmounted "$device"; then
+                return 0
+              fi
+              disk_unmount_error="$output"
+              [ "$attempt" -ge "$DISK_CLEANUP_ATTEMPTS" ] || \
+                sleep "$DISK_CLEANUP_SLEEP_SECONDS"
+              attempt=$((attempt + 1))
+            done
+            return 1
+          }
+
+          disk_detach_error=""
+          disk_detach_device=""
+          detach_image_with_retry() {
+            local image_path="$1"
+            local whole_device="$2"
+            local attachment=""
+            local attempt=1
+            local detach_output=""
+            local detach_status=0
+            local resolve_status=0
+            local resolved_device=""
+            disk_detach_error=""
+            disk_detach_device="$whole_device"
+            while [ "$attempt" -le "$DISK_CLEANUP_ATTEMPTS" ]; do
+              detach_status=0
+              detach_output=$(hdiutil detach "$disk_detach_device" -force 2>&1) \
+                || detach_status=$?
+              attachment=""
+              resolve_status=0
+              attachment=$(resolve_image_from_info "$image_path" 2>/dev/null) \
+                || resolve_status=$?
+              if [ "$resolve_status" -eq 1 ]; then
+                return 0
+              fi
+              if [ "$resolve_status" -ne 0 ]; then
+                disk_detach_error="could not verify image-path detachment"
+                return 1
+              fi
+              resolved_device=$(printf '%s' "$attachment" | jq -r \
+                '.backing_device // .whole_device // empty' 2>/dev/null || true)
+              if [ -z "$resolved_device" ]; then
+                disk_detach_error="image remains attached without a backing device"
+                return 1
+              fi
+              disk_detach_device="$resolved_device"
+              if [ "$detach_status" -ne 0 ] \
+                && ! printf '%s' "$detach_output" | grep -qi "Resource busy"; then
+                disk_detach_error=$(printf '%s\n' "$detach_output" | tail -1)
+                return 1
+              fi
+              [ "$attempt" -ge "$DISK_CLEANUP_ATTEMPTS" ] || \
+                sleep "$DISK_CLEANUP_SLEEP_SECONDS"
+              attempt=$((attempt + 1))
+            done
+            disk_detach_error="image remained attached after $DISK_CLEANUP_ATTEMPTS attempts"
+            return 1
+          }
+
+          detach_source_image() {
+            local attachment=""
+            local info_status=0
+            local mounted_device=""
+            local synthesized_device=""
+            [ "${source_image_attached:-false}" = true ] || return 0
+            cd "$WORKSPACE_DIR" || return 1
+            if [ -z "${source_image_path:-}" ]; then
+              report_source_cleanup_error \
+                "Source disk image state has no image path; refusing workspace cleanup"
+              return 1
+            fi
+            if attachment=$(resolve_image_from_info "$source_image_path" 2>/dev/null); then
+              load_source_attachment "$attachment"
+            else
+              info_status=$?
+              if [ "$info_status" -eq 1 ]; then
+                clear_source_image_state
+                return 0
+              fi
+              report_source_cleanup_error \
+                "Could not resolve source disk image topology; refusing workspace cleanup"
+              return 1
+            fi
+            if [ -z "${source_image_device:-}" ]; then
+              report_source_cleanup_error \
+                "Source disk image backing device is unresolved; refusing workspace cleanup"
+              return 1
+            fi
+            rm -f "$app_temp_dir/source-image-attach.plist" \
+              "$app_temp_dir/source-image-attach.stderr" || {
+              report_source_cleanup_error \
+                "Could not close source disk image attachment metadata"
+              return 1
+            }
+            if ! sync; then
+              report_source_cleanup_error \
+                "Could not sync source disk image writes before detach"
+              return 1
+            fi
+            for mounted_device in "${source_image_mounted_devices[@]}"; do
+              retry_force_unmount unmount "$mounted_device" || true
+            done
+            for synthesized_device in "${source_image_synthesized_devices[@]}"; do
+              retry_force_unmount unmountDisk "$synthesized_device" || true
+            done
+            if ! detach_image_with_retry \
+              "$source_image_path" "$source_image_device"; then
+              source_image_device="$disk_detach_device"
+              report_source_cleanup_error \
+                "Could not detach source disk image $source_image_device: $disk_detach_error"
+              return 1
+            fi
+            clear_source_image_state
           }
 
           attach_source_image() {
@@ -644,6 +846,7 @@ jobs:
             source_image_device=""
             source_image_mounts=()
             source_image_mounted_devices=()
+            source_image_synthesized_devices=()
             source_image_attached=false
             source_cleanup_error_reported=false
             rm -f "$attach_plist" "$attach_stderr"
@@ -662,7 +865,7 @@ jobs:
               echo "hdiutil attach failed for $image_path (exit $attach_status)" >&2
               [ ! -s "$attach_stderr" ] || cat "$attach_stderr" >&2
               if attachment=$(resolve_image_from_info "$image_path" 2>/dev/null); then
-                source_image_device=$(printf '%s' "$attachment" | jq -r '.whole_device // empty' 2>/dev/null || true)
+                load_source_attachment "$attachment"
                 source_image_attached=true
                 detach_source_image || return 2
               else
@@ -681,13 +884,7 @@ jobs:
               echo "Could not resolve devices from hdiutil attach output for $image_path" >&2
               attachment=$(resolve_image_from_info "$image_path" 2>/dev/null || true)
             fi
-            source_image_device=$(printf '%s' "$attachment" | jq -r '.whole_device // empty' 2>/dev/null || true)
-            while IFS= read -r mount_point; do
-              [ -z "$mount_point" ] || source_image_mounts+=("$mount_point")
-            done < <(printf '%s' "$attachment" | jq -r '.mounted_entities[]?.mount_point' 2>/dev/null)
-            while IFS= read -r mounted_device; do
-              [ -z "$mounted_device" ] || source_image_mounted_devices+=("$mounted_device")
-            done < <(printf '%s' "$attachment" | jq -r '.mounted_entities[]?.device' 2>/dev/null)
+            load_source_attachment "$attachment"
 
             if [ -z "$source_image_device" ] \
               || [ ${#source_image_mounts[@]} -eq 0 ] \
@@ -743,44 +940,74 @@ jobs:
 
           destroy_app_workspace() {
             local attachment=""
-            local detach_output=""
+            local info_status=0
+            local mounted_device=""
+            local synthesized_device=""
             cd "$WORKSPACE_DIR" || return 1
             detach_source_image || return 1
-            if [ "${app_attached:-false}" = true ] \
-              && [ -z "${app_device:-}" ] \
-              && [ -n "${app_sparse_image:-}" ]; then
-              attachment=$(resolve_image_from_info "$app_sparse_image" 2>/dev/null || true)
-              app_device=$(printf '%s' "$attachment" | jq -r '.whole_device // empty' 2>/dev/null || true)
+            if [ -n "${app_temp_dir:-}" ]; then
+              rm -f "$app_temp_dir/source-image-attach.plist" \
+                "$app_temp_dir/source-image-attach.stderr" \
+                "$app_temp_dir/workspace-attach.plist" || {
+                report_workspace_cleanup_error \
+                  "Could not close bounded workspace attachment metadata"
+                return 1
+              }
             fi
-            if [ "${app_attached:-false}" = true ] && [ -z "${app_device:-}" ]; then
-              if [ "${cleanup_error_reported:-false}" != true ]; then
-                echo "Bounded workspace is attached but its whole device is unresolved; refusing destructive cleanup" >&2
-                cleanup_error_reported=true
-              fi
+            if ! sync; then
+              report_workspace_cleanup_error \
+                "Could not sync bounded workspace writes before detach"
               return 1
             fi
-            if [ "${app_attached:-false}" = true ] \
-              && [ -n "${app_device:-}" ]; then
-              if ! detach_output=$(hdiutil detach "$app_device" -force 2>&1); then
-                if [ "${cleanup_error_reported:-false}" != true ]; then
-                  echo "Could not detach bounded workspace whole device $app_device: $detach_output" >&2
-                  cleanup_error_reported=true
-                  hdiutil info >&2 || true
-                fi
+            if [ "${app_attached:-false}" = true ]; then
+              if [ -z "${app_sparse_image:-}" ]; then
+                report_workspace_cleanup_error \
+                  "Bounded workspace state has no image path; refusing destructive cleanup"
                 return 1
               fi
-              app_attached=false
-              app_device=""
+              if attachment=$(resolve_image_from_info "$app_sparse_image" 2>/dev/null); then
+                load_app_attachment "$attachment"
+              else
+                info_status=$?
+                if [ "$info_status" -ne 1 ]; then
+                  report_workspace_cleanup_error \
+                    "Could not resolve bounded workspace topology; refusing destructive cleanup"
+                  return 1
+                fi
+              fi
+              if [ "$info_status" -eq 0 ]; then
+                if [ -z "${app_device:-}" ]; then
+                  report_workspace_cleanup_error \
+                    "Bounded workspace backing device is unresolved; refusing destructive cleanup"
+                  return 1
+                fi
+                for mounted_device in "${app_mounted_devices[@]}"; do
+                  retry_force_unmount unmount "$mounted_device" || true
+                done
+                for synthesized_device in "${app_synthesized_devices[@]}"; do
+                  retry_force_unmount unmountDisk "$synthesized_device" || true
+                done
+                if ! detach_image_with_retry "$app_sparse_image" "$app_device"; then
+                  app_device="$disk_detach_device"
+                  report_workspace_cleanup_error \
+                    "Could not detach bounded workspace $app_device: $disk_detach_error"
+                  return 1
+                fi
+              fi
             fi
-            [ "${app_attached:-false}" = true ] || app_device=""
-            [ -z "${app_mount_dir:-}" ] || rm -rf "$app_mount_dir" || return 1
-            [ -z "${app_sparse_image:-}" ] || rm -f "$app_sparse_image" || return 1
-            app_temp_dir=""
-            app_mount_dir=""
-            app_sparse_image=""
-            app_device=""
-            app_attached=false
-            cleanup_error_reported=false
+            if [ -n "${app_mount_dir:-}" ] \
+              && ! rm -rf "$app_mount_dir"; then
+              report_workspace_cleanup_error \
+                "Could not remove detached bounded workspace mount directory"
+              return 1
+            fi
+            if [ -n "${app_sparse_image:-}" ] \
+              && ! rm -f "$app_sparse_image"; then
+              report_workspace_cleanup_error \
+                "Could not remove detached bounded workspace image"
+              return 1
+            fi
+            clear_app_workspace_state
           }
 
           create_app_workspace() {
@@ -801,7 +1028,7 @@ jobs:
             if ! attach_plist=$(hdiutil attach "$app_sparse_image" \
               -mountpoint "$app_mount_dir" -nobrowse -plist); then
               if devices=$(resolve_image_from_info "$app_sparse_image" 2>/dev/null); then
-                app_device=$(printf '%s' "$devices" | jq -r '.whole_device // empty' 2>/dev/null || true)
+                 load_app_attachment "$devices"
                 app_attached=true
               else
                 info_status=$?
@@ -815,7 +1042,7 @@ jobs:
             devices=$(python "$DISK_IMAGE_HELPER" attach \
               --plist "$app_mount_dir/workspace-attach.plist") \
               || { destroy_app_workspace; return 1; }
-            app_device=$(printf '%s' "$devices" | jq -r '.whole_device // empty')
+            load_app_attachment "$devices"
             actual_mount=$(printf '%s' "$devices" | jq -r \
               'if (.mounted_entities | length) == 1 then .mounted_entities[0].mount_point else empty end')
             if [ -z "$app_device" ] \
