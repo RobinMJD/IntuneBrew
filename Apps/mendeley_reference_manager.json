@@ -11,5 +11,7 @@
   "sha": "2fe21cba5e9dac0c5037731ef588515d518518d132686acbf85a1faadba6b61f",
   "category": "Productivity",
   "publisher": "Mendeley Ltd.",
-  "previous_version": "2.148.0"
+  "previous_version": "2.148.0",
+  "deprecated": true,
+  "deprecation_reason": "Source integrity quarantine: vendor source returned HTTP 403 for all supported user agents in GitHub-hosted workflow run 32861938278 attempts 1 and 2; source SHA256 could not be verified"
 }

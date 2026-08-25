@@ -14,6 +14,15 @@ import tempfile
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from urllib.parse import urlparse, unquote
 
+SCRIPT_DIRECTORY = Path(__file__).resolve().parent
+if str(SCRIPT_DIRECTORY) not in sys.path:
+    sys.path.insert(0, str(SCRIPT_DIRECTORY))
+
+from source_integrity_quarantine import (
+    get_quarantine_reason,
+    load_source_integrity_quarantine as load_quarantine_file,
+)
+
 
 ARCHIVE_EXTENSIONS = (".zip", ".tar.gz", ".tgz", ".tar.xz", ".tar.bz2", ".tbz")
 ARTIFACT_KIND_OVERRIDES = {
@@ -61,16 +70,7 @@ README_APPS_END_MARKER = "## 🔧 Configuration"
 
 
 def load_source_integrity_quarantine():
-    try:
-        with SOURCE_INTEGRITY_QUARANTINE_PATH.open(encoding="utf-8") as handle:
-            quarantine = json.load(handle)
-    except (OSError, ValueError) as error:
-        raise RuntimeError(
-            f"Could not load source integrity quarantine: {error}"
-        ) from error
-    if not isinstance(quarantine, dict):
-        raise RuntimeError("Source integrity quarantine must contain an object")
-    return quarantine
+    return load_quarantine_file(SOURCE_INTEGRITY_QUARANTINE_PATH)
 
 
 def get_artifact_kind(url):
@@ -2207,13 +2207,8 @@ def get_homebrew_app_info(json_url, needs_packaging=False, is_pkg_in_dmg=False, 
         # Defensive: a URL the prefetch never saw is still fetched here.
         data = fetch_cask_data(json_url)
 
-    quarantine_entry = load_source_integrity_quarantine().get(cask_token)
-    if quarantine_entry:
-        reason = quarantine_entry.get("reason")
-        if not isinstance(reason, str) or not reason.strip():
-            raise RuntimeError(
-                f"Source integrity quarantine entry for {cask_token} has no reason"
-            )
+    reason = get_quarantine_reason(load_source_integrity_quarantine(), cask_token)
+    if reason:
         raise SourceIntegrityQuarantineError(
             reason,
             display_name=data["name"][0],

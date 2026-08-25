@@ -19,6 +19,15 @@ from difflib import SequenceMatcher
 from pathlib import Path
 from urllib.parse import unquote, urlparse
 
+SCRIPT_DIRECTORY = Path(__file__).resolve().parent
+if str(SCRIPT_DIRECTORY) not in sys.path:
+    sys.path.insert(0, str(SCRIPT_DIRECTORY))
+
+from source_integrity_quarantine import (
+    get_quarantine_reason,
+    load_source_integrity_quarantine as load_quarantine_file,
+)
+
 # Cache for the Homebrew cask list
 _cask_list_cache = None
 
@@ -56,16 +65,7 @@ SOURCE_INTEGRITY_QUARANTINE_PATH = (
 
 
 def load_source_integrity_quarantine():
-    try:
-        with SOURCE_INTEGRITY_QUARANTINE_PATH.open(encoding="utf-8") as handle:
-            quarantine = json.load(handle)
-    except (OSError, ValueError) as error:
-        raise RuntimeError(
-            f"Could not load source integrity quarantine: {error}"
-        ) from error
-    if not isinstance(quarantine, dict):
-        raise RuntimeError("Source integrity quarantine must contain an object")
-    return quarantine
+    return load_quarantine_file(SOURCE_INTEGRITY_QUARANTINE_PATH)
 
 
 def deterministic_source_kind(homebrew_data):
@@ -93,12 +93,8 @@ def unsupported_cask_reason(homebrew_data):
     """Explain why a cask has no directly deployable app/package payload."""
     token = homebrew_data.get("token")
     quarantine = load_source_integrity_quarantine()
-    if token in quarantine:
-        reason = quarantine[token].get("reason")
-        if not isinstance(reason, str) or not reason.strip():
-            raise RuntimeError(
-                f"Source integrity quarantine entry for {token} has no reason"
-            )
+    reason = get_quarantine_reason(quarantine, token)
+    if reason:
         return reason
     if token in UNSUPPORTED_CASK_TOKENS:
         return UNSUPPORTED_CASK_TOKENS[token]
@@ -541,12 +537,8 @@ def main():
             skipped_apps.append({'cask': cask_name, 'reason': 'duplicate request'})
             continue
         validated_casks.add(cask_name)
-        if cask_name in source_integrity_quarantine:
-            reason = source_integrity_quarantine[cask_name].get("reason")
-            if not isinstance(reason, str) or not reason.strip():
-                raise RuntimeError(
-                    f"Source integrity quarantine entry for {cask_name} has no reason"
-                )
+        reason = get_quarantine_reason(source_integrity_quarantine, cask_name)
+        if reason:
             print(f"Failed {cask_name}: {reason}")
             failed_apps.append({"cask": cask_name, "reason": reason})
             continue

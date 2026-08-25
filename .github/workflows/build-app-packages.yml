@@ -11,6 +11,7 @@ on:
     branches: [main]
     paths:
       - '.github/scripts/collect_app_info.py'
+      - '.github/scripts/source_integrity_quarantine.py'
       - '.github/data/source-integrity-quarantine.json'
   schedule:
     - cron: "0 0 * * *" # Run at midnight UTC every day

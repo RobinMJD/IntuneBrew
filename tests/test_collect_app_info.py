@@ -430,6 +430,139 @@ class CollectAppInfoTests(unittest.TestCase):
             "Source integrity quarantine: reviewed mismatch",
         )
 
+    def test_removing_quarantine_entry_permits_collector_recovery(self):
+        url = (
+            "https://formulae.brew.sh/api/cask/"
+            "mendeley-reference-manager.json"
+        )
+        payload = {
+            "name": ["Mendeley Reference Manager"],
+            "desc": "Research management tool",
+            "version": "2.149.0",
+            "url": (
+                "https://static.mendeley.com/bin/desktop/"
+                "mendeley-reference-manager-2.149.0-universal.dmg"
+            ),
+            "sha256": "9" * 64,
+            "homepage": "https://www.mendeley.com/",
+            "artifacts": [{"app": ["Mendeley Reference Manager.app"]}],
+            "url_specs": {},
+        }
+        with (
+            patch.dict(collect_app_info.cask_cache, {url: payload}, clear=True),
+            patch.object(
+                collect_app_info,
+                "load_source_integrity_quarantine",
+                return_value={},
+            ),
+        ):
+            app_info = collect_app_info.get_homebrew_app_info(url)
+
+        self.assertEqual(
+            app_info["homebrew_cask"],
+            "mendeley-reference-manager",
+        )
+        self.assertEqual(app_info["version"], "2.149.0")
+        self.assertFalse(app_info.get("deprecated", False))
+
+    def test_access_denied_quarantine_requires_run_evidence_without_actual_sha(self):
+        entry = {
+            "cask": "mendeley-reference-manager",
+            "expected_sha256": "9" * 64,
+            "failure_type": "access_denied",
+            "observed_at": "2026-08-25",
+            "reason": "Source integrity quarantine: automation cannot access source",
+            "url": "https://example.test/mendeley.dmg",
+            "workflow_runs": [{"run_id": 32861938278, "attempt": 1}],
+        }
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "quarantine.json"
+            path.write_text(
+                json.dumps({"mendeley-reference-manager": entry}),
+                encoding="utf-8",
+            )
+            with patch.object(
+                collect_app_info,
+                "SOURCE_INTEGRITY_QUARANTINE_PATH",
+                path,
+            ):
+                loaded = collect_app_info.load_source_integrity_quarantine()
+            self.assertNotIn(
+                "actual_sha256",
+                loaded["mendeley-reference-manager"],
+            )
+
+            entry["workflow_runs"] = []
+            path.write_text(
+                json.dumps({"mendeley-reference-manager": entry}),
+                encoding="utf-8",
+            )
+            with (
+                patch.object(
+                    collect_app_info,
+                    "SOURCE_INTEGRITY_QUARANTINE_PATH",
+                    path,
+                ),
+                self.assertRaisesRegex(RuntimeError, "workflow run evidence"),
+            ):
+                collect_app_info.load_source_integrity_quarantine()
+
+            entry["workflow_runs"] = [{"run_id": 32861938278, "attempt": 1}]
+            entry["actual_sha256"] = "8" * 64
+            path.write_text(
+                json.dumps({"mendeley-reference-manager": entry}),
+                encoding="utf-8",
+            )
+            with (
+                patch.object(
+                    collect_app_info,
+                    "SOURCE_INTEGRITY_QUARANTINE_PATH",
+                    path,
+                ),
+                self.assertRaisesRegex(RuntimeError, "must not claim actual_sha256"),
+            ):
+                collect_app_info.load_source_integrity_quarantine()
+
+            entry.pop("actual_sha256")
+            entry["workflow_runs"] = [{"run_id": True, "attempt": 1}]
+            path.write_text(
+                json.dumps({"mendeley-reference-manager": entry}),
+                encoding="utf-8",
+            )
+            with (
+                patch.object(
+                    collect_app_info,
+                    "SOURCE_INTEGRITY_QUARANTINE_PATH",
+                    path,
+                ),
+                self.assertRaisesRegex(RuntimeError, "workflow run evidence"),
+            ):
+                collect_app_info.load_source_integrity_quarantine()
+
+    def test_sha_mismatch_quarantine_requires_expected_and_actual_sha(self):
+        entry = {
+            "expected_sha256": "9" * 64,
+            "observed_at": "2026-08-25",
+            "reason": "Source integrity quarantine: reviewed mismatch",
+            "url": "https://example.test/app.dmg",
+            "workflow_run_id": 123,
+        }
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "quarantine.json"
+            path.write_text(
+                json.dumps({"example": entry}),
+                encoding="utf-8",
+            )
+            with (
+                patch.object(
+                    collect_app_info,
+                    "SOURCE_INTEGRITY_QUARANTINE_PATH",
+                    path,
+                ),
+                self.assertRaisesRegex(RuntimeError, "actual_sha256"),
+            ):
+                collect_app_info.load_source_integrity_quarantine()
+
     def test_quarantine_can_create_a_missing_tombstone(self):
         with tempfile.TemporaryDirectory() as directory:
             collect_app_info.require_deprecation_tombstone(
@@ -1630,7 +1763,10 @@ class CatalogConsistencyTests(unittest.TestCase):
             },
         }
 
-        self.assertEqual(set(quarantine), set(expected))
+        self.assertEqual(
+            set(quarantine),
+            set(expected) | {"mendeley-reference-manager"},
+        )
         for token, evidence in expected.items():
             with self.subTest(token=token):
                 entry = quarantine[token]
@@ -1651,7 +1787,41 @@ class CatalogConsistencyTests(unittest.TestCase):
                 self.assertNotIn(Path(evidence["filename"]).stem, supported)
                 self.assertNotIn(evidence["display_name"], readme)
 
-    def test_repaired_warp_and_jamovi_are_not_quarantined(self):
+        mendeley = quarantine["mendeley-reference-manager"]
+        manifest = json.loads(
+            (ROOT / "Apps/mendeley_reference_manager.json").read_text(
+                encoding="utf-8"
+            )
+        )
+        self.assertEqual(mendeley["cask"], "mendeley-reference-manager")
+        self.assertEqual(mendeley["failure_type"], "access_denied")
+        self.assertEqual(
+            mendeley["expected_sha256"],
+            "97c5dba3fd0152e8f2a63f3fd828dff4b9d3730b6ae79e382ef7381ab8efb9d0",
+        )
+        self.assertNotIn("actual_sha256", mendeley)
+        self.assertEqual(
+            mendeley["workflow_runs"],
+            [
+                {"attempt": 1, "run_id": 32861938278},
+                {"attempt": 2, "run_id": 32861938278},
+            ],
+        )
+        self.assertEqual(
+            mendeley["url"],
+            "https://static.mendeley.com/bin/desktop/mendeley-reference-manager-2.149.0-universal.dmg",
+        )
+        self.assertEqual(mendeley["observed_at"], "2026-08-25")
+        self.assertEqual(
+            manifest["homebrew_cask"],
+            "mendeley-reference-manager",
+        )
+        self.assertTrue(manifest["deprecated"])
+        self.assertEqual(manifest["deprecation_reason"], mendeley["reason"])
+        self.assertNotIn("mendeley_reference_manager", supported)
+        self.assertNotIn("Mendeley Reference Manager", readme)
+
+    def test_repaired_apps_are_not_quarantined(self):
         quarantine = json.loads(
             (ROOT / ".github/data/source-integrity-quarantine.json").read_text(
                 encoding="utf-8"
@@ -1666,7 +1836,7 @@ class CatalogConsistencyTests(unittest.TestCase):
         )
         readme = (ROOT / "README.md").read_text(encoding="utf-8")
 
-        for token in ("warp", "jamovi"):
+        for token in ("warp", "jamovi", "colorwell"):
             with self.subTest(token=token):
                 manifest = json.loads(
                     (ROOT / "Apps" / f"{token}.json").read_text(encoding="utf-8")
