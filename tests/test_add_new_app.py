@@ -72,6 +72,64 @@ class CaskArtifactValidationTests(unittest.TestCase):
             "artifacts": [{"app": ["Postman.app"]}],
         }
         self.assertIsNone(add_new_app.unsupported_cask_reason(data))
+
+    def test_source_integrity_quarantine_rejects_cask(self):
+        data = {
+            "token": "visual-paradigm",
+            "url": "https://example.test/Visual_Paradigm.dmg",
+            "artifacts": [{"app": ["Visual Paradigm.app"]}],
+        }
+
+        reason = add_new_app.unsupported_cask_reason(data)
+
+        self.assertIn("Source integrity quarantine", reason)
+        self.assertIn("32355543573", reason)
+
+    def test_request_processor_does_not_write_quarantined_cask(self):
+        visual_paradigm = {
+            "token": "visual-paradigm",
+            "name": ["Visual Paradigm"],
+            "url": "https://example.test/Visual_Paradigm.dmg",
+            "artifacts": [{"app": ["Visual Paradigm.app"]}],
+        }
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = pathlib.Path(temp_dir)
+            script_path = root / ".github" / "scripts" / "collect_app_info.py"
+            script_path.parent.mkdir(parents=True)
+            original = (
+                'app_urls = ['
+                '"https://formulae.brew.sh/api/cask/visual-paradigm.json"]\n'
+            )
+            script_path.write_text(original, encoding="utf-8")
+
+            previous_cwd = os.getcwd()
+            try:
+                os.chdir(root)
+                with (
+                    patch.dict(
+                        os.environ,
+                        {
+                            "ISSUE_TITLE": "Add Visual Paradigm",
+                            "ISSUE_BODY": "",
+                            "COMMENT_BODY": "/approve visual-paradigm",
+                        },
+                        clear=True,
+                    ),
+                    patch.object(
+                        add_new_app,
+                        "fetch_homebrew_info",
+                        return_value=visual_paradigm,
+                    ),
+                    self.assertRaises(SystemExit) as context,
+                ):
+                    add_new_app.main()
+            finally:
+                os.chdir(previous_cwd)
+
+            self.assertEqual(context.exception.code, 1)
+            self.assertEqual(script_path.read_text(encoding="utf-8"), original)
+
     def test_codex_cli_is_rejected(self):
         codex = cask_data(
             "https://example.test/codex-package-aarch64-apple-darwin.tar.gz",

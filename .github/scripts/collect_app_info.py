@@ -20,6 +20,7 @@ ARTIFACT_KIND_OVERRIDES = {
     "raycast": ("dmg", None),
     "tenable-nessus-agent": ("dmg", None),
     "visual-studio-code": ("archive", "zip"),
+    "warp": ("dmg", None),
     "whatsapp": ("archive", "zip"),
 }
 ARTIFACT_SOURCE_OVERRIDES = {
@@ -28,6 +29,9 @@ ARTIFACT_SOURCE_OVERRIDES = {
     "rode-central": {"pkg": "RØDE Central*.pkg"},
     "rode-connect": {"pkg": "RØDE Connect*.pkg"},
 }
+DOWNLOAD_USER_AGENT_OVERRIDES = {
+    "warp": "homebrew",
+}
 ARTIFACT_METADATA_KEYS = {
     "artifact_app",
     "artifact_pkg",
@@ -35,6 +39,7 @@ ARTIFACT_METADATA_KEYS = {
     "archive_format",
     "artifact_app_source",
     "artifact_pkg_source",
+    "download_referer",
     "download_user_agent",
     "source_version",
     "source_sha256",
@@ -46,6 +51,22 @@ INSTALLER_ONLY_DEPRECATION_REASON = (
 NO_DEPLOYABLE_PAYLOAD_REASON = (
     "No directly deployable app or package artifact"
 )
+SOURCE_INTEGRITY_QUARANTINE_PATH = (
+    Path(__file__).resolve().parents[1] / "data" / "source-integrity-quarantine.json"
+)
+
+
+def load_source_integrity_quarantine():
+    try:
+        with SOURCE_INTEGRITY_QUARANTINE_PATH.open(encoding="utf-8") as handle:
+            quarantine = json.load(handle)
+    except (OSError, ValueError) as error:
+        raise RuntimeError(
+            f"Could not load source integrity quarantine: {error}"
+        ) from error
+    if not isinstance(quarantine, dict):
+        raise RuntimeError("Source integrity quarantine must contain an object")
+    return quarantine
 
 
 def get_artifact_kind(url):
@@ -78,6 +99,54 @@ def get_archive_format(url):
     if path.endswith((".tar.bz2", ".tbz")):
         return "tar.bz2"
     return None
+
+
+def url_origin(url):
+    try:
+        parsed = urlparse(url)
+        port = parsed.port
+    except ValueError:
+        return None
+    if (
+        parsed.scheme.lower() != "https"
+        or not parsed.hostname
+        or parsed.username
+        or parsed.password
+        or port not in (None, 443)
+    ):
+        return None
+    return ("https", parsed.hostname.lower(), 443)
+
+
+def approved_download_referer(url_specs, source_url, homepage):
+    referer = (url_specs or {}).get("referer")
+    if (
+        not isinstance(referer, str)
+        or any(ord(character) < 32 or ord(character) == 127 for character in referer)
+    ):
+        return None
+    try:
+        parsed = urlparse(referer)
+        port = parsed.port
+    except ValueError:
+        return None
+    if (
+        parsed.scheme.lower() != "https"
+        or not parsed.hostname
+        or parsed.username
+        or parsed.password
+        or port not in (None, 443)
+        or parsed.query
+        or parsed.fragment
+    ):
+        return None
+    referer_origin = url_origin(referer)
+    allowed_origins = {
+        origin
+        for origin in (url_origin(source_url), url_origin(homepage))
+        if origin is not None
+    }
+    return referer if referer_origin in allowed_origins else None
 
 
 def get_installable_artifacts(data):
@@ -1550,13 +1619,14 @@ DOWNLOAD_USER_AGENTS = (
     "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 "
     "(KHTML, like Gecko) Chrome/126.0 Safari/537.36",
 )
+HOMEBREW_DOWNLOAD_USER_AGENT = "Homebrew/5.0.0 (Macintosh; arm64 Mac OS X 15.0)"
 
 
 class _OversizedDownload(Exception):
     """Raised when a body passes MAX_DOWNLOAD_BYTES, to stop the agent cascade."""
 
 
-def _stream_to_temp_file(url, user_agent, temp_file):
+def _stream_to_temp_file(url, user_agent, temp_file, referer=None):
     """Download url into temp_file with one agent. Returns the byte count, or None.
 
     None means this attempt is unusable (HTTP error, HTML page, empty body) and
@@ -1567,11 +1637,14 @@ def _stream_to_temp_file(url, user_agent, temp_file):
     temp_file.seek(0)
     temp_file.truncate()
 
+    headers = {"User-Agent": user_agent}
+    if referer:
+        headers["Referer"] = referer
     response = requests.get(
         url,
         stream=True,
         timeout=DOWNLOAD_TIMEOUT,
-        headers={"User-Agent": user_agent},
+        headers=headers,
     )
     # An abandoned attempt leaves a half-read stream behind, so release it the
     # way check_url does in check_download_urls.py before the next agent runs.
@@ -1610,16 +1683,24 @@ def _stream_to_temp_file(url, user_agent, temp_file):
         response.close()
 
 
-def calculate_file_hash(url):
+def calculate_file_hash(url, referer=None, user_agent_mode="default"):
     """Download a file and calculate its SHA256 hash."""
     print(f"📥 Downloading file from {url} to calculate hash...")
 
     # Create a temporary file
     with tempfile.NamedTemporaryFile(delete=False) as temp_file:
         try:
-            for user_agent in DOWNLOAD_USER_AGENTS:
+            if user_agent_mode == "browser":
+                user_agents = (DOWNLOAD_USER_AGENTS[-1],)
+            elif user_agent_mode == "homebrew":
+                user_agents = (HOMEBREW_DOWNLOAD_USER_AGENT,)
+            else:
+                user_agents = DOWNLOAD_USER_AGENTS
+            for user_agent in user_agents:
                 try:
-                    if _stream_to_temp_file(url, user_agent, temp_file) is None:
+                    if _stream_to_temp_file(
+                        url, user_agent, temp_file, referer=referer
+                    ) is None:
                         continue
                 except _OversizedDownload as e:
                     print(str(e))
@@ -1651,11 +1732,32 @@ def calculate_file_hash(url):
 
 
 class SourceHashMismatchError(ValueError):
-    pass
+    def __init__(self, app_name, expected, actual, url, cask_token=None):
+        self.app_name = app_name
+        self.expected = expected.lower()
+        self.actual = actual.lower()
+        self.url = url
+        self.cask_token = cask_token
+        super().__init__(
+            f"{app_name}: expected {self.expected}, got {self.actual} from {url}"
+        )
+
+    def as_dict(self):
+        return {
+            "app": self.app_name,
+            "cask": self.cask_token,
+            "expected_sha256": self.expected,
+            "actual_sha256": self.actual,
+            "url": self.url,
+        }
 
 
 def calculate_verified_source_hash(app_info):
-    digest = calculate_file_hash(app_info["url"])
+    digest = calculate_file_hash(
+        app_info["url"],
+        referer=app_info.get("download_referer"),
+        user_agent_mode=app_info.get("download_user_agent", "default"),
+    )
     expected = app_info.get("source_sha256", "")
     if (
         digest
@@ -1665,8 +1767,11 @@ def calculate_verified_source_hash(app_info):
         app_info.pop("sha", None)
         app_info["source_hash_mismatch"] = True
         raise SourceHashMismatchError(
-            f"Source SHA256 mismatch for {app_info['name']}: "
-            f"expected {expected}, got {digest}"
+            app_info["name"],
+            expected,
+            digest,
+            app_info["url"],
+            app_info.get("homebrew_cask"),
         )
     return digest
 
@@ -1695,6 +1800,10 @@ class CaskUnavailableError(Exception):
         self.display_name = display_name
         self.cask_token = cask_token
         self.reason = reason
+
+
+class SourceIntegrityQuarantineError(CaskUnavailableError):
+    pass
 
 def get_cask_token(json_url):
     """Extract the Homebrew cask token from an API URL."""
@@ -1819,18 +1928,135 @@ def mark_app_deprecated(apps_folder, display_name, reason, cask_token=None):
 
 
 def require_deprecation_tombstone(
-    apps_folder, display_name, reason, cask_token=None
+    apps_folder, display_name, reason, cask_token=None, allow_create=False
 ):
-    if not mark_app_deprecated(
+    if allow_create:
+        existing_path = find_app_file(
+            apps_folder,
+            display_name=display_name,
+            cask_token=cask_token,
+        )
+        if existing_path:
+            try:
+                with open(existing_path, "r", encoding="utf-8") as handle:
+                    existing_data = json.load(handle)
+            except (OSError, ValueError) as error:
+                raise RuntimeError(
+                    f"Cannot quarantine {cask_token or display_name}: "
+                    f"existing manifest is unreadable"
+                ) from error
+            if existing_data.get("homebrew_cask") != cask_token:
+                raise RuntimeError(
+                    f"Cannot quarantine {cask_token or display_name}: "
+                    f"{existing_path} is not conclusively owned by that cask"
+                )
+            if mark_app_deprecated(
+                apps_folder,
+                display_name,
+                reason,
+                cask_token,
+            ):
+                return
+            raise RuntimeError(
+                f"Could not update quarantine tombstone for "
+                f"{cask_token or display_name}"
+            )
+
+        identifier = cask_token or display_name or "unknown_cask"
+        filename_source = display_name or cask_token or "unknown_cask"
+        file_path = Path(apps_folder) / f"{sanitize_filename(filename_source)}.json"
+        if file_path.exists():
+            raise RuntimeError(
+                f"Cannot create quarantine tombstone for {identifier}: "
+                f"{file_path} already exists"
+            )
+        tombstone = {
+            "name": display_name or cask_token,
+            "deprecated": True,
+            "deprecation_reason": reason,
+        }
+        if cask_token:
+            tombstone["homebrew_cask"] = cask_token
+        with file_path.open("w", encoding="utf-8") as handle:
+            json.dump(tombstone, handle, indent=2)
+        print(f"Created deprecation tombstone for {identifier}: {reason}")
+        return
+
+    if mark_app_deprecated(
         apps_folder,
         display_name,
         reason,
         cask_token,
     ):
-        identifier = cask_token or display_name or "unknown cask"
+        return
+    identifier = cask_token or display_name or "unknown cask"
+    raise RuntimeError(
+        f"Configured cask {identifier} is unavailable but has no manifest tombstone"
+    )
+
+
+def restore_mismatched_manifest(apps_folder, mismatch):
+    manifest_path = find_app_file(
+        apps_folder,
+        display_name=mismatch.app_name,
+        cask_token=mismatch.cask_token,
+    )
+    if manifest_path is None:
+        identifier = mismatch.cask_token or mismatch.app_name
+        manifest_path = Path(apps_folder) / f"{sanitize_filename(identifier)}.json"
+    else:
+        manifest_path = Path(manifest_path)
+
+    repository_root = Path(__file__).resolve().parents[2]
+    try:
+        relative_path = manifest_path.resolve().relative_to(repository_root).as_posix()
+    except ValueError as error:
         raise RuntimeError(
-            f"Configured cask {identifier} is unavailable but has no manifest tombstone"
-        )
+            f"Manifest path is outside the repository: {manifest_path}"
+        ) from error
+
+    result = subprocess.run(
+        ["git", "show", f"HEAD:{relative_path}"],
+        cwd=repository_root,
+        capture_output=True,
+        check=False,
+    )
+    if result.returncode == 0:
+        manifest_path.parent.mkdir(parents=True, exist_ok=True)
+        manifest_path.write_bytes(result.stdout)
+    elif manifest_path.exists():
+        manifest_path.unlink()
+
+
+def record_source_hash_mismatch(mismatches, apps_folder, mismatch):
+    restore_mismatched_manifest(apps_folder, mismatch)
+    mismatches.append(mismatch)
+    print(f"Source SHA256 mismatch recorded: {mismatch}")
+
+
+def raise_collected_source_hash_mismatches(mismatches):
+    if not mismatches:
+        return
+    ordered = sorted(
+        mismatches,
+        key=lambda mismatch: (
+            mismatch.cask_token or "",
+            mismatch.app_name,
+            mismatch.url,
+        ),
+    )
+    print(
+        "Source SHA256 mismatch summary:\n"
+        + json.dumps(
+            [mismatch.as_dict() for mismatch in ordered],
+            indent=2,
+            sort_keys=True,
+        ),
+        file=sys.stderr,
+    )
+    raise RuntimeError(
+        f"Source SHA256 verification failed for {len(ordered)} app(s)"
+    )
 
 
 # Cask JSON is a few kilobytes: 10s to connect, 30s to read is generous, and a
@@ -1923,6 +2149,19 @@ def get_homebrew_app_info(json_url, needs_packaging=False, is_pkg_in_dmg=False, 
         # Defensive: a URL the prefetch never saw is still fetched here.
         data = fetch_cask_data(json_url)
 
+    quarantine_entry = load_source_integrity_quarantine().get(cask_token)
+    if quarantine_entry:
+        reason = quarantine_entry.get("reason")
+        if not isinstance(reason, str) or not reason.strip():
+            raise RuntimeError(
+                f"Source integrity quarantine entry for {cask_token} has no reason"
+            )
+        raise SourceIntegrityQuarantineError(
+            reason,
+            display_name=data["name"][0],
+            cask_token=cask_token,
+        )
+
     # A deprecated or disabled cask means the vendor discontinued the app or
     # its download can no longer be fetched reliably. Its URL will rot, so it
     # must not be offered for upload.
@@ -1962,12 +2201,6 @@ def get_homebrew_app_info(json_url, needs_packaging=False, is_pkg_in_dmg=False, 
         version = version.split('_')[0]
 
     url = data["url"]
-
-    # Special URL handling for apps with non-working Homebrew URLs
-    app_name = data["name"][0].lower()
-    if app_name == "warp":
-        # Warp's Homebrew URL returns HTML, use direct DMG URL instead
-        url = f"https://releases.warp.dev/stable/v{version}/Warp.dmg"
 
     vendor_url = url
     artifact_kind = get_artifact_kind(url)
@@ -2011,10 +2244,19 @@ def get_homebrew_app_info(json_url, needs_packaging=False, is_pkg_in_dmg=False, 
         app_info["artifact_app_source"] = source_paths["app"]
     if source_paths.get("pkg"):
         app_info["artifact_pkg_source"] = source_paths["pkg"]
-    user_agent = (data.get("url_specs") or {}).get("user_agent")
-    app_info["download_user_agent"] = (
-        "browser" if user_agent == ":browser" else "default"
+    url_specs = data.get("url_specs") or {}
+    user_agent = url_specs.get("user_agent")
+    app_info["download_user_agent"] = DOWNLOAD_USER_AGENT_OVERRIDES.get(
+        cask_token,
+        "browser" if user_agent == ":browser" else "default",
     )
+    download_referer = approved_download_referer(
+        url_specs,
+        url,
+        data["homepage"],
+    )
+    if download_referer:
+        app_info["download_referer"] = download_referer
 
     if needs_packaging:
         app_info["type"] = "app"
@@ -2248,6 +2490,7 @@ def main():
     supported_apps = []
     apps_info = []
     collection_errors = []
+    source_hash_mismatches = []
 
     prefetch_cask_data(
         app_urls + homebrew_cask_urls + pkg_in_pkg_urls + pkg_urls + pkg_in_dmg_urls
@@ -2333,9 +2576,15 @@ def main():
             apps_info.append(app_info)
             print(f"Saved app information for {display_name} to {file_path}")
         except CaskUnavailableError as e:
-            require_deprecation_tombstone(apps_folder, e.display_name, e.reason, e.cask_token)
-        except SourceHashMismatchError:
-            raise
+            require_deprecation_tombstone(
+                apps_folder,
+                e.display_name,
+                e.reason,
+                e.cask_token,
+                allow_create=isinstance(e, SourceIntegrityQuarantineError),
+            )
+        except SourceHashMismatchError as e:
+            record_source_hash_mismatch(source_hash_mismatches, apps_folder, e)
         except Exception as e:
             collection_errors.append(f"{url}: {e}")
 
@@ -2420,9 +2669,15 @@ def main():
             apps_info.append(app_info)
             print(f"Saved app information for {display_name} to {file_path}")
         except CaskUnavailableError as e:
-            require_deprecation_tombstone(apps_folder, e.display_name, e.reason, e.cask_token)
-        except SourceHashMismatchError:
-            raise
+            require_deprecation_tombstone(
+                apps_folder,
+                e.display_name,
+                e.reason,
+                e.cask_token,
+                allow_create=isinstance(e, SourceIntegrityQuarantineError),
+            )
+        except SourceHashMismatchError as e:
+            record_source_hash_mismatch(source_hash_mismatches, apps_folder, e)
         except Exception as e:
             collection_errors.append(f"{url}: {e}")
 
@@ -2478,7 +2733,13 @@ def main():
             apps_info.append(app_info)
             print(f"Saved app information for {display_name} to {file_path}")
         except CaskUnavailableError as e:
-            require_deprecation_tombstone(apps_folder, e.display_name, e.reason, e.cask_token)
+            require_deprecation_tombstone(
+                apps_folder,
+                e.display_name,
+                e.reason,
+                e.cask_token,
+                allow_create=isinstance(e, SourceIntegrityQuarantineError),
+            )
         except Exception as e:
             collection_errors.append(f"{url}: {e}")
 
@@ -2563,9 +2824,15 @@ def main():
             apps_info.append(app_info)
             print(f"Saved app information for {display_name} to {file_path}")
         except CaskUnavailableError as e:
-            require_deprecation_tombstone(apps_folder, e.display_name, e.reason, e.cask_token)
-        except SourceHashMismatchError:
-            raise
+            require_deprecation_tombstone(
+                apps_folder,
+                e.display_name,
+                e.reason,
+                e.cask_token,
+                allow_create=isinstance(e, SourceIntegrityQuarantineError),
+            )
+        except SourceHashMismatchError as e:
+            record_source_hash_mismatch(source_hash_mismatches, apps_folder, e)
         except Exception as e:
             collection_errors.append(f"{url}: {e}")
 
@@ -2620,7 +2887,13 @@ def main():
             apps_info.append(app_info)
             print(f"Saved app information for {display_name} to {file_path}")
         except CaskUnavailableError as e:
-            require_deprecation_tombstone(apps_folder, e.display_name, e.reason, e.cask_token)
+            require_deprecation_tombstone(
+                apps_folder,
+                e.display_name,
+                e.reason,
+                e.cask_token,
+                allow_create=isinstance(e, SourceIntegrityQuarantineError),
+            )
         except Exception as e:
             collection_errors.append(f"{url}: {e}")
 
@@ -2648,15 +2921,29 @@ def main():
                 (app_data['url'].endswith('.dmg') or app_data['url'].endswith('.pkg'))):
                 
                 print(f"🔍 Calculating SHA256 hash for {app_data['name']}...")
-                file_hash = calculate_verified_source_hash(app_data)
-                if file_hash:
-                    app_data['sha'] = file_hash
-                    # Write back the updated JSON
-                    with open(json_file, 'w') as f:
-                        json.dump(app_data, f, indent=2)
-                    print(f"✅ SHA256 hash added for {app_data['name']}: {file_hash}")
-                else:
-                    print(f"⚠️ Could not calculate SHA256 hash for {app_data['name']}")
+                try:
+                    file_hash = calculate_verified_source_hash(app_data)
+                    if file_hash:
+                        app_data['sha'] = file_hash
+                        # Write back the updated JSON
+                        with open(json_file, 'w') as f:
+                            json.dump(app_data, f, indent=2)
+                        print(f"✅ SHA256 hash added for {app_data['name']}: {file_hash}")
+                    else:
+                        raise RuntimeError(
+                            f"Could not verify source SHA256 for {app_data['name']}"
+                        )
+                except SourceHashMismatchError as e:
+                    record_source_hash_mismatch(
+                        source_hash_mismatches, apps_folder, e
+                    )
+
+    if source_hash_mismatches:
+        if collection_errors:
+            print("OTHER COLLECTION FAILURES:", file=sys.stderr)
+            for error in collection_errors:
+                print(f"- {error}", file=sys.stderr)
+        raise_collected_source_hash_mismatches(source_hash_mismatches)
 
     # Update the README with both the apps table and latest changes
     update_readme_apps(supported_apps)

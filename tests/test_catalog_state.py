@@ -181,6 +181,13 @@ class CatalogWorkflowTests(unittest.TestCase):
         self.assertNotIn(".github/catalog-state.json", trigger)
         self.assertNotIn("publish-catalog-state.yml", trigger)
 
+    def test_quarantine_data_change_triggers_immediate_collection(self):
+        trigger = self.workflow.split("  schedule:", 1)[0]
+        self.assertIn(
+            "'.github/data/source-integrity-quarantine.json'",
+            trigger,
+        )
+
     def test_publication_rejects_non_main_dispatch_refs(self):
         collect_job = self.workflow.split("  collect:", 1)[1].split("  build:", 1)[0]
         guard = collect_job.index("- name: Require main branch")

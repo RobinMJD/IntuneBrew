@@ -16,6 +16,7 @@ import sys
 import json
 import requests
 from difflib import SequenceMatcher
+from pathlib import Path
 from urllib.parse import unquote, urlparse
 
 # Cache for the Homebrew cask list
@@ -42,12 +43,29 @@ OPAQUE_CASK_OVERRIDES = frozenset({
     "raycast",
     "tenable-nessus-agent",
     "visual-studio-code",
+    "warp",
     "whatsapp",
 })
 UNSUPPORTED_CASK_TOKENS = {
     "abstract": "Vendor download host is no longer resolvable",
     "ubar": "Vendor download host is no longer resolvable",
 }
+SOURCE_INTEGRITY_QUARANTINE_PATH = (
+    Path(__file__).resolve().parents[1] / "data" / "source-integrity-quarantine.json"
+)
+
+
+def load_source_integrity_quarantine():
+    try:
+        with SOURCE_INTEGRITY_QUARANTINE_PATH.open(encoding="utf-8") as handle:
+            quarantine = json.load(handle)
+    except (OSError, ValueError) as error:
+        raise RuntimeError(
+            f"Could not load source integrity quarantine: {error}"
+        ) from error
+    if not isinstance(quarantine, dict):
+        raise RuntimeError("Source integrity quarantine must contain an object")
+    return quarantine
 
 
 def deterministic_source_kind(homebrew_data):
@@ -74,6 +92,14 @@ def artifact_types(homebrew_data):
 def unsupported_cask_reason(homebrew_data):
     """Explain why a cask has no directly deployable app/package payload."""
     token = homebrew_data.get("token")
+    quarantine = load_source_integrity_quarantine()
+    if token in quarantine:
+        reason = quarantine[token].get("reason")
+        if not isinstance(reason, str) or not reason.strip():
+            raise RuntimeError(
+                f"Source integrity quarantine entry for {token} has no reason"
+            )
+        return reason
     if token in UNSUPPORTED_CASK_TOKENS:
         return UNSUPPORTED_CASK_TOKENS[token]
     if homebrew_data.get("disabled"):
@@ -507,6 +533,7 @@ def main():
     failed_apps = []
     validated_apps = []
     validated_casks = set()
+    source_integrity_quarantine = load_source_integrity_quarantine()
 
     for cask_name in casks_to_process:
         if cask_name in validated_casks:
@@ -514,6 +541,15 @@ def main():
             skipped_apps.append({'cask': cask_name, 'reason': 'duplicate request'})
             continue
         validated_casks.add(cask_name)
+        if cask_name in source_integrity_quarantine:
+            reason = source_integrity_quarantine[cask_name].get("reason")
+            if not isinstance(reason, str) or not reason.strip():
+                raise RuntimeError(
+                    f"Source integrity quarantine entry for {cask_name} has no reason"
+                )
+            print(f"Failed {cask_name}: {reason}")
+            failed_apps.append({"cask": cask_name, "reason": reason})
+            continue
         # Check if already exists
         if check_app_exists(cask_name, content):
             print(f"Skipping {cask_name}: already exists")

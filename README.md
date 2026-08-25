@@ -20,7 +20,7 @@
     </a>
                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 <p>
     <a href="#-supported-applications">
-      <img src="https://img.shields.io/badge/Apps_Available-1052-2ea44f?style=flat" alt="TotalApps"/>
+      <img src="https://img.shields.io/badge/Apps_Available-1051-2ea44f?style=flat" alt="TotalApps"/>
     </a>
   </p>
 </div>
@@ -1817,7 +1817,6 @@ This project uses publicly available metadata from Homebrew’s JSON API. Homebr
 | <img src='Logos/vimr.png' width='32' height='32'> VimR | 0.65.0 |
 | <img src='Logos/virtualbuddy.png' width='32' height='32'> VirtualBuddy | 2.1 |
 | <img src='Logos/viscosity.png' width='32' height='32'> Viscosity | 1.13.1 |
-| <img src='Logos/visual_paradigm.png' width='32' height='32'> Visual Paradigm | 18.0 |
 | <img src='Logos/visualvm.png' width='32' height='32'> VisualVM | 2.2.1 |
 | <img src='Logos/vivaldi.png' width='32' height='32'> Vivaldi | 8.1.4087.68 |
 | <img src='Logos/viz.png' width='32' height='32'> Viz | 2.3.3 |

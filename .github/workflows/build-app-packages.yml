@@ -11,6 +11,7 @@ on:
     branches: [main]
     paths:
       - '.github/scripts/collect_app_info.py'
+      - '.github/data/source-integrity-quarantine.json'
   schedule:
     - cron: "0 0 * * *" # Run at midnight UTC every day
 
@@ -616,21 +617,6 @@ jobs:
 
           trap destroy_app_workspace EXIT
 
-          download_source() {
-            local destination="$1"
-            local source_url="$2"
-            require_free_disk "$app_temp_dir" || return 1
-            local user_agent_args=()
-            if [ "${download_user_agent:-default}" = "browser" ]; then
-              user_agent_args=(-A "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 Chrome/124 Safari/537.36")
-            fi
-            curl -fLsS "${user_agent_args[@]}" \
-              --connect-timeout 30 --max-time 300 --retry 3 \
-              --retry-all-errors --retry-max-time 300 \
-              --max-filesize "$MAX_SOURCE_BYTES" \
-              -o "$destination" "$source_url"
-          }
-
           require_archive_quota() {
             local archive="$1"
             local format="$2"
@@ -688,6 +674,30 @@ jobs:
             esac
             safe_blob_leaf "$leaf" || return 1
             printf '%s\n' "$leaf"
+          }
+
+          download_source() {
+            local destination="$1"
+            local source_url="$2"
+            require_free_disk "$app_temp_dir" || return 1
+            local referer_args=()
+            local user_agent_args=()
+            case "${download_user_agent:-default}" in
+              browser)
+                user_agent_args=(-A "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 Chrome/124 Safari/537.36")
+                ;;
+              homebrew)
+                user_agent_args=(-A "Homebrew/5.0.0 (Macintosh; arm64 Mac OS X 15.0)")
+                ;;
+            esac
+            if [ -n "${download_referer:-}" ]; then
+              referer_args=(--header "Referer: $download_referer")
+            fi
+            curl -fLsS "${user_agent_args[@]}" "${referer_args[@]}" \
+              --connect-timeout 30 --max-time 300 --retry 3 \
+              --retry-all-errors --retry-max-time 300 \
+              --max-filesize "$MAX_SOURCE_BYTES" \
+              -o "$destination" "$source_url"
           }
 
           reusable_blob_leaf() {
@@ -845,6 +855,18 @@ jobs:
             source_sha=$(jq -r '.source_sha256 // empty' "$WORKSPACE_DIR/Apps/${app_name}.json")
             app_type=$(jq -r '.type' "$WORKSPACE_DIR/Apps/${app_name}.json")
             download_user_agent=$(jq -r '.download_user_agent // "default"' "$WORKSPACE_DIR/Apps/${app_name}.json")
+            download_referer=$(jq -r '.download_referer // empty' "$WORKSPACE_DIR/Apps/${app_name}.json")
+            homepage=$(jq -r '.homepage // empty' "$WORKSPACE_DIR/Apps/${app_name}.json")
+            if [ -n "$download_referer" ] \
+              && ! python "$WORKSPACE_DIR/.github/scripts/validate_download_referer.py" \
+                --referer "$download_referer" \
+                --source "$url" \
+                --homepage "$homepage"; then
+              FAILED_APPS+=("$app_name")
+              ERROR_LOG+=("$app_name: Rejected unsafe or cross-origin download referer")
+              destroy_app_workspace
+              continue
+            fi
             echo "📦 Version: $version"
             echo "🏷️ Type: $app_type"
             
