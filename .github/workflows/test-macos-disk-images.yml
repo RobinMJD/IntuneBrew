@@ -1,0 +1,16 @@
+name: Test macOS Disk Image Lifecycle
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: macos-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Exercise bounded workspace and nested image lifecycle
+        run: bash .github/scripts/test_macos_disk_images.sh
