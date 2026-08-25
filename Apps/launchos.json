@@ -13,10 +13,10 @@
   "source_sha256": "3d96519f946e463791cd0f37c69c7a046ca06a546924ceec34c864b980905610",
   "source_sha256_provenance": "homebrew",
   "artifact_kind": "dmg",
+  "sha": "3d96519f946e463791cd0f37c69c7a046ca06a546924ceec34c864b980905610",
   "artifact_app": "LaunchOS.app",
   "download_user_agent": "default",
-  "sha": "3d96519f946e463791cd0f37c69c7a046ca06a546924ceec34c864b980905610",
   "category": "Utilities",
   "publisher": "LaunchOS",
-  "previous_version": "2.2.1"
+  "previous_version": "2.3.0"
 }

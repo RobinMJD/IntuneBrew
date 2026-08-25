@@ -13,10 +13,10 @@
   "source_sha256": "36df6cec348460becd51d1bc09e2497fd995eac749c9ebe74d1a4e83ef2d6aea",
   "source_sha256_provenance": "homebrew",
   "artifact_kind": "dmg",
+  "sha": "36df6cec348460becd51d1bc09e2497fd995eac749c9ebe74d1a4e83ef2d6aea",
   "artifact_app": "TablePlus.app",
   "download_user_agent": "default",
-  "sha": "36df6cec348460becd51d1bc09e2497fd995eac749c9ebe74d1a4e83ef2d6aea",
   "category": "Developer Tools",
   "publisher": "TablePlus",
-  "previous_version": "26.9.6"
+  "previous_version": "26.9.12"
 }

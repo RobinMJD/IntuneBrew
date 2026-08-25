@@ -13,10 +13,10 @@
   "source_sha256": "8afca5fea3f8a938dff74e006a99aefa72e456a245ece8f708a11a43b166fcb8",
   "source_sha256_provenance": "homebrew",
   "artifact_kind": "dmg",
+  "sha": "8afca5fea3f8a938dff74e006a99aefa72e456a245ece8f708a11a43b166fcb8",
   "artifact_app": "Milanote.app",
   "download_user_agent": "default",
-  "sha": "8afca5fea3f8a938dff74e006a99aefa72e456a245ece8f708a11a43b166fcb8",
   "category": "Productivity",
   "publisher": "Milanote",
-  "previous_version": "3.18.123"
+  "previous_version": "3.18.124"
 }

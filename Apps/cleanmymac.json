@@ -1,14 +1,14 @@
 {
   "name": "CleanMyMac",
   "description": "Tool to remove unnecessary files and folders from disk",
-  "version": "5.5.7",
-  "url": "https://intcybintunebrewprd01st.blob.core.windows.net/pkg/cleanmymac_5.5.7.pkg",
-  "vendor_url": "https://updates.cleanmymac.com/com.macpaw.cleanmymac5/releases/CleanMyMac5_50507.0.2607220856.zip",
+  "version": "5.6.0",
+  "url": "https://intcybintunebrewprd01st.blob.core.windows.net/pkg/cleanmymac_5.6.0_32702f101255949f7b5fa26d9124c32e6a522db4c62b04a737fb3a15e8808112.pkg",
+  "vendor_url": "https://updates.cleanmymac.com/com.macpaw.cleanmymac5/releases/CleanMyMac5_50600.0.2608201300.zip",
   "bundleId": "com.macpaw.CleanMyMac5",
   "homepage": "https://macpaw.com/cleanmymac",
-  "fileName": "cleanmymac_5.5.7.pkg",
+  "fileName": "cleanmymac_5.6.0_32702f101255949f7b5fa26d9124c32e6a522db4c62b04a737fb3a15e8808112.pkg",
   "type": "app",
-  "sha": "36d0543696974d7a6183c1581e5e25055ab262251bd2eb55582ac4e29044084f",
+  "sha": "32702f101255949f7b5fa26d9124c32e6a522db4c62b04a737fb3a15e8808112",
   "changelog": "https://macpaw.com/support/cleanmymac/knowledgebase/cleanmymac-x-release-notes",
   "previous_version": "5.5.7",
   "qa_info": {
@@ -24,7 +24,13 @@
   "category": "Utilities",
   "publisher": "MacPaw",
   "homebrew_cask": "cleanmymac",
-  "source_version": "5.5.7,50507.0.2607220856",
-  "source_sha256": "fa0d0cb0a78340c5b33934e3963fe8eb561a1282a5fc557369420455a7c6c089",
-  "source_sha256_provenance": "homebrew"
+  "source_version": "5.6.0,50600.0.2608201300",
+  "source_sha256": "12eb9308835820c26927f953a1bb8a186538004539282d06a6eb0d73a3955cb8",
+  "source_sha256_provenance": "homebrew",
+  "artifact_app": "CleanMyMac_5.app",
+  "archive_format": "zip",
+  "download_user_agent": "default",
+  "artifact_kind": "archive",
+  "bundleId_source": "package",
+  "source_checked_at": "2026-08-25T18:55:15Z"
 }

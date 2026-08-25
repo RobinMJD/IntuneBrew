@@ -13,10 +13,10 @@
   "source_sha256": "2e6f0f4cace14aa7033592febefc65bde042c4fa5033978a82b9581399dd1c20",
   "source_sha256_provenance": "homebrew",
   "artifact_kind": "dmg",
+  "sha": "2e6f0f4cace14aa7033592febefc65bde042c4fa5033978a82b9581399dd1c20",
   "artifact_app": "MarginNote 4.app",
   "download_user_agent": "default",
-  "sha": "2e6f0f4cace14aa7033592febefc65bde042c4fa5033978a82b9581399dd1c20",
   "category": "Productivity",
   "publisher": "MarginNote Team",
-  "previous_version": "4.4.5"
+  "previous_version": "4.4.6"
 }

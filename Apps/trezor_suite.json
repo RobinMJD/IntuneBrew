@@ -13,10 +13,10 @@
   "source_sha256": "99f511e73f6f10ec97b824e64c5906435b3abe20d092c0ac95362c195f352fc1",
   "source_sha256_provenance": "homebrew",
   "artifact_kind": "dmg",
+  "sha": "99f511e73f6f10ec97b824e64c5906435b3abe20d092c0ac95362c195f352fc1",
   "artifact_app": "Trezor Suite.app",
   "download_user_agent": "default",
-  "sha": "99f511e73f6f10ec97b824e64c5906435b3abe20d092c0ac95362c195f352fc1",
   "category": "Security",
   "publisher": "SatoshiLabs",
-  "previous_version": "26.7.4"
+  "previous_version": "26.8.2"
 }

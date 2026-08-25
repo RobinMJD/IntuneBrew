@@ -2,13 +2,13 @@
   "name": "BusyContacts",
   "description": "Contact manager focusing on efficiency",
   "version": "2026.3.1",
-  "url": "https://intcybintunebrewprd01st.blob.core.windows.net/pkg/busycontacts_2026.3.1.pkg",
+  "url": "https://intcybintunebrewprd01st.blob.core.windows.net/pkg/busycontacts_2026.3.1_8cfa5047d31c534764f9478aa7dbcfcd9d20db790ab55386c3d8ba386d48bbca.pkg",
   "vendor_url": "https://www.busymac.com/download/bct-2026.3.1.zip",
   "bundleId": "com.busymac.busycontacts",
   "homepage": "https://www.busymac.com/busycontacts/index.html",
-  "fileName": "busycontacts_2026.3.1.pkg",
+  "fileName": "busycontacts_2026.3.1_8cfa5047d31c534764f9478aa7dbcfcd9d20db790ab55386c3d8ba386d48bbca.pkg",
   "type": "app",
-  "sha": "f6ce8a02ef9dbce6ab9903d1fb09c0cd3af510b32f84f8178d31cbe1288989cd",
+  "sha": "8cfa5047d31c534764f9478aa7dbcfcd9d20db790ab55386c3d8ba386d48bbca",
   "changelog": "https://www.busymac.com/busycontacts/releasenotes.html",
   "previous_version": "2026.3.1",
   "qa_info": {
@@ -26,5 +26,12 @@
   "homebrew_cask": "busycontacts",
   "source_version": "2026.3.1",
   "source_sha256": "no_check",
-  "packaging_pending": true
+  "archive_format": "zip",
+  "artifact_pkg": "BusyContacts Installer.pkg",
+  "source_sha256_provenance": "observed-no_check",
+  "download_user_agent": "default",
+  "artifact_kind": "archive",
+  "bundleId_source": "package",
+  "source_observed_sha256": "89c63541b39ac7bc067b04c9837f9f14816e9b8921c38235110b9caff50e39cb",
+  "source_checked_at": "2026-08-25T18:55:15Z"
 }

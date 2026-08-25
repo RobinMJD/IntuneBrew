@@ -13,10 +13,10 @@
   "source_sha256": "3fc8fb0078f0af7e9b04ce5e0980ab3f23fbc7eef192e521e0066108254835ed",
   "source_sha256_provenance": "homebrew",
   "artifact_kind": "dmg",
+  "sha": "3fc8fb0078f0af7e9b04ce5e0980ab3f23fbc7eef192e521e0066108254835ed",
   "artifact_app": "Royal TSX.app",
   "download_user_agent": "default",
-  "sha": "3fc8fb0078f0af7e9b04ce5e0980ab3f23fbc7eef192e521e0066108254835ed",
   "category": "Utilities",
   "publisher": "Royal Apps Ltd",
-  "previous_version": "6.4.3.1000"
+  "previous_version": "6.4.4.1000"
 }

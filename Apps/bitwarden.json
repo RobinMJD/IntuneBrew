@@ -13,9 +13,9 @@
   "source_sha256": "8180ae4bbb2c4686e19ebab897eb661bc4fffbfa3992779d4fb3d2251609f7d1",
   "source_sha256_provenance": "homebrew",
   "artifact_kind": "dmg",
+  "sha": "8180ae4bbb2c4686e19ebab897eb661bc4fffbfa3992779d4fb3d2251609f7d1",
   "artifact_app": "Bitwarden.app",
   "download_user_agent": "default",
-  "sha": "8180ae4bbb2c4686e19ebab897eb661bc4fffbfa3992779d4fb3d2251609f7d1",
   "changelog": "https://github.com/bitwarden/clients/releases",
   "qa_info": {
     "qa_timestamp": "2025-05-12T11:25:58Z",
@@ -29,5 +29,5 @@
   },
   "category": "Security",
   "publisher": "Bitwarden, Inc.",
-  "previous_version": "2026.7.0"
+  "previous_version": "2026.8.0"
 }

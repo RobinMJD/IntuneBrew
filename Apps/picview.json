@@ -13,10 +13,10 @@
   "source_sha256": "e1314f40af7c934dada129bf91403535f834d08a0213272702f3e34aad1ec938",
   "source_sha256_provenance": "homebrew",
   "artifact_kind": "dmg",
+  "sha": "e1314f40af7c934dada129bf91403535f834d08a0213272702f3e34aad1ec938",
   "artifact_app": "PicView.app",
   "download_user_agent": "default",
-  "sha": "e1314f40af7c934dada129bf91403535f834d08a0213272702f3e34aad1ec938",
   "category": "Media",
   "publisher": "PicView",
-  "previous_version": "5.0.4"
+  "previous_version": "5.0.5"
 }

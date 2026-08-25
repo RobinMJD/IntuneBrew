@@ -13,9 +13,9 @@
   "source_sha256": "1492c91b74b68d12185476088c8c1235ce6d5547b13fe39fbc09cbacf949551a",
   "source_sha256_provenance": "homebrew",
   "artifact_kind": "dmg",
+  "sha": "1492c91b74b68d12185476088c8c1235ce6d5547b13fe39fbc09cbacf949551a",
   "artifact_app": "Canva.app",
   "download_user_agent": "default",
-  "sha": "1492c91b74b68d12185476088c8c1235ce6d5547b13fe39fbc09cbacf949551a",
   "changelog": "https://www.canva.com/help/canva-desktop-app/",
   "qa_info": {
     "qa_timestamp": "2025-05-16T13:25:36Z",
@@ -29,5 +29,5 @@
   },
   "category": "Design",
   "publisher": "Canva Pty Ltd",
-  "previous_version": "1.123.1"
+  "previous_version": "1.124.0"
 }

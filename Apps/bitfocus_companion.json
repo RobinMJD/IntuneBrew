@@ -13,10 +13,10 @@
   "source_sha256": "893becb2ac02c30909de2e469d557b37407b1500387c022dff73d08446ad9f81",
   "source_sha256_provenance": "homebrew",
   "artifact_kind": "dmg",
+  "sha": "893becb2ac02c30909de2e469d557b37407b1500387c022dff73d08446ad9f81",
   "artifact_app": "Companion.app",
   "download_user_agent": "default",
-  "sha": "893becb2ac02c30909de2e469d557b37407b1500387c022dff73d08446ad9f81",
   "category": "Utilities",
   "publisher": "Bitfocus",
-  "previous_version": "5.0.3"
+  "previous_version": "5.0.4"
 }

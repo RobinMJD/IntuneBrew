@@ -2,13 +2,20 @@
   "name": "Cisco Jabber",
   "description": "Jabber client from Cisco",
   "version": "20260722023311",
-  "url": "https://binaries.webex.com/jabberclientmac/20260722023311/Install_Cisco-Jabber-Mac.pkg",
+  "url": "https://intcybintunebrewprd01st.blob.core.windows.net/pkg/cisco_jabber_20260722023311_bb71f8686049930033710f88698712e6aee6ed469516f3a73e48df8cecda4d61.pkg",
   "vendor_url": "https://binaries.webex.com/jabberclientmac/20260722023311/Install_Cisco-Jabber-Mac.pkg",
   "bundleId": "com.cisco.Jabber",
+  "bundleId_source": "package",
   "homepage": "https://www.webex.com/downloads/jabber.html",
   "homebrew_cask": "cisco-jabber",
-  "fileName": "Install_Cisco-Jabber-Mac.pkg",
-  "type": "pkg",
+  "fileName": "cisco_jabber_20260722023311_bb71f8686049930033710f88698712e6aee6ed469516f3a73e48df8cecda4d61.pkg",
+  "source_version": "20260722023311",
+  "source_sha256": "bb71f8686049930033710f88698712e6aee6ed469516f3a73e48df8cecda4d61",
+  "source_sha256_provenance": "homebrew",
+  "artifact_kind": "pkg",
+  "artifact_pkg": "Install_Cisco-Jabber-Mac.pkg",
+  "download_user_agent": "default",
+  "type": "app",
   "sha": "bb71f8686049930033710f88698712e6aee6ed469516f3a73e48df8cecda4d61",
   "changelog": "https://help.webex.com/en-us/article/nqx2qkb/Jabber-Release-Notes",
   "qa_info": {
@@ -23,5 +30,6 @@
   },
   "category": "Communication",
   "publisher": "Cisco Systems, Inc.",
-  "previous_version": "20260722023311"
+  "previous_version": "20260722023311",
+  "source_checked_at": "2026-08-25T18:55:15Z"
 }

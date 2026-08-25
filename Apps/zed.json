@@ -13,11 +13,11 @@
   "source_sha256": "4bad0834d3542391de86b309c8e920b37e69887915df80d53de0aa119ea1e14d",
   "source_sha256_provenance": "homebrew",
   "artifact_kind": "dmg",
+  "sha": "4bad0834d3542391de86b309c8e920b37e69887915df80d53de0aa119ea1e14d",
   "artifact_app": "Zed.app",
   "download_user_agent": "default",
-  "sha": "4bad0834d3542391de86b309c8e920b37e69887915df80d53de0aa119ea1e14d",
   "changelog": "https://zed.dev/releases/stable",
   "category": "Developer Tools",
   "publisher": "Zed",
-  "previous_version": "1.16.1"
+  "previous_version": "1.16.2"
 }

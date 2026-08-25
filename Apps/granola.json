@@ -13,10 +13,10 @@
   "source_sha256": "2585b48a202e33765c25ec0dd7baca1908b68f69c42e424515898e6d2646fb3d",
   "source_sha256_provenance": "homebrew",
   "artifact_kind": "dmg",
+  "sha": "2585b48a202e33765c25ec0dd7baca1908b68f69c42e424515898e6d2646fb3d",
   "artifact_app": "Granola.app",
   "download_user_agent": "default",
-  "sha": "2585b48a202e33765c25ec0dd7baca1908b68f69c42e424515898e6d2646fb3d",
   "category": "Productivity",
   "publisher": "Granola AI",
-  "previous_version": "7.488.3"
+  "previous_version": "7.503.0"
 }

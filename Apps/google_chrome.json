@@ -8,8 +8,8 @@
   "homepage": "https://www.google.com/chrome/",
   "fileName": "GoogleChrome-151.0.7922.174.pkg",
   "type": "pkg",
+  "sha": "0c0b1e495c0537b972a8438eab56cb6499f6264eedd6d39dec48d47ef159903f",
   "changelog": "https://chromereleases.googleblog.com/",
   "category": "Browsers",
-  "publisher": "Google LLC",
-  "sha": "0c0b1e495c0537b972a8438eab56cb6499f6264eedd6d39dec48d47ef159903f"
+  "publisher": "Google LLC"
 }

@@ -13,10 +13,10 @@
   "source_sha256": "b0611f8513ee3c1eec6e700d77b9e21bd1ed1a74ea349b7314e1cac2f1a5396d",
   "source_sha256_provenance": "homebrew",
   "artifact_kind": "dmg",
+  "sha": "b0611f8513ee3c1eec6e700d77b9e21bd1ed1a74ea349b7314e1cac2f1a5396d",
   "artifact_app": "DeskTime.app",
   "download_user_agent": "default",
-  "sha": "b0611f8513ee3c1eec6e700d77b9e21bd1ed1a74ea349b7314e1cac2f1a5396d",
   "category": "Productivity",
   "publisher": "DeskTime",
-  "previous_version": "6.2.1"
+  "previous_version": "6.3.0"
 }

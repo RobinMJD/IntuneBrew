@@ -13,10 +13,10 @@
   "source_sha256": "92f4ae49369824d7c81dcf5ee514ca365e319a9b7cebd8adfaa7c866eda8072e",
   "source_sha256_provenance": "homebrew",
   "artifact_kind": "dmg",
+  "sha": "92f4ae49369824d7c81dcf5ee514ca365e319a9b7cebd8adfaa7c866eda8072e",
   "artifact_app": "Rive.app",
   "download_user_agent": "default",
-  "sha": "92f4ae49369824d7c81dcf5ee514ca365e319a9b7cebd8adfaa7c866eda8072e",
   "category": "Design",
   "publisher": "Rive, Inc.",
-  "previous_version": "0.8.5520"
+  "previous_version": "0.8.5589"
 }

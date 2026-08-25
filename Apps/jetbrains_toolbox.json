@@ -13,11 +13,11 @@
   "source_sha256": "cbf04f5e17baec83f6d6170839e881a67dc3d30217dc07992ec15e4405a89ae4",
   "source_sha256_provenance": "homebrew",
   "artifact_kind": "dmg",
+  "sha": "cbf04f5e17baec83f6d6170839e881a67dc3d30217dc07992ec15e4405a89ae4",
   "artifact_app": "JetBrains Toolbox.app",
   "download_user_agent": "default",
-  "sha": "cbf04f5e17baec83f6d6170839e881a67dc3d30217dc07992ec15e4405a89ae4",
   "changelog": "https://www.jetbrains.com/toolbox-app/whatsnew/",
   "category": "Developer Tools",
   "publisher": "JetBrains s.r.o.",
-  "previous_version": "3.7"
+  "previous_version": "3.7.2"
 }

@@ -13,10 +13,10 @@
   "source_sha256": "b4e7b63283c5dee2ed036d2ce42c7b9afee9f433dcc5cfe5b79673c2ac29bdc7",
   "source_sha256_provenance": "homebrew",
   "artifact_kind": "dmg",
+  "sha": "b4e7b63283c5dee2ed036d2ce42c7b9afee9f433dcc5cfe5b79673c2ac29bdc7",
   "artifact_app": "Shapr3D.app",
   "download_user_agent": "default",
-  "sha": "b4e7b63283c5dee2ed036d2ce42c7b9afee9f433dcc5cfe5b79673c2ac29bdc7",
   "category": "Design",
   "publisher": "Shapr3D Ltd.",
-  "previous_version": "26.150.0.11562"
+  "previous_version": "26.151.0.11589"
 }

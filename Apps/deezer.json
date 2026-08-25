@@ -13,10 +13,10 @@
   "source_sha256": "9ffc00cb6b22a8ed907d24a2a2ec93efc2fa48eca0d45441b531a1f1ada6fa7b",
   "source_sha256_provenance": "homebrew",
   "artifact_kind": "unknown",
+  "sha": "9ffc00cb6b22a8ed907d24a2a2ec93efc2fa48eca0d45441b531a1f1ada6fa7b",
   "artifact_app": "Deezer.app",
   "download_user_agent": "default",
-  "sha": "9ffc00cb6b22a8ed907d24a2a2ec93efc2fa48eca0d45441b531a1f1ada6fa7b",
   "category": "Media",
   "publisher": "Deezer",
-  "previous_version": "7.1.300"
+  "previous_version": "7.1.310"
 }

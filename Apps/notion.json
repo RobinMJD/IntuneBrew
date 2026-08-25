@@ -13,11 +13,11 @@
   "source_sha256": "224516f6a134f05bf61b6ce6de90ca75397181c8c01d65945716ca2469cec65c",
   "source_sha256_provenance": "homebrew",
   "artifact_kind": "dmg",
+  "sha": "224516f6a134f05bf61b6ce6de90ca75397181c8c01d65945716ca2469cec65c",
   "artifact_app": "Notion.app",
   "download_user_agent": "default",
-  "sha": "224516f6a134f05bf61b6ce6de90ca75397181c8c01d65945716ca2469cec65c",
   "changelog": "https://www.notion.so/desktop-release-notes",
   "category": "Productivity",
   "publisher": "Notion Labs, Inc.",
-  "previous_version": "7.31.0"
+  "previous_version": "7.31.2"
 }

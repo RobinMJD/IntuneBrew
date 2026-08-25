@@ -13,10 +13,10 @@
   "source_sha256": "7c7936743186be51b9f42064d1ce7ede43e86dac2c24d907c4e7241165ce4b72",
   "source_sha256_provenance": "homebrew",
   "artifact_kind": "dmg",
+  "sha": "7c7936743186be51b9f42064d1ce7ede43e86dac2c24d907c4e7241165ce4b72",
   "artifact_app": "Linphone.app",
   "download_user_agent": "default",
-  "sha": "7c7936743186be51b9f42064d1ce7ede43e86dac2c24d907c4e7241165ce4b72",
   "category": "Communication",
   "publisher": "Belledonne Communications",
-  "previous_version": "6.2.0"
+  "previous_version": "6.2.1"
 }

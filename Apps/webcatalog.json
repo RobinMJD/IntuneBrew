@@ -13,10 +13,10 @@
   "source_sha256": "7d39085535a1af227b74e429253e101617a4146f1e0905810dc06402c07a1c44",
   "source_sha256_provenance": "homebrew",
   "artifact_kind": "dmg",
+  "sha": "7d39085535a1af227b74e429253e101617a4146f1e0905810dc06402c07a1c44",
   "artifact_app": "WebCatalog.app",
   "download_user_agent": "default",
-  "sha": "7d39085535a1af227b74e429253e101617a4146f1e0905810dc06402c07a1c44",
   "category": "Productivity",
   "publisher": "WebCatalog",
-  "previous_version": "77.9.1"
+  "previous_version": "77.10.0"
 }

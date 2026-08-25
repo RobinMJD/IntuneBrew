@@ -13,10 +13,10 @@
   "source_sha256": "b35781bc14496ffe6b00792a5d3b18dc1a74617600f7ff553624cfcf3c22ce4f",
   "source_sha256_provenance": "homebrew",
   "artifact_kind": "dmg",
+  "sha": "b35781bc14496ffe6b00792a5d3b18dc1a74617600f7ff553624cfcf3c22ce4f",
   "artifact_app": "Floorp.app",
   "download_user_agent": "default",
-  "sha": "b35781bc14496ffe6b00792a5d3b18dc1a74617600f7ff553624cfcf3c22ce4f",
   "category": "Browsers",
   "publisher": "Floorp Team",
-  "previous_version": "12.16.4"
+  "previous_version": "12.17.0"
 }

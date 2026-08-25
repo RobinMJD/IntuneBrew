@@ -13,10 +13,10 @@
   "source_sha256": "4e0905fe491bb0335d7a75b404b904a982ad3a796976b35bd7550dfd9186ddf8",
   "source_sha256_provenance": "homebrew",
   "artifact_kind": "dmg",
+  "sha": "4e0905fe491bb0335d7a75b404b904a982ad3a796976b35bd7550dfd9186ddf8",
   "artifact_app": "Ferdium.app",
   "download_user_agent": "default",
-  "sha": "4e0905fe491bb0335d7a75b404b904a982ad3a796976b35bd7550dfd9186ddf8",
   "category": "Communication",
   "publisher": "Ferdium",
-  "previous_version": "7.2.0"
+  "previous_version": "7.2.2"
 }

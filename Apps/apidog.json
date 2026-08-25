@@ -13,9 +13,9 @@
   "source_sha256": "5f2b6c3907285b33a5263b145680a489720c04975299e55fff3900c8775e3b9d",
   "source_sha256_provenance": "homebrew",
   "artifact_kind": "dmg",
+  "sha": "5f2b6c3907285b33a5263b145680a489720c04975299e55fff3900c8775e3b9d",
   "artifact_app": "Apidog.app",
   "download_user_agent": "default",
-  "sha": "5f2b6c3907285b33a5263b145680a489720c04975299e55fff3900c8775e3b9d",
   "changelog": "https://apidog.com/blog/",
   "qa_info": {
     "qa_timestamp": "2025-05-19T06:52:28Z",
@@ -29,5 +29,5 @@
   },
   "category": "Developer Tools",
   "publisher": "Apidog",
-  "previous_version": "2.8.43"
+  "previous_version": "2.8.44"
 }

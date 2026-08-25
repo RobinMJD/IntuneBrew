@@ -1,14 +1,14 @@
 {
   "name": "Claude",
   "description": "Anthropic's official Claude AI desktop app",
-  "version": "1.32885.1",
-  "url": "https://intcybintunebrewprd01st.blob.core.windows.net/pkg/claude_1.32885.1.pkg",
-  "vendor_url": "https://downloads.claude.ai/releases/darwin/universal/1.32885.1/Claude-a757f53392ab406812eac6d069efb087b541c07c.zip",
+  "version": "1.34493.1",
+  "url": "https://intcybintunebrewprd01st.blob.core.windows.net/pkg/claude_1.34493.1_cd9272755f1a0896ad2ef38bb34227110129631102f73deefdeff42e7173e37a.pkg",
+  "vendor_url": "https://downloads.claude.ai/releases/darwin/universal/1.34493.1/Claude-255293a41a25d54c5177aa9614fb4cd620e70b78.zip",
   "bundleId": "com.anthropic.claudefordesktop",
   "homepage": "https://claude.ai/download",
-  "fileName": "claude_1.32885.1.pkg",
+  "fileName": "claude_1.34493.1_cd9272755f1a0896ad2ef38bb34227110129631102f73deefdeff42e7173e37a.pkg",
   "type": "app",
-  "sha": "d9214581f4d2d87cc6ff148afeb87c1c653be274375de36cfd068017ef468383",
+  "sha": "cd9272755f1a0896ad2ef38bb34227110129631102f73deefdeff42e7173e37a",
   "changelog": "https://docs.anthropic.com/en/release-notes/claude-apps",
   "previous_version": "1.32885.1",
   "qa_info": {
@@ -24,7 +24,13 @@
   "category": "Productivity",
   "publisher": "Anthropic, Inc.",
   "homebrew_cask": "claude",
-  "source_version": "1.32885.1,a757f53392ab406812eac6d069efb087b541c07c",
-  "source_sha256": "e88a998ebafc6c9b71edb46a81f8b334e469dcfd8b143f0b3321910220904ae2",
-  "source_sha256_provenance": "homebrew"
+  "source_version": "1.34493.1,255293a41a25d54c5177aa9614fb4cd620e70b78",
+  "source_sha256": "c89494a96f1a7d6d84d5bf4dc097bf425074166ca3bf6b4d91684119fedaf745",
+  "source_sha256_provenance": "homebrew",
+  "artifact_app": "Claude.app",
+  "archive_format": "zip",
+  "download_user_agent": "default",
+  "artifact_kind": "archive",
+  "bundleId_source": "package",
+  "source_checked_at": "2026-08-25T18:55:15Z"
 }

@@ -20,7 +20,7 @@
     </a>
                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 <p>
     <a href="#-supported-applications">
-      <img src="https://img.shields.io/badge/Apps_Available-1053-2ea44f?style=flat" alt="TotalApps"/>
+      <img src="https://img.shields.io/badge/Apps_Available-1064-2ea44f?style=flat" alt="TotalApps"/>
     </a>
   </p>
 </div>
@@ -579,9 +579,10 @@ This project uses publicly available metadata from Homebrew’s JSON API. Homebr
 
 
 
+
 ## 🔄 Latest Updates
 
-*Last checked: 2026-08-25 17:19 UTC*
+*Last checked: 2026-08-25 18:20 UTC*
 
 | Application | Previous Version | New Version |
 |-------------|-----------------|-------------|
@@ -594,7 +595,6 @@ This project uses publicly available metadata from Homebrew’s JSON API. Homebr
 | OpenMTP | 3.2.25 | 3.3.0 |
 | Postman | 12.24.2 | 12.25.3 |
 | Vivaldi | 8.1.4087.68 | 8.1.4087.70 |
-| Arc | 1.160.0 | 1.161.1 |
 | Claude | 1.32885.1 | 1.34493.1 |
 | Cursor | 3.16.29 | 3.17.19 |
 | Ollama | 0.32.14 | 0.32.15 |
@@ -602,10 +602,7 @@ This project uses publicly available metadata from Homebrew’s JSON API. Homebr
 | WhatsApp | 26.33.17 | 26.34.15 |
 | Telegram for macOS | 12.9 | 12.10 |
 | Cyberduck | 9.5.3 | 9.5.4 |
-| Acorn | 8.6.1 | 8.6.2 |
 | CleanMyMac | 5.5.7 | 5.6.0 |
-| BetterZip | 6.0.4 | 6.0.5 |
-| Beeper | 4.3.34 | 4.3.57 |
 | Spline | 0.12.11 | 0.20.48 |
 | coconutBattery | 4.3.3 | 4.3.4 |
 | GitButler | 0.22.0 | 0.22.1 |
@@ -616,7 +613,6 @@ This project uses publicly available metadata from Homebrew’s JSON API. Homebr
 | Hepta | 1.104.0 | 1.105.1 |
 | Superhuman | 1041.0.32 | 1041.0.34 |
 | Workspaces | 2.1.5 | 2.2 |
-| Amie | 260814.0.0 | 260821.0.0 |
 | Google Antigravity | 2.8.1 | 2.10.0 |
 | Cork | 1.7.6 | 2.0.0 |
 | Gitfox | 4.9.0 | 4.9.3 |
@@ -636,100 +632,22 @@ This project uses publicly available metadata from Homebrew’s JSON API. Homebr
 | VPN Tracker 365 | 26.7 | 26.8 |
 | Zight | 8.7.2 | 8.7.3 |
 | Dia | 1.44.1 | 1.45.2 |
-| Mozilla Firefox Developer Edition | 155.0b2 | 155.0b4 |
-| Antinote | 1.1.7 | 2.0.10 |
-| Rive | 0.8.5520 | 0.8.5589 |
-| Clop | 3.3.4 | 3.3.5 |
-| TabTab | 2.1.2 | 2.1.3 |
-| AirBuddy | 2.8.1 | 3.0.1 |
-| LookAway | 2.4.1 | 2.4.2 |
-| Bambu Studio | 02.08.02.60 | 02.08.02.61 |
-| Apifox | 2.8.43 | 2.8.44 |
-| Rectangle | 0.98 | 0.99 |
-| Yaak | 2026.5.0 | 2026.6.0 |
-| GrandPerspective | 3.7.2 | 3.8.0 |
-| Proxyman | 6.15.0 | 6.16.0 |
-| WeChat for Mac | 4.1.13.7 | 4.1.13.11 |
-| LocalSend | 1.18.0 | 1.18.2 |
-| Headlamp | 0.44.0 | 0.45.0 |
-| Downie | 4.12.13 | 4.12.14 |
-| Pastebot | 3.0 | 3.1 |
-| Mozilla Firefox | 154.0 | 154.0.1 |
-| Spotify | 1.2.96.518 | 1.2.97.270 |
-| Grammarly Desktop | 1.185.0.0 | 1.186.0.0 |
-| Docker Desktop | 4.87.0 | 4.88.1 |
-| Bitwarden | 2026.7.0 | 2026.8.0 |
-| Canva | 1.123.1 | 1.124.0 |
-| Blender | 5.2.0 | 5.2.1 |
-| MongoDB Compass | 1.49.14 | 1.49.15 |
-| Notion | 7.31.0 | 7.31.2 |
-| Brave | 1.93.137.0 | 1.93.138.0 |
+| SABnzbd | 5.1.1 | 5.1.2 |
 | ChatGPT | 26.814.41957 | 26.818.61809 |
-| DataGrip | 2026.2.3 | 2026.2.4 |
-| Discord | 0.0.408 | 0.0.409 |
-| DuckDuckGo | 1.203.0 | 1.204.0 |
-| draw.io Desktop | 31.1.8 | 31.3.2 |
 | Splashtop Business | 3.8.4.0 | 3.8.6.0 |
 | Raycast | 1.104.25 | 2.0.6.0 |
-| Stats | 3.0.11 | 3.0.13 |
-| Bruno | 4.0.0 | 4.1.0 |
-| Zed | 1.16.1 | 1.16.2 |
-| Microsoft Edge | 151.0.4129.93 | 151.0.4129.107 |
-| Insomnia | 13.1.0 | 13.2.0 |
-| OneDrive | 26.139.0720.0007 | 26.145.0728.0011 |
-| Opera | 134.0.5954.66 | 135.0.5973.41 |
-| JetBrains Toolbox | 3.7 | 3.7.2 |
-| Apidog | 2.8.43 | 2.8.44 |
-| Dataflare | 3.1.9 | 3.2.0 |
-| Camtasia | 2026.2.0 | 2026.2.1 |
-| Joplin | 3.6.15 | 3.6.16 |
+| Microsoft Office | 16.112.26081720 | 16.112.26082125 |
 | Warp | 0.2026.08.18.02.52.stable | 0.2026.08.19.08.15.stable |
-| Beekeeper Studio | 6.0.4 | 6.0.5 |
-| Floorp browser | 12.16.4 | 12.17.0 |
-| Milanote | 3.18.123 | 3.18.124 |
-| Movist Pro | 2.17.4 | 2.17.5 |
-| Permute | 4.0.7 | 4.0.8 |
-| Surfshark | 4.28.1 | 4.29.0 |
-| TablePlus | 26.9.6 | 26.9.12 |
-| Deezer | 7.1.300 | 7.1.310 |
-| Ferdium | 7.2.0 | 7.2.2 |
-| MarginNote | 4.4.5 | 4.4.6 |
-| Bitfocus Companion | 5.0.3 | 5.0.4 |
-| AdLock | 2.1.9.2 | 2.1.9.3 |
-| Anytype | 0.56.4 | 0.56.5 |
+| SuperDuper! | 4.0.3 | 4.0.4 |
 | Nektony App Cleaner & Uninstaller | 9.3 | 9.4 |
-| Buzz | 1.4.4 | 1.4.5 |
-| ChatWork | 2.25.0 | 2.25.1 |
-| DeskTime | 6.2.1 | 6.3.0 |
-| digiexam | 26.1.24 | 26.3.1 |
-| GDevelop | 5.6.279 | 5.6.280 |
-| GoodSync | 12.11.5 | 12.11.6 |
 | Google Earth Pro | 7.3.7.1155 | 7.3.7.1327 |
-| Granola | 7.488.3 | 7.503.0 |
-| Jami | 2.41 | 2.42 |
-| KeyStore Explorer | 5.6.1 | 5.7.0 |
-| LaunchOS | 2.2.1 | 2.3.0 |
-| Local | 10.1.1 | 10.1.2 |
-| Loom | 0.369.2 | 0.370.1 |
-| NetSpot | 5.1.4971 | 6.0.6016 |
-| PicView | 5.0.4 | 5.0.5 |
-| Pitch | 2.141.0 | 2.142.0 |
-| Royal TSX | 6.4.3.1000 | 6.4.4.1000 |
-| Shapr3D | 26.150.0.11562 | 26.151.0.11589 |
-| TickTick | 8.0.80 | 8.0.81 |
-| TREZOR Suite | 26.7.4 | 26.8.2 |
-| Tuta Mail | 357.260818.1 | 357.260824.1 |
-| VueScan | 9.8.56 | 9.8.57 |
-| WebCatalog | 77.9.1 | 77.10.0 |
-| Linear | 1.28.13 | 1.32.1 |
-| Rhinoceros | 8.20.25157.13002 | 8.34.26223.11002 |
-| Zotero | 10.0 | 10.0.1 |
-| Linphone | 6.2.0 | 6.2.1 |
-| Vorssaint | 3.3.1 | 3.3.2 |
 | Okta Advanced Server Access | 1.109.0 | 1.111.1 |
 | NordLayer | 3.12.0 | 3.12.1 |
 | Tailscale | 1.102.2 | 1.102.3 |
-| TeamViewer | 15.80.4 | 15.81.5 |
+| Microsoft Office BusinessPro | 16.112.26081720 | 16.112.26082125 |
+| Microsoft OneNote | 16.112.26081720 | 16.112.26082125 |
+| Microsoft PowerPoint | 16.112.26081720 | 16.112.26082125 |
+| Microsoft Word | 16.112.26081720 | 16.112.26082125 |
 | Jabra Direct | 8.1.14601 | 8.2.23201 |
 | Splashtop Streamer | 3.8.4.2 | 3.8.6.0 |
 | Google Drive | 130.0.1 | 130.0.2 |
@@ -1338,14 +1256,14 @@ This project uses publicly available metadata from Homebrew’s JSON API. Homebr
 | <img src='Logos/microsoft_build_of_openjdk.png' width='32' height='32'> Microsoft Build of OpenJDK | 25.0.4.1 |
 | <img src='Logos/microsoft_edge.png' width='32' height='32'> Microsoft Edge | 151.0.4129.107 |
 | <img src='Logos/microsoft_excel.png' width='32' height='32'> Microsoft Excel | 16.112.26081720 |
-| <img src='Logos/microsoft_office.png' width='32' height='32'> Microsoft Office | 16.112.26081720 |
-| <img src='Logos/microsoft_office_businesspro.png' width='32' height='32'> Microsoft Office BusinessPro | 16.112.26081720 |
-| <img src='Logos/microsoft_onenote.png' width='32' height='32'> Microsoft OneNote | 16.112.26081720 |
+| <img src='Logos/microsoft_office.png' width='32' height='32'> Microsoft Office | 16.112.26082125 |
+| <img src='Logos/microsoft_office_businesspro.png' width='32' height='32'> Microsoft Office BusinessPro | 16.112.26082125 |
+| <img src='Logos/microsoft_onenote.png' width='32' height='32'> Microsoft OneNote | 16.112.26082125 |
 | <img src='Logos/microsoft_outlook.png' width='32' height='32'> Microsoft Outlook | 16.112.26081720 |
-| <img src='Logos/microsoft_powerpoint.png' width='32' height='32'> Microsoft PowerPoint | 16.112.26081720 |
+| <img src='Logos/microsoft_powerpoint.png' width='32' height='32'> Microsoft PowerPoint | 16.112.26082125 |
 | <img src='Logos/microsoft_teams.png' width='32' height='32'> Microsoft Teams | 26213.1006.5011.1671 |
 | <img src='Logos/microsoft_visual_studio_code.png' width='32' height='32'> Microsoft Visual Studio Code | 1.134.0 |
-| <img src='Logos/microsoft_word.png' width='32' height='32'> Microsoft Word | 16.112.26081720 |
+| <img src='Logos/microsoft_word.png' width='32' height='32'> Microsoft Word | 16.112.26082125 |
 | <img src='Logos/middle.png' width='32' height='32'> Middle | 1.14 |
 | <img src='Logos/middleclick.png' width='32' height='32'> MiddleClick | 3.2.0 |
 | <img src='Logos/milanote.png' width='32' height='32'> Milanote | 3.18.124 |
@@ -1609,7 +1527,7 @@ This project uses publicly available metadata from Homebrew’s JSON API. Homebr
 | <img src='Logos/runjs.png' width='32' height='32'> RunJS | 4.1.0 |
 | <img src='Logos/rustdesk.png' width='32' height='32'> RustDesk | 1.4.9 |
 | <img src='Logos/rustrover.png' width='32' height='32'> RustRover | 2026.2.1 |
-| <img src='Logos/sabnzbd.png' width='32' height='32'> SABnzbd | 5.1.1 |
+| <img src='Logos/sabnzbd.png' width='32' height='32'> SABnzbd | 5.1.2 |
 | <img src='Logos/safe_exam_browser.png' width='32' height='32'> Safe Exam Browser | 3.7 |
 | <img src='Logos/sanesidebuttons.png' width='32' height='32'> SaneSideButtons | 1.4.1 |
 | <img src='Logos/santa.png' width='32' height='32'> Santa | 2026.7 |
@@ -1709,7 +1627,7 @@ This project uses publicly available metadata from Homebrew’s JSON API. Homebr
 | <img src='Logos/sublime_text.png' width='32' height='32'> Sublime Text | 4200 |
 | <img src='Logos/sunsama.png' width='32' height='32'> Sunsama | 3.4.11 |
 | <img src='Logos/supercollider.png' width='32' height='32'> SuperCollider | 3.14.1 |
-| <img src='Logos/superduper.png' width='32' height='32'> SuperDuper! | 4.0.3 |
+| <img src='Logos/superduper.png' width='32' height='32'> SuperDuper! | 4.0.4 |
 | <img src='Logos/superhuman.png' width='32' height='32'> Superhuman | 1041.0.34 |
 | <img src='Logos/superkey.png' width='32' height='32'> Superkey | 1.66 |
 | <img src='Logos/superlist.png' width='32' height='32'> Superlist | 1.57.1 |

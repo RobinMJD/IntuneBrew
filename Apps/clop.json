@@ -13,9 +13,9 @@
   "source_sha256": "10874890329505346665f83e3038f9d251c452c2d51a5b4efacfaf01ad7a2e0d",
   "source_sha256_provenance": "homebrew",
   "artifact_kind": "dmg",
+  "sha": "10874890329505346665f83e3038f9d251c452c2d51a5b4efacfaf01ad7a2e0d",
   "artifact_app": "Clop.app",
   "download_user_agent": "default",
-  "sha": "10874890329505346665f83e3038f9d251c452c2d51a5b4efacfaf01ad7a2e0d",
   "qa_info": {
     "qa_timestamp": "2025-05-13T07:19:24Z",
     "qa_result": "Installation successful and verified",
@@ -28,5 +28,5 @@
   },
   "category": "Utilities",
   "publisher": "Low Tech Guys",
-  "previous_version": "3.3.4"
+  "previous_version": "3.3.5"
 }

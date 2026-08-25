@@ -13,10 +13,10 @@
   "source_sha256": "e1180ad6808122422efe174837d86100944ea06dd7a100f030f14870498b6ac9",
   "source_sha256_provenance": "homebrew",
   "artifact_kind": "dmg",
+  "sha": "e1180ad6808122422efe174837d86100944ea06dd7a100f030f14870498b6ac9",
   "artifact_app": "Rhino 8.app",
   "download_user_agent": "default",
-  "sha": "e1180ad6808122422efe174837d86100944ea06dd7a100f030f14870498b6ac9",
   "category": "Design",
   "publisher": "Robert McNeel & Associates",
-  "previous_version": "8.20.25157.13002"
+  "previous_version": "8.34.26223.11002"
 }

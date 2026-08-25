@@ -13,11 +13,11 @@
   "source_sha256": "0aa77a277bc2040aae73ce1f77c6eca5e52d6d21f8e83cfbc206916b600bfb4e",
   "source_sha256_provenance": "homebrew",
   "artifact_kind": "dmg",
+  "sha": "0aa77a277bc2040aae73ce1f77c6eca5e52d6d21f8e83cfbc206916b600bfb4e",
   "artifact_app": "Joplin.app",
   "download_user_agent": "default",
-  "sha": "0aa77a277bc2040aae73ce1f77c6eca5e52d6d21f8e83cfbc206916b600bfb4e",
   "changelog": "https://github.com/laurent22/joplin/releases",
   "category": "Productivity",
   "publisher": "Joplin Team",
-  "previous_version": "3.6.15"
+  "previous_version": "3.6.16"
 }

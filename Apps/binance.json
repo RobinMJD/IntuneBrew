@@ -13,9 +13,9 @@
   "source_sha256": "2bb7e4c115a5bbef14c734f31ead811456e46a4863d3ec3303a66cb3e5c6e745",
   "source_sha256_provenance": "homebrew",
   "artifact_kind": "dmg",
+  "sha": "2bb7e4c115a5bbef14c734f31ead811456e46a4863d3ec3303a66cb3e5c6e745",
   "artifact_app": "Binance.app",
   "download_user_agent": "default",
-  "sha": "2bb7e4c115a5bbef14c734f31ead811456e46a4863d3ec3303a66cb3e5c6e745",
   "category": "Utilities",
   "publisher": "Binance",
   "previous_version": "2.4.1"

@@ -1,14 +1,23 @@
 {
   "name": "ChatGPT",
   "description": "OpenAI's official ChatGPT desktop app",
-  "version": "26.814.41957",
-  "url": "https://persistent.oaistatic.com/codex-app-prod/ChatGPT-darwin-arm64-26.814.41957.zip",
-  "vendor_url": "https://persistent.oaistatic.com/codex-app-prod/ChatGPT-darwin-arm64-26.814.41957.zip",
-  "bundleId": "com.openai.chat",
+  "version": "26.818.61809",
+  "url": "https://intcybintunebrewprd01st.blob.core.windows.net/pkg/chatgpt_26.818.61809_330ef165e6a9a267e092e5a3a70ba932cda17a67603dc65b89c7fce9407f99bc.pkg",
+  "vendor_url": "https://persistent.oaistatic.com/codex-app-prod/ChatGPT-darwin-arm64-26.818.61809.zip",
+  "bundleId": "com.openai.codex",
+  "bundleId_source": "package",
   "homepage": "https://chatgpt.com/",
   "homebrew_cask": "chatgpt",
-  "fileName": "ChatGPT-darwin-arm64-26.814.41957.zip",
-  "sha": "d444ea3ea80502004de8237a0f4707d35a3c8a3d66a559fa6406bd73bb2cf2eb",
+  "fileName": "chatgpt_26.818.61809_330ef165e6a9a267e092e5a3a70ba932cda17a67603dc65b89c7fce9407f99bc.pkg",
+  "source_version": "26.818.61809",
+  "source_sha256": "36a4c47d0bdee76710c0989b9b077f3c3e88bc0ba452469b86c811cc638a00bc",
+  "source_sha256_provenance": "homebrew",
+  "artifact_kind": "archive",
+  "archive_format": "zip",
+  "artifact_app": "ChatGPT.app",
+  "download_user_agent": "default",
+  "type": "app",
+  "sha": "330ef165e6a9a267e092e5a3a70ba932cda17a67603dc65b89c7fce9407f99bc",
   "changelog": "https://help.openai.com/en/articles/9703738-macos-app-release-notes",
   "qa_info": {
     "qa_timestamp": "2025-05-16T13:26:17Z",
@@ -22,5 +31,6 @@
   },
   "category": "Productivity",
   "publisher": "OpenAI",
-  "previous_version": "26.814.41957"
+  "previous_version": "26.814.41957",
+  "source_checked_at": "2026-08-25T18:55:15Z"
 }

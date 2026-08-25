@@ -13,9 +13,9 @@
   "source_sha256": "cf648a95858fb630e1353c4987038df60d6caab693f18411fb95fb809f2d6926",
   "source_sha256_provenance": "homebrew",
   "artifact_kind": "dmg",
+  "sha": "cf648a95858fb630e1353c4987038df60d6caab693f18411fb95fb809f2d6926",
   "artifact_app": "BambuStudio.app",
   "download_user_agent": "default",
-  "sha": "cf648a95858fb630e1353c4987038df60d6caab693f18411fb95fb809f2d6926",
   "qa_info": {
     "qa_timestamp": "2025-05-12T10:36:08Z",
     "qa_result": "Installation successful and verified",
@@ -28,5 +28,5 @@
   },
   "category": "Design",
   "publisher": "Bambu Lab",
-  "previous_version": "02.08.02.60"
+  "previous_version": "02.08.02.61"
 }

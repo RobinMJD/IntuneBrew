@@ -13,10 +13,10 @@
   "source_sha256": "32f04ad4d3a84511a9a9cfa2752d85a98ba365d462f80a7201635c8e249e09d3",
   "source_sha256_provenance": "homebrew",
   "artifact_kind": "dmg",
+  "sha": "32f04ad4d3a84511a9a9cfa2752d85a98ba365d462f80a7201635c8e249e09d3",
   "artifact_app": "GrandPerspective.app",
   "download_user_agent": "default",
-  "sha": "32f04ad4d3a84511a9a9cfa2752d85a98ba365d462f80a7201635c8e249e09d3",
   "category": "Utilities",
   "publisher": "Erwin Bolwidt",
-  "previous_version": "3.7.2"
+  "previous_version": "3.8.0"
 }

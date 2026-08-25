@@ -13,10 +13,10 @@
   "source_sha256": "ba9da95761a2542a5036e35222b9c2232bfdff3b6b6d076d35298306f70c8dac",
   "source_sha256_provenance": "homebrew",
   "artifact_kind": "dmg",
+  "sha": "ba9da95761a2542a5036e35222b9c2232bfdff3b6b6d076d35298306f70c8dac",
   "artifact_app": "Loom.app",
   "download_user_agent": "default",
-  "sha": "ba9da95761a2542a5036e35222b9c2232bfdff3b6b6d076d35298306f70c8dac",
   "category": "Productivity",
   "publisher": "Loom, Inc.",
-  "previous_version": "0.369.2"
+  "previous_version": "0.370.1"
 }

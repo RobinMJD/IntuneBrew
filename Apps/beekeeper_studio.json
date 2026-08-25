@@ -13,10 +13,10 @@
   "source_sha256": "cb2f0e3ac743a69d15d2cb5ba2a48f5679304d6c8fdc10b77a8d08d635b16183",
   "source_sha256_provenance": "homebrew",
   "artifact_kind": "dmg",
+  "sha": "cb2f0e3ac743a69d15d2cb5ba2a48f5679304d6c8fdc10b77a8d08d635b16183",
   "artifact_app": "Beekeeper Studio.app",
   "download_user_agent": "default",
-  "sha": "cb2f0e3ac743a69d15d2cb5ba2a48f5679304d6c8fdc10b77a8d08d635b16183",
   "category": "Developer Tools",
   "publisher": "Beekeeper Studio",
-  "previous_version": "6.0.4"
+  "previous_version": "6.0.5"
 }

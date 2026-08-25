@@ -13,10 +13,10 @@
   "source_sha256": "126860d56f6f49b11845f601aac51de27a49b16d2b48102415da91e0e37e5155",
   "source_sha256_provenance": "homebrew",
   "artifact_kind": "dmg",
+  "sha": "126860d56f6f49b11845f601aac51de27a49b16d2b48102415da91e0e37e5155",
   "artifact_app": "LocalSend.app",
   "download_user_agent": "default",
-  "sha": "126860d56f6f49b11845f601aac51de27a49b16d2b48102415da91e0e37e5155",
   "category": "Utilities",
   "publisher": "LocalSend",
-  "previous_version": "1.18.0"
+  "previous_version": "1.18.2"
 }

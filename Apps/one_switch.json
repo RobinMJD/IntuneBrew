@@ -13,9 +13,9 @@
   "source_sha256": "3c52cfa634a0806385527aea1053bf09ef556d50e97a18ba4349d9a5b481ce9a",
   "source_sha256_provenance": "homebrew",
   "artifact_kind": "dmg",
+  "sha": "3c52cfa634a0806385527aea1053bf09ef556d50e97a18ba4349d9a5b481ce9a",
   "artifact_app": "One Switch.app",
   "download_user_agent": "default",
-  "sha": "3c52cfa634a0806385527aea1053bf09ef556d50e97a18ba4349d9a5b481ce9a",
   "category": "Utilities",
   "publisher": "Fireball Studio",
   "previous_version": "1.35.4"

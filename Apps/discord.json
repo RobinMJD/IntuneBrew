@@ -13,9 +13,9 @@
   "source_sha256": "caf8473d7f702fd67e09ccda55a05934675a5f464ae9bfca6d4b534f6d6cc511",
   "source_sha256_provenance": "homebrew",
   "artifact_kind": "dmg",
+  "sha": "caf8473d7f702fd67e09ccda55a05934675a5f464ae9bfca6d4b534f6d6cc511",
   "artifact_app": "Discord.app",
   "download_user_agent": "default",
-  "sha": "caf8473d7f702fd67e09ccda55a05934675a5f464ae9bfca6d4b534f6d6cc511",
   "changelog": "https://discord.com/tags/changelog",
   "qa_info": {
     "qa_timestamp": "2025-05-12T12:26:31Z",
@@ -29,5 +29,5 @@
   },
   "category": "Communication",
   "publisher": "Discord, Inc.",
-  "previous_version": "0.0.408"
+  "previous_version": "0.0.409"
 }

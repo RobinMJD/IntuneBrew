@@ -13,10 +13,10 @@
   "source_sha256": "0eefefeaefe409d50c049628b97f822a64645c6d9c35aecf273a4074dbbbea52",
   "source_sha256_provenance": "homebrew",
   "artifact_kind": "dmg",
+  "sha": "0eefefeaefe409d50c049628b97f822a64645c6d9c35aecf273a4074dbbbea52",
   "artifact_app": "Movist Pro.app",
   "download_user_agent": "default",
-  "sha": "0eefefeaefe409d50c049628b97f822a64645c6d9c35aecf273a4074dbbbea52",
   "category": "Media",
   "publisher": "Movist Prime",
-  "previous_version": "2.17.4"
+  "previous_version": "2.17.5"
 }

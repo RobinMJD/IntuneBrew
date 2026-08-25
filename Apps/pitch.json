@@ -13,10 +13,10 @@
   "source_sha256": "8776904e39dc686c2cd42398f6d3691a6edb44f712f9b7c86c6827f3b8fe6022",
   "source_sha256_provenance": "homebrew",
   "artifact_kind": "dmg",
+  "sha": "8776904e39dc686c2cd42398f6d3691a6edb44f712f9b7c86c6827f3b8fe6022",
   "artifact_app": "Pitch.app",
   "download_user_agent": "default",
-  "sha": "8776904e39dc686c2cd42398f6d3691a6edb44f712f9b7c86c6827f3b8fe6022",
   "category": "Productivity",
   "publisher": "Pitch Technologies GmbH",
-  "previous_version": "2.141.0"
+  "previous_version": "2.142.0"
 }

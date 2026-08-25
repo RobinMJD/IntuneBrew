@@ -13,10 +13,10 @@
   "source_sha256": "7e1e32ee1e3ddc1be3dcaa49bf61ab32d4374dc70f197788e9bdb62b02ddfe2b",
   "source_sha256_provenance": "homebrew",
   "artifact_kind": "dmg",
+  "sha": "7e1e32ee1e3ddc1be3dcaa49bf61ab32d4374dc70f197788e9bdb62b02ddfe2b",
   "artifact_app": "Linear.app",
   "download_user_agent": "default",
-  "sha": "7e1e32ee1e3ddc1be3dcaa49bf61ab32d4374dc70f197788e9bdb62b02ddfe2b",
   "category": "Developer Tools",
   "publisher": "Linear, Inc.",
-  "previous_version": "1.28.13"
+  "previous_version": "1.32.1"
 }

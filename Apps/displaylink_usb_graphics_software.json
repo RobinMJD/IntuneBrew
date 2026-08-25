@@ -2,13 +2,20 @@
   "name": "DisplayLink USB Graphics Software",
   "description": "Drivers for DisplayLink docks, adapters and monitors",
   "version": "16.2",
-  "url": "https://www.synaptics.com/sites/default/files/exe_files/2026-07/DisplayLink%20Manager%20Graphics%20Connectivity16.2-EXE.pkg",
+  "url": "https://intcybintunebrewprd01st.blob.core.windows.net/pkg/displaylink_usb_graphics_software_16.2_fd9eafab9542e592baa39984ed4e87e64e89f3de6b9a4429ab13a2334a7538e6.pkg",
   "vendor_url": "https://www.synaptics.com/sites/default/files/exe_files/2026-07/DisplayLink%20Manager%20Graphics%20Connectivity16.2-EXE.pkg",
   "bundleId": "com.displaylink.DisplayLinkUserAgent",
+  "bundleId_source": "package",
   "homepage": "https://www.synaptics.com/products/displaylink-graphics",
   "homebrew_cask": "displaylink",
-  "fileName": "DisplayLink Manager Graphics Connectivity16.2-EXE.pkg",
-  "type": "pkg",
+  "fileName": "displaylink_usb_graphics_software_16.2_fd9eafab9542e592baa39984ed4e87e64e89f3de6b9a4429ab13a2334a7538e6.pkg",
+  "source_version": "16.2,2026-07",
+  "source_sha256": "fd9eafab9542e592baa39984ed4e87e64e89f3de6b9a4429ab13a2334a7538e6",
+  "source_sha256_provenance": "homebrew",
+  "artifact_kind": "pkg",
+  "artifact_pkg": "DisplayLink Manager Graphics Connectivity16.2-EXE.pkg",
+  "download_user_agent": "default",
+  "type": "app",
   "sha": "fd9eafab9542e592baa39984ed4e87e64e89f3de6b9a4429ab13a2334a7538e6",
   "qa_info": {
     "qa_timestamp": "2025-05-14T08:59:10Z",
@@ -21,5 +28,6 @@
   },
   "category": "Utilities",
   "publisher": "DisplayLink",
-  "previous_version": "16.2"
+  "previous_version": "16.2",
+  "source_checked_at": "2026-08-25T18:55:15Z"
 }

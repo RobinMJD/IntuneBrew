@@ -1,14 +1,14 @@
 {
   "name": "Cyberduck",
   "description": "Server and cloud storage browser",
-  "version": "9.5.3",
-  "url": "https://intcybintunebrewprd01st.blob.core.windows.net/pkg/cyberduck_9.5.3.pkg",
-  "vendor_url": "https://update.cyberduck.io/Cyberduck-9.5.3.45464.zip",
+  "version": "9.5.4",
+  "url": "https://intcybintunebrewprd01st.blob.core.windows.net/pkg/cyberduck_9.5.4_16ea5df92aee14529fbbf654c0fb4c411229d32bc9ee8a5073786c4af550302d.pkg",
+  "vendor_url": "https://update.cyberduck.io/Cyberduck-9.5.4.45528.zip",
   "bundleId": "ch.sudo.cyberduck",
   "homepage": "https://cyberduck.io/",
-  "fileName": "cyberduck_9.5.3.pkg",
+  "fileName": "cyberduck_9.5.4_16ea5df92aee14529fbbf654c0fb4c411229d32bc9ee8a5073786c4af550302d.pkg",
   "type": "app",
-  "sha": "6897c5a97b57177b48bceb07ca7f43ea3d05389eb0cdd1099d9291e2c1028b8c",
+  "sha": "16ea5df92aee14529fbbf654c0fb4c411229d32bc9ee8a5073786c4af550302d",
   "changelog": "https://cyberduck.io/changelog/",
   "previous_version": "9.5.3",
   "qa_info": {
@@ -24,7 +24,13 @@
   "category": "Utilities",
   "publisher": "iterate GmbH",
   "homebrew_cask": "cyberduck",
-  "source_version": "9.5.3,45464",
-  "source_sha256": "b53092b7b7057d9782c093839bc47b19afd0987b23d7252bae435078f3e47e28",
-  "source_sha256_provenance": "homebrew"
+  "source_version": "9.5.4,45528",
+  "source_sha256": "9398777ad01bfac7228db3990aed1c834437a599664e0f3e27a68feb53cbcebf",
+  "source_sha256_provenance": "homebrew",
+  "artifact_app": "Cyberduck.app",
+  "archive_format": "zip",
+  "download_user_agent": "default",
+  "artifact_kind": "archive",
+  "bundleId_source": "package",
+  "source_checked_at": "2026-08-25T18:55:15Z"
 }

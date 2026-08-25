@@ -13,10 +13,10 @@
   "source_sha256": "9507b0cf27637dedb65b5750f76da20c3a7723ebf91030c779e9211779af001c",
   "source_sha256_provenance": "homebrew",
   "artifact_kind": "dmg",
+  "sha": "9507b0cf27637dedb65b5750f76da20c3a7723ebf91030c779e9211779af001c",
   "artifact_app": "Local.app",
   "download_user_agent": "default",
-  "sha": "9507b0cf27637dedb65b5750f76da20c3a7723ebf91030c779e9211779af001c",
   "category": "Developer Tools",
   "publisher": "Flywheel, Inc.",
-  "previous_version": "10.1.1"
+  "previous_version": "10.1.2"
 }

@@ -13,9 +13,9 @@
   "source_sha256": "0c8e2b7349629f8176d7af8d2460cd06e37d1721edff6a925109914b53992700",
   "source_sha256_provenance": "homebrew",
   "artifact_kind": "dmg",
+  "sha": "0c8e2b7349629f8176d7af8d2460cd06e37d1721edff6a925109914b53992700",
   "artifact_app": "AirBuddy.app",
   "download_user_agent": "browser",
-  "sha": "0c8e2b7349629f8176d7af8d2460cd06e37d1721edff6a925109914b53992700",
   "qa_info": {
     "qa_timestamp": "2025-05-12T10:29:40Z",
     "qa_result": "Installation successful and verified",
@@ -28,5 +28,5 @@
   },
   "category": "Utilities",
   "publisher": "AirBuddy",
-  "previous_version": "2.8.1"
+  "previous_version": "3.0.1"
 }

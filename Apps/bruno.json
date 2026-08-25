@@ -13,9 +13,9 @@
   "source_sha256": "31af43035099556492ce2196a87e88234caafdc897ccc2c9bfa62a321fc5df8e",
   "source_sha256_provenance": "homebrew",
   "artifact_kind": "dmg",
+  "sha": "31af43035099556492ce2196a87e88234caafdc897ccc2c9bfa62a321fc5df8e",
   "artifact_app": "Bruno.app",
   "download_user_agent": "default",
-  "sha": "31af43035099556492ce2196a87e88234caafdc897ccc2c9bfa62a321fc5df8e",
   "changelog": "https://github.com/usebruno/bruno/releases",
   "qa_info": {
     "qa_timestamp": "2025-05-16T13:25:20Z",
@@ -29,5 +29,5 @@
   },
   "category": "Developer Tools",
   "publisher": "Bruno",
-  "previous_version": "4.0.0"
+  "previous_version": "4.1.0"
 }

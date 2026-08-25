@@ -13,10 +13,10 @@
   "source_sha256": "b8283663de017a2545d94709662f56fa0cdd7759cd0c1ff4e73dc9092e39508a",
   "source_sha256_provenance": "homebrew",
   "artifact_kind": "dmg",
+  "sha": "b8283663de017a2545d94709662f56fa0cdd7759cd0c1ff4e73dc9092e39508a",
   "artifact_app": "Anytype.app",
   "download_user_agent": "default",
-  "sha": "b8283663de017a2545d94709662f56fa0cdd7759cd0c1ff4e73dc9092e39508a",
   "category": "Productivity",
   "publisher": "Anytype",
-  "previous_version": "0.56.4"
+  "previous_version": "0.56.5"
 }

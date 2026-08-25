@@ -13,10 +13,10 @@
   "source_sha256": "d50b4040b4c4040d842c48c58b39d05a1dac0eef879f5adc189348456f19991b",
   "source_sha256_provenance": "homebrew",
   "artifact_kind": "dmg",
+  "sha": "d50b4040b4c4040d842c48c58b39d05a1dac0eef879f5adc189348456f19991b",
   "artifact_app": "jamovi.app",
   "download_user_agent": "default",
   "download_referer": "https://www.jamovi.org/download.html",
-  "sha": "d50b4040b4c4040d842c48c58b39d05a1dac0eef879f5adc189348456f19991b",
   "category": "Productivity",
   "publisher": "jamovi Foundation",
   "previous_version": "28.2.0.0"

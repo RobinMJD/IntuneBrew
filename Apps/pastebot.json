@@ -13,10 +13,10 @@
   "source_sha256": "7142a6644756cde5c7cca2b83585c13225cc0756ad2a3bc020ea2dbace85cd02",
   "source_sha256_provenance": "homebrew",
   "artifact_kind": "dmg",
+  "sha": "7142a6644756cde5c7cca2b83585c13225cc0756ad2a3bc020ea2dbace85cd02",
   "artifact_app": "Pastebot.app",
   "download_user_agent": "default",
-  "sha": "7142a6644756cde5c7cca2b83585c13225cc0756ad2a3bc020ea2dbace85cd02",
   "category": "Productivity",
   "publisher": "Tapbots",
-  "previous_version": "3.0"
+  "previous_version": "3.1"
 }

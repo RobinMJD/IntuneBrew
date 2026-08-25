@@ -13,11 +13,11 @@
   "source_sha256": "3212a8c1775de46ef82fdd979adfb4da28b82678c85137b1a6ab96ea907e782f",
   "source_sha256_provenance": "homebrew",
   "artifact_kind": "dmg",
+  "sha": "3212a8c1775de46ef82fdd979adfb4da28b82678c85137b1a6ab96ea907e782f",
   "artifact_app": "Microsoft Edge.app",
   "download_user_agent": "default",
-  "sha": "3212a8c1775de46ef82fdd979adfb4da28b82678c85137b1a6ab96ea907e782f",
   "changelog": "https://learn.microsoft.com/en-us/deployedge/microsoft-edge-relnote-stable-channel",
   "category": "Browsers",
   "publisher": "Microsoft Corporation",
-  "previous_version": "151.0.4129.93"
+  "previous_version": "151.0.4129.107"
 }

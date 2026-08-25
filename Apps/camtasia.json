@@ -13,9 +13,9 @@
   "source_sha256": "480a512cf8d9595ac23a43a649a6feec22a028d99ef113d6b35ca8e4ec145963",
   "source_sha256_provenance": "homebrew",
   "artifact_kind": "dmg",
+  "sha": "480a512cf8d9595ac23a43a649a6feec22a028d99ef113d6b35ca8e4ec145963",
   "artifact_app": "Camtasia.app",
   "download_user_agent": "default",
-  "sha": "480a512cf8d9595ac23a43a649a6feec22a028d99ef113d6b35ca8e4ec145963",
   "changelog": "https://support.techsmith.com/hc/en-us/articles/115006443267",
   "qa_info": {
     "qa_timestamp": "2025-05-19T08:06:25Z",
@@ -29,5 +29,5 @@
   },
   "category": "Media",
   "publisher": "TechSmith Corporation",
-  "previous_version": "2026.2.0"
+  "previous_version": "2026.2.1"
 }

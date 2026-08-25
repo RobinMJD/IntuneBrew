@@ -13,9 +13,9 @@
   "source_sha256": "8402aae2a57547cd919055c4f78c47f22c9d644b19d29b5662970519565b1240",
   "source_sha256_provenance": "homebrew",
   "artifact_kind": "dmg",
+  "sha": "8402aae2a57547cd919055c4f78c47f22c9d644b19d29b5662970519565b1240",
   "artifact_app": "Antinote.app",
   "download_user_agent": "default",
-  "sha": "8402aae2a57547cd919055c4f78c47f22c9d644b19d29b5662970519565b1240",
   "qa_info": {
     "qa_timestamp": "2025-05-12T10:31:53Z",
     "qa_result": "Installation successful and verified",
@@ -28,5 +28,5 @@
   },
   "category": "Productivity",
   "publisher": "Antinote",
-  "previous_version": "1.1.7"
+  "previous_version": "2.0.10"
 }

@@ -13,11 +13,11 @@
   "source_sha256": "17bd3fd5f5172451685787ff8292e88178ac132c0d58a0c8064bb32ea201bb92",
   "source_sha256_provenance": "homebrew",
   "artifact_kind": "pkg",
+  "sha": "17bd3fd5f5172451685787ff8292e88178ac132c0d58a0c8064bb32ea201bb92",
   "artifact_pkg": "TeamViewer.pkg",
   "download_user_agent": "default",
   "type": "pkg",
-  "sha": "17bd3fd5f5172451685787ff8292e88178ac132c0d58a0c8064bb32ea201bb92",
   "category": "Security",
   "publisher": "TeamViewer GmbH",
-  "previous_version": "15.80.4"
+  "previous_version": "15.81.5"
 }

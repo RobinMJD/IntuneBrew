@@ -2,13 +2,13 @@
   "name": "DaisyDisk",
   "description": "Disk space visualiser",
   "version": "4.34.2",
-  "url": "https://intcybintunebrewprd01st.blob.core.windows.net/pkg/daisydisk_4.34.2.pkg",
+  "url": "https://intcybintunebrewprd01st.blob.core.windows.net/pkg/daisydisk_4.34.2_e3e55ffa86eacf6f9c01791b0b3c08a2115b0bf72776a96cefcaeff6461193ec.pkg",
   "vendor_url": "https://daisydiskapp.com/download/DaisyDisk.zip",
   "bundleId": "com.daisydiskapp.DaisyDiskStandAlone",
   "homepage": "https://daisydiskapp.com/",
-  "fileName": "daisydisk_4.34.2.pkg",
+  "fileName": "daisydisk_4.34.2_e3e55ffa86eacf6f9c01791b0b3c08a2115b0bf72776a96cefcaeff6461193ec.pkg",
   "type": "app",
-  "sha": "fb979de9ee60a6e499f1f50cfac557ee61f60a74b52551823e620ad974663038",
+  "sha": "e3e55ffa86eacf6f9c01791b0b3c08a2115b0bf72776a96cefcaeff6461193ec",
   "changelog": "https://daisydiskapp.com/changelog/",
   "previous_version": "4.34.2",
   "qa_info": {
@@ -26,5 +26,12 @@
   "homebrew_cask": "daisydisk",
   "source_version": "4.34.2",
   "source_sha256": "no_check",
-  "packaging_pending": true
+  "artifact_app": "DaisyDisk.app",
+  "archive_format": "zip",
+  "source_sha256_provenance": "observed-no_check",
+  "download_user_agent": "default",
+  "artifact_kind": "archive",
+  "bundleId_source": "package",
+  "source_observed_sha256": "45ef4639f2b4dc6a206f8129d62b54266eb42fde2abc67d7823aa92e0f064257",
+  "source_checked_at": "2026-08-25T18:55:15Z"
 }

@@ -13,9 +13,9 @@
   "source_sha256": "e715f052c924dac979161c17857d36af170c3d932bcb777761ce1d8f40575a11",
   "source_sha256_provenance": "homebrew",
   "artifact_kind": "dmg",
+  "sha": "e715f052c924dac979161c17857d36af170c3d932bcb777761ce1d8f40575a11",
   "artifact_app": "Downie 4.app",
   "download_user_agent": "default",
-  "sha": "e715f052c924dac979161c17857d36af170c3d932bcb777761ce1d8f40575a11",
   "changelog": "https://software.charliemonroe.net/downie/version-history/",
   "qa_info": {
     "qa_timestamp": "2025-05-13T08:10:13Z",
@@ -28,5 +28,5 @@
   },
   "category": "Utilities",
   "publisher": "Charlie Monroe",
-  "previous_version": "4.12.13"
+  "previous_version": "4.12.14"
 }

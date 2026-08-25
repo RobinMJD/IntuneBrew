@@ -13,10 +13,10 @@
   "source_sha256": "833e4946c614a7bdedbff1ed205194b7238652ad14ee33c1b76a6e44603b1775",
   "source_sha256_provenance": "homebrew",
   "artifact_kind": "dmg",
+  "sha": "833e4946c614a7bdedbff1ed205194b7238652ad14ee33c1b76a6e44603b1775",
   "artifact_app": "Permute 4.app",
   "download_user_agent": "default",
-  "sha": "833e4946c614a7bdedbff1ed205194b7238652ad14ee33c1b76a6e44603b1775",
   "category": "Media",
   "publisher": "Charlie Monroe",
-  "previous_version": "4.0.7"
+  "previous_version": "4.0.8"
 }

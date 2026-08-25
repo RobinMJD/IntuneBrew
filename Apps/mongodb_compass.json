@@ -13,11 +13,11 @@
   "source_sha256": "c9bce4d13fbdfe5ab56128b52b8269f0c9ebe45d23a6ae359fed985e4bbfe3b2",
   "source_sha256_provenance": "homebrew",
   "artifact_kind": "dmg",
+  "sha": "c9bce4d13fbdfe5ab56128b52b8269f0c9ebe45d23a6ae359fed985e4bbfe3b2",
   "artifact_app": "MongoDB Compass.app",
   "download_user_agent": "default",
-  "sha": "c9bce4d13fbdfe5ab56128b52b8269f0c9ebe45d23a6ae359fed985e4bbfe3b2",
   "changelog": "https://www.mongodb.com/docs/compass/current/release-notes/",
   "category": "Developer Tools",
   "publisher": "MongoDB, Inc.",
-  "previous_version": "1.49.14"
+  "previous_version": "1.49.15"
 }

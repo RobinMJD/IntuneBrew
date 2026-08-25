@@ -13,10 +13,10 @@
   "source_sha256": "ae07b5fe765f9eb00409286aade6f563861e9766b1a1493bd1ab9977e8526300",
   "source_sha256_provenance": "homebrew",
   "artifact_kind": "dmg",
+  "sha": "ae07b5fe765f9eb00409286aade6f563861e9766b1a1493bd1ab9977e8526300",
   "artifact_app": "GDevelop 5.app",
   "download_user_agent": "default",
-  "sha": "ae07b5fe765f9eb00409286aade6f563861e9766b1a1493bd1ab9977e8526300",
   "category": "Developer Tools",
   "publisher": "Florian Rival",
-  "previous_version": "5.6.279"
+  "previous_version": "5.6.280"
 }

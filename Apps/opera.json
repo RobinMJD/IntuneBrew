@@ -13,11 +13,11 @@
   "source_sha256": "12f5a0afe3d8544ca1a22eaa9c18da1547ae001eebb9f9ca08ddb1548243b7b4",
   "source_sha256_provenance": "homebrew",
   "artifact_kind": "dmg",
+  "sha": "12f5a0afe3d8544ca1a22eaa9c18da1547ae001eebb9f9ca08ddb1548243b7b4",
   "artifact_app": "Opera.app",
   "download_user_agent": "default",
-  "sha": "12f5a0afe3d8544ca1a22eaa9c18da1547ae001eebb9f9ca08ddb1548243b7b4",
   "changelog": "https://blogs.opera.com/desktop/",
   "category": "Browsers",
   "publisher": "Opera Software AS",
-  "previous_version": "134.0.5954.66"
+  "previous_version": "135.0.5973.41"
 }

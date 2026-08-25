@@ -13,11 +13,11 @@
   "source_sha256": "be8841586446a9a1e80d4c4fd0c434d8f1182b460ca728c82dd465c1b0c23415",
   "source_sha256_provenance": "homebrew",
   "artifact_kind": "dmg",
+  "sha": "be8841586446a9a1e80d4c4fd0c434d8f1182b460ca728c82dd465c1b0c23415",
   "artifact_app": "Stats.app",
   "download_user_agent": "default",
-  "sha": "be8841586446a9a1e80d4c4fd0c434d8f1182b460ca728c82dd465c1b0c23415",
   "changelog": "https://github.com/exelban/stats/releases",
   "category": "Utilities",
   "publisher": "exelban",
-  "previous_version": "3.0.11"
+  "previous_version": "3.0.13"
 }

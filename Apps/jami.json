@@ -13,10 +13,10 @@
   "source_sha256": "8e9e1990ce3af57629a619991c91f08c0518273facbed5b3fcdd736ef11fa6e6",
   "source_sha256_provenance": "homebrew",
   "artifact_kind": "dmg",
+  "sha": "8e9e1990ce3af57629a619991c91f08c0518273facbed5b3fcdd736ef11fa6e6",
   "artifact_app": "Jami.app",
   "download_user_agent": "default",
-  "sha": "8e9e1990ce3af57629a619991c91f08c0518273facbed5b3fcdd736ef11fa6e6",
   "category": "Communication",
   "publisher": "Savoir-faire Linux",
-  "previous_version": "2.41"
+  "previous_version": "2.42"
 }

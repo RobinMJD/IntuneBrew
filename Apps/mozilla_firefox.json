@@ -13,11 +13,11 @@
   "source_sha256": "01d95a6652018bb3d1e0bfad13ed6775864a1f3390d224e713f7d6f8b98fd679",
   "source_sha256_provenance": "homebrew",
   "artifact_kind": "dmg",
+  "sha": "01d95a6652018bb3d1e0bfad13ed6775864a1f3390d224e713f7d6f8b98fd679",
   "artifact_app": "Firefox.app",
   "download_user_agent": "default",
-  "sha": "01d95a6652018bb3d1e0bfad13ed6775864a1f3390d224e713f7d6f8b98fd679",
   "changelog": "https://www.mozilla.org/en-US/firefox/releases/",
   "category": "Browsers",
   "publisher": "Mozilla Corporation",
-  "previous_version": "154.0"
+  "previous_version": "154.0.1"
 }

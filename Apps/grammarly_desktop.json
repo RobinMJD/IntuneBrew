@@ -13,11 +13,11 @@
   "source_sha256": "acf85974e5ec1c5f16f794c26ceddf36efd11ee4e61ea1cec747c109f60a7a6b",
   "source_sha256_provenance": "homebrew",
   "artifact_kind": "dmg",
+  "sha": "acf85974e5ec1c5f16f794c26ceddf36efd11ee4e61ea1cec747c109f60a7a6b",
   "artifact_app": "Grammarly Installer.app",
   "download_user_agent": "default",
-  "sha": "acf85974e5ec1c5f16f794c26ceddf36efd11ee4e61ea1cec747c109f60a7a6b",
   "changelog": "https://www.grammarly.com/desktop/release-notes",
   "category": "Productivity",
   "publisher": "Grammarly, Inc.",
-  "previous_version": "1.185.0.0"
+  "previous_version": "1.186.0.0"
 }

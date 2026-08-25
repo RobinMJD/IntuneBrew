@@ -13,11 +13,11 @@
   "source_sha256": "d47b1a3c34221f6de9cfa001faeb109e4c1a518dca4f88d18d21b5731344c463",
   "source_sha256_provenance": "homebrew",
   "artifact_kind": "pkg",
+  "sha": "d47b1a3c34221f6de9cfa001faeb109e4c1a518dca4f88d18d21b5731344c463",
   "artifact_pkg": "OneDrive.pkg",
   "download_user_agent": "default",
-  "sha": "d47b1a3c34221f6de9cfa001faeb109e4c1a518dca4f88d18d21b5731344c463",
   "changelog": "https://support.microsoft.com/en-us/office/onedrive-release-notes-845dcf18-f921-435e-bf28-4e24b95e5fc0",
   "category": "Productivity",
   "publisher": "Microsoft Corporation",
-  "previous_version": "26.139.0720.0007"
+  "previous_version": "26.145.0728.0011"
 }

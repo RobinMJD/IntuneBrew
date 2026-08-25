@@ -13,10 +13,10 @@
   "source_sha256": "63c6286ece4c46a6700e130558e1f86e0a941ce95428d17004beef8381e39cba",
   "source_sha256_provenance": "homebrew",
   "artifact_kind": "dmg",
+  "sha": "63c6286ece4c46a6700e130558e1f86e0a941ce95428d17004beef8381e39cba",
   "artifact_app": "Surfshark.app",
   "download_user_agent": "default",
-  "sha": "63c6286ece4c46a6700e130558e1f86e0a941ce95428d17004beef8381e39cba",
   "category": "Security",
   "publisher": "Surfshark Ltd.",
-  "previous_version": "4.28.1"
+  "previous_version": "4.29.0"
 }

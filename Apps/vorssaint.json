@@ -13,8 +13,8 @@
   "source_sha256": "7faf8b55753a4f34ccccd65c20c2ee847d88e374159dfbb95eedcd50aa5341cb",
   "source_sha256_provenance": "homebrew",
   "artifact_kind": "dmg",
+  "sha": "7faf8b55753a4f34ccccd65c20c2ee847d88e374159dfbb95eedcd50aa5341cb",
   "artifact_app": "Vorssaint.app",
   "download_user_agent": "default",
-  "sha": "7faf8b55753a4f34ccccd65c20c2ee847d88e374159dfbb95eedcd50aa5341cb",
-  "previous_version": "3.3.1"
+  "previous_version": "3.3.2"
 }

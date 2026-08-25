@@ -13,10 +13,10 @@
   "source_sha256": "8fa3bf2b79ac61213d94d8c1ecab348e6826135fe81017fb2dbb2a122df41413",
   "source_sha256_provenance": "homebrew",
   "artifact_kind": "dmg",
+  "sha": "8fa3bf2b79ac61213d94d8c1ecab348e6826135fe81017fb2dbb2a122df41413",
   "artifact_app": "Yaak.app",
   "download_user_agent": "default",
-  "sha": "8fa3bf2b79ac61213d94d8c1ecab348e6826135fe81017fb2dbb2a122df41413",
   "category": "Developer Tools",
   "publisher": "Yaak",
-  "previous_version": "2026.5.0"
+  "previous_version": "2026.6.0"
 }

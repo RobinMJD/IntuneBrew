@@ -13,11 +13,11 @@
   "source_sha256": "d4eddd21f5b249df95b6f7738ced4b09e9894d7fea84fe543a80688395ce5bb9",
   "source_sha256_provenance": "homebrew",
   "artifact_kind": "dmg",
+  "sha": "d4eddd21f5b249df95b6f7738ced4b09e9894d7fea84fe543a80688395ce5bb9",
   "artifact_app": "Rectangle.app",
   "download_user_agent": "default",
-  "sha": "d4eddd21f5b249df95b6f7738ced4b09e9894d7fea84fe543a80688395ce5bb9",
   "changelog": "https://github.com/rxhanson/Rectangle/releases",
   "category": "Utilities",
   "publisher": "Rectangle",
-  "previous_version": "0.98"
+  "previous_version": "0.99"
 }
