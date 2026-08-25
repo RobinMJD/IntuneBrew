@@ -1,6 +1,7 @@
 import importlib.util
 import json
 import os
+import plistlib
 import re
 import shutil
 import subprocess
@@ -16,6 +17,8 @@ from unittest.mock import patch
 ROOT = Path(__file__).resolve().parents[1]
 WORKFLOW_PATH = ROOT / ".github/workflows/build-app-packages.yml"
 GENERATOR_PATH = ROOT / ".github/scripts/generate_supported_apps.py"
+DISK_IMAGE_HELPER_PATH = ROOT / ".github/scripts/macos_disk_image.py"
+HDIUTIL_FIXTURES = ROOT / "tests/fixtures/hdiutil"
 REFERER_VALIDATOR_PATH = (
     ROOT / ".github/scripts/validate_download_referer.py"
 )
@@ -23,6 +26,12 @@ REFERER_VALIDATOR_PATH = (
 SPEC = importlib.util.spec_from_file_location("generate_supported_apps", GENERATOR_PATH)
 generator = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(generator)
+
+DISK_IMAGE_SPEC = importlib.util.spec_from_file_location(
+    "macos_disk_image", DISK_IMAGE_HELPER_PATH
+)
+disk_image = importlib.util.module_from_spec(DISK_IMAGE_SPEC)
+DISK_IMAGE_SPEC.loader.exec_module(disk_image)
 
 
 class CatalogPublicationContractTests(unittest.TestCase):
@@ -198,6 +207,86 @@ class CatalogPublicationContractTests(unittest.TestCase):
 
 
 class WorkflowPackagingRegressionTests(unittest.TestCase):
+    def test_workspace_attach_parser_retains_whole_and_mounted_devices(self):
+        with (HDIUTIL_FIXTURES / "workspace-attach.plist").open("rb") as handle:
+            attachment = disk_image.parse_attach_plist(
+                plistlib.load(handle)
+            )
+        self.assertEqual(attachment["whole_device"], "/dev/disk9")
+        self.assertEqual(
+            attachment["mounted_entities"],
+            [
+                {
+                    "device": "/dev/disk10s1",
+                    "mount_point": "/private/tmp/intunebrew-mount-example",
+                }
+            ],
+        )
+
+    def test_zulu_gpt_hfs_parser_uses_whole_image_device(self):
+        with (HDIUTIL_FIXTURES / "zulu-gpt-hfs-attach.plist").open(
+            "rb"
+        ) as handle:
+            attachment = disk_image.parse_attach_plist(
+                plistlib.load(handle)
+            )
+        self.assertEqual(attachment["whole_device"], "/dev/disk12")
+        self.assertEqual(
+            attachment["mounted_entities"][0]["device"],
+            "/dev/disk12s2",
+        )
+        self.assertEqual(
+            attachment["mounted_entities"][0]["mount_point"],
+            "/Volumes/Azul Zulu JDK 26",
+        )
+
+    def test_hdiutil_info_maps_canonical_image_path_to_whole_device(self):
+        with tempfile.TemporaryDirectory() as directory:
+            image = Path(directory) / "workspace.sparseimage"
+            alias = Path(directory) / "workspace-link.sparseimage"
+            image.touch()
+            try:
+                alias.symlink_to(image)
+            except OSError:
+                self.skipTest("symlinks are unavailable")
+            info = {
+                "images": [
+                    {
+                        "image-path": os.fspath(image),
+                        "system-entities": [
+                            {"dev-entry": "/dev/disk21"},
+                            {
+                                "dev-entry": "/dev/disk21s1",
+                                "mount-point": "/private/tmp/workspace",
+                            },
+                        ],
+                    }
+                ]
+            }
+            attachment = disk_image.find_image_attachment(info, alias)
+        self.assertEqual(attachment["whole_device"], "/dev/disk21")
+
+    def test_hdiutil_info_recovers_unmounted_partial_attachment(self):
+        image = ROOT / "partial.sparseimage"
+        info = {
+            "images": [
+                {
+                    "image-path": os.fspath(image),
+                    "system-entities": [
+                        {"dev-entry": "/dev/disk31"},
+                        {"dev-entry": "/dev/disk31s1"},
+                    ],
+                }
+            ]
+        }
+        attachment = disk_image.find_image_attachment(info, image)
+        self.assertEqual(attachment["whole_device"], "/dev/disk31")
+        self.assertEqual(attachment["mounted_entities"], [])
+
+    def test_hdiutil_info_distinguishes_absent_image(self):
+        with self.assertRaises(disk_image.DiskImageNotFoundError):
+            disk_image.find_image_attachment({"images": []}, ROOT / "missing.dmg")
+
     def test_remote_help_scraper_emits_verified_package_metadata(self):
         scraper = (
             ROOT / ".github/scripts/scrapers/remotehelp.sh"
@@ -308,15 +397,15 @@ class WorkflowPackagingRegressionTests(unittest.TestCase):
 
     def test_compressed_dmg_routes_by_url_and_mounts(self):
         dmg_route = self.process.split("dmg)", 1)[1].split("archive)", 1)[0]
-        self.assertIn("hdiutil attach", dmg_route)
+        self.assertIn("attach_source_image", dmg_route)
         self.assertNotIn("file -b", self.process)
 
     def test_gzip_dmg_is_decompressed_before_mounting(self):
         route = self.process.split("dmg|dmg_gzip)", 1)[1].split("archive)", 1)[0]
         self.assertIn('if [ "$kind" = "dmg_gzip" ]', route)
         self.assertIn('gunzip -c "${download_path}.dmg.gz"', route)
-        self.assertIn('hdiutil attach "${download_path}.dmg"', route)
-        self.assertLess(route.index("gunzip -c"), route.index("hdiutil attach"))
+        self.assertIn('attach_source_image "${download_path}.dmg"', route)
+        self.assertLess(route.index("gunzip -c"), route.index("attach_source_image"))
         self.assertNotIn("payload.pkg", route)
 
     def test_declared_app_precedes_auxiliary_pkgs_in_dmg(self):
@@ -324,11 +413,11 @@ class WorkflowPackagingRegressionTests(unittest.TestCase):
             'elif [ "$app_type" = "pkg_in_dmg" ]', 1
         )[1].split("else\n              # Download app", 1)[0]
         self.assertIn(
-            'app_file=$(find_app_payload "${download_path}_mount" "$declared_app" "$source_app")',
+            'app_file=$(find_app_in_source_image "$declared_app" "$source_app")',
             dmg_path,
         )
         self.assertIn(
-            '[ -n "$app_file" ] || pkg_file=$(find_pkg_payload',
+            '[ -n "$app_file" ] || pkg_file=$(find_pkg_in_source_image',
             dmg_path,
         )
         self.assertNotIn('find "${download_path}_mount" -name "*.pkg"', dmg_path)
@@ -342,7 +431,13 @@ class WorkflowPackagingRegressionTests(unittest.TestCase):
         self.assertNotIn("log_bundle_id_change", self.process)
 
     def test_dmg_falls_back_to_declared_top_level_app(self):
-        self.assertIn('find_app_payload "$mount_dir" "$declared_app"', self.process)
+        mounted_helper = self.process.split(
+            "find_app_in_source_image() {", 1
+        )[1].split("find_pkg_in_source_image() {", 1)[0]
+        self.assertIn(
+            'find_app_payload "$mount_point" "$expected"',
+            mounted_helper,
+        )
         self.assertIn('-name "*.app"', self.process)
         self.assertIn("-prune -print", self.process)
 
@@ -413,7 +508,7 @@ class WorkflowPackagingRegressionTests(unittest.TestCase):
         archive_route = self.process.split("archive)", 1)[1].split("*)", 1)[0]
         self.assertIn("ditto -x -k", archive_route)
         self.assertIn('nested_dmg=$(find "$extract_dir"', archive_route)
-        self.assertIn("hdiutil attach \"$nested_dmg\"", archive_route)
+        self.assertIn("attach_source_image \"$nested_dmg\"", archive_route)
 
     def test_tgz_and_persisted_extensionless_archive_formats_are_supported(self):
         self.assertIn("*.tar.gz|*.tgz", self.process)
@@ -597,7 +692,7 @@ class WorkflowPackagingRegressionTests(unittest.TestCase):
         self.assertIn("hdiutil create", self.process)
         self.assertIn("hdiutil attach", self.process)
         self.assertIn("-plist", self.process)
-        self.assertIn('app_device="$devices"', self.process)
+        self.assertIn('app_device=$(printf', self.process)
         self.assertIn('hdiutil detach "$app_device" -force', self.process)
         self.assertNotIn('hdiutil detach "$app_mount_dir"', self.process)
         self.assertIn("app_attached=true", self.process)
@@ -605,7 +700,7 @@ class WorkflowPackagingRegressionTests(unittest.TestCase):
             "refusing destructive cleanup",
             self.process,
         )
-        self.assertIn("trap destroy_app_workspace EXIT", self.process)
+        self.assertIn("trap cleanup_on_exit EXIT", self.process)
         self.assertIn('package_path="$app_temp_dir/output.pkg"', self.process)
         self.assertNotIn('$HOME/Desktop/${app_name}', self.process)
         self.assertNotIn('${app_name}_extracted', self.process)
@@ -613,6 +708,68 @@ class WorkflowPackagingRegressionTests(unittest.TestCase):
         self.assertIn('[ -z "${app_mount_dir:-}" ] || rm -rf', self.process)
         self.assertIn('[ -z "${app_sparse_image:-}" ] || rm -f', self.process)
         self.assertGreaterEqual(self.process.count("destroy_app_workspace"), 4)
+
+    def test_source_images_mount_read_only_without_forced_mountpoint(self):
+        helper = self.process.split("attach_source_image() {", 1)[1].split(
+            "destroy_app_workspace() {", 1
+        )[0]
+        self.assertIn("-readonly -nobrowse -plist", helper)
+        self.assertNotIn("-mountpoint", helper)
+        self.assertIn("attach.stderr", helper)
+        self.assertIn("cat \"$attach_stderr\"", helper)
+        self.assertIn("mounted_entities", helper)
+
+    def test_all_mounted_payload_copies_are_guarded_and_quota_checked(self):
+        self.assertIn(
+            'dmg_copy_error="Failed to copy app payload from DMG"',
+            self.process,
+        )
+        self.assertIn(
+            'nested_copy_error="Failed to copy app payload from nested DMG"',
+            self.process,
+        )
+        self.assertIn(
+            '${dmg_copy_error:-Copied DMG payload exceeds quota or disk headroom}',
+            self.process,
+        )
+        self.assertIn(
+            '${nested_copy_error:-Copied nested DMG payload exceeds quota or disk headroom}',
+            self.process,
+        )
+
+    def test_cleanup_detaches_nested_then_whole_workspace_device(self):
+        cleanup = self.process.split("destroy_app_workspace() {", 1)[1].split(
+            "create_app_workspace() {", 1
+        )[0]
+        self.assertIn("detach_source_image", cleanup)
+        self.assertIn('cd "$WORKSPACE_DIR"', cleanup)
+        self.assertIn('hdiutil detach "$app_device" -force', cleanup)
+        self.assertIn("cleanup_error_reported", cleanup)
+        self.assertNotIn("hdiutil detach \"$app_mount_dir\"", cleanup)
+        self.assertLess(
+            cleanup.index('app_device=""'),
+            cleanup.index('rm -rf "$app_mount_dir"'),
+        )
+
+    def test_manual_macos_lifecycle_harness_cannot_publish(self):
+        workflow = (
+            ROOT / ".github/workflows/test-macos-disk-images.yml"
+        ).read_text(encoding="utf-8")
+        harness = (
+            ROOT / ".github/scripts/test_macos_disk_images.sh"
+        ).read_text(encoding="utf-8")
+        self.assertIn("workflow_dispatch:", workflow)
+        self.assertIn("contents: read", workflow)
+        self.assertNotIn("azure", workflow.lower())
+        self.assertNotIn("git push", workflow)
+        self.assertIn("nested.dmg", harness)
+        self.assertIn("hdiutil detach \"$INNER_DEVICE\" -force", harness)
+        self.assertIn(
+            'if [ "$cleanup_status" -eq 0 ] \\\n'
+            '    && [ -n "$OUTER_DEVICE" ]',
+            harness,
+        )
+        self.assertNotIn("resolve_test_device \"$OUTER_IMAGE\" 2>/dev/null || true", harness)
 
     def test_pkg_expansion_stays_inside_bounded_workspace(self):
         helper = self.process.split("extract_bundle_id_from_pkg() {", 1)[1].split(
@@ -832,7 +989,7 @@ class WorkflowPackagingRegressionTests(unittest.TestCase):
     def test_reuse_requires_verified_full_source_identity(self):
         helper = self.process.split(
             "verified_source_identity_matches() {", 1
-        )[1].split("configured_blob_leaf() {", 1)[0]
+        )[1].split("verify_source_file() {", 1)[0]
         helper = "verified_source_identity_matches() {" + helper
         bash = shutil.which("bash")
         verified_sha = "e" * 64

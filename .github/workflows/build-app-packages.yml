@@ -547,6 +547,7 @@ jobs:
           MIN_FREE_KB=2097152
           HOST_WORKSPACE_KB=10485760
           WORKSPACE_CAPACITY=10g
+          DISK_IMAGE_HELPER="$WORKSPACE_DIR/.github/scripts/macos_disk_image.py"
 
           require_free_disk() {
             local path="$1"
@@ -562,25 +563,215 @@ jobs:
             [ "${free_kb:-0}" -ge $((HOST_WORKSPACE_KB + MIN_FREE_KB)) ]
           }
 
+          app_temp_dir=""
+          app_mount_dir=""
+          app_sparse_image=""
+          app_device=""
+          app_attached=false
+          source_image_path=""
+          source_image_device=""
+          source_image_mounts=()
+          source_image_mounted_devices=()
+          source_image_attached=false
+          cleanup_error_reported=false
+          source_cleanup_error_reported=false
+
+          resolve_image_from_info() {
+            local image_path="$1"
+            local info_plist="${RUNNER_TEMP:-${TMPDIR:-/tmp}}/intunebrew-hdiutil-info.plist"
+            local result=""
+            local status=0
+            if ! hdiutil info -plist > "$info_plist" 2>/dev/null; then
+              rm -f "$info_plist"
+              return 3
+            fi
+            result=$(python "$DISK_IMAGE_HELPER" info \
+              --plist "$info_plist" --image "$image_path") || status=$?
+            rm -f "$info_plist"
+            [ "$status" -eq 0 ] || return "$status"
+            [ -z "$result" ] || printf '%s\n' "$result"
+          }
+
+          report_source_cleanup_error() {
+            if [ "${source_cleanup_error_reported:-false}" != true ]; then
+              echo "$1" >&2
+              source_cleanup_error_reported=true
+            fi
+          }
+
+          detach_source_image() {
+            local attachment=""
+            local detach_output=""
+            [ "${source_image_attached:-false}" = true ] || return 0
+            cd "$WORKSPACE_DIR" || return 1
+            if [ -z "${source_image_device:-}" ] \
+              && [ -n "${source_image_path:-}" ]; then
+              attachment=$(resolve_image_from_info "$source_image_path" 2>/dev/null || true)
+              source_image_device=$(printf '%s' "$attachment" | jq -r '.whole_device // empty' 2>/dev/null || true)
+            fi
+            if [ -z "${source_image_device:-}" ]; then
+              report_source_cleanup_error \
+                "Source disk image is attached but its whole device is unresolved; refusing workspace cleanup"
+              return 1
+            fi
+            if ! detach_output=$(hdiutil detach "$source_image_device" -force 2>&1); then
+              report_source_cleanup_error \
+                "Could not detach source disk image whole device $source_image_device: $detach_output"
+              hdiutil info >&2 || true
+              return 1
+            fi
+            source_image_path=""
+            source_image_device=""
+            source_image_mounts=()
+            source_image_mounted_devices=()
+            source_image_attached=false
+            source_cleanup_error_reported=false
+          }
+
+          attach_source_image() {
+            local image_path="$1"
+            local attach_plist="$app_temp_dir/source-image-attach.plist"
+            local attach_stderr="$app_temp_dir/source-image-attach.stderr"
+            local attachment=""
+            local attach_status=0
+            local info_status=0
+            local mount_point=""
+            local mounted_device=""
+
+            detach_source_image || return 2
+            source_image_path="$image_path"
+            source_image_device=""
+            source_image_mounts=()
+            source_image_mounted_devices=()
+            source_image_attached=false
+            source_cleanup_error_reported=false
+            rm -f "$attach_plist" "$attach_stderr"
+
+            if ! python -c 'import pathlib,sys; root=pathlib.Path(sys.argv[1]).resolve(strict=True); image=pathlib.Path(sys.argv[2]).resolve(strict=True); image.relative_to(root)' \
+              "$app_temp_dir" "$image_path"; then
+              echo "Refusing to mount source image outside bounded workspace: $image_path" >&2
+              return 1
+            fi
+
+            if hdiutil attach "$image_path" -readonly -nobrowse -plist \
+              > "$attach_plist" 2> "$attach_stderr"; then
+              source_image_attached=true
+            else
+              attach_status=$?
+              echo "hdiutil attach failed for $image_path (exit $attach_status)" >&2
+              [ ! -s "$attach_stderr" ] || cat "$attach_stderr" >&2
+              if attachment=$(resolve_image_from_info "$image_path" 2>/dev/null); then
+                source_image_device=$(printf '%s' "$attachment" | jq -r '.whole_device // empty' 2>/dev/null || true)
+                source_image_attached=true
+                detach_source_image || return 2
+              else
+                info_status=$?
+                if [ "$info_status" -ne 1 ]; then
+                  source_image_attached=true
+                  report_source_cleanup_error \
+                    "Could not determine whether failed source image attachment left a device"
+                  return 2
+                fi
+              fi
+              return 1
+            fi
+
+            if ! attachment=$(python "$DISK_IMAGE_HELPER" attach --plist "$attach_plist"); then
+              echo "Could not resolve devices from hdiutil attach output for $image_path" >&2
+              attachment=$(resolve_image_from_info "$image_path" 2>/dev/null || true)
+            fi
+            source_image_device=$(printf '%s' "$attachment" | jq -r '.whole_device // empty' 2>/dev/null || true)
+            while IFS= read -r mount_point; do
+              [ -z "$mount_point" ] || source_image_mounts+=("$mount_point")
+            done < <(printf '%s' "$attachment" | jq -r '.mounted_entities[]?.mount_point' 2>/dev/null)
+            while IFS= read -r mounted_device; do
+              [ -z "$mounted_device" ] || source_image_mounted_devices+=("$mounted_device")
+            done < <(printf '%s' "$attachment" | jq -r '.mounted_entities[]?.device' 2>/dev/null)
+
+            if [ -z "$source_image_device" ] \
+              || [ ${#source_image_mounts[@]} -eq 0 ] \
+              || [ ${#source_image_mounts[@]} -ne ${#source_image_mounted_devices[@]} ]; then
+              echo "Incomplete hdiutil attachment metadata for $image_path" >&2
+              detach_source_image || return 2
+              return 1
+            fi
+            for mount_point in "${source_image_mounts[@]}"; do
+              if [ ! -d "$mount_point" ]; then
+                echo "hdiutil reported an invalid mount point for $image_path: $mount_point" >&2
+                detach_source_image || return 2
+                return 1
+              fi
+            done
+          }
+
+          find_app_in_source_image() {
+            local expected="$1"
+            local source_expected="$2"
+            local mount_point=""
+            local candidate=""
+            local result=""
+            for mount_point in "${source_image_mounts[@]}"; do
+              candidate=$(find_app_payload "$mount_point" "$expected" "$source_expected")
+              [ -z "$candidate" ] && continue
+              if [ -n "$result" ]; then
+                echo "Ambiguous app payload across mounted disk image entities" >&2
+                return 0
+              fi
+              result="$candidate"
+            done
+            [ -z "$result" ] || printf '%s\n' "$result"
+          }
+
+          find_pkg_in_source_image() {
+            local expected="$1"
+            local source_expected="$2"
+            local mount_point=""
+            local candidate=""
+            local result=""
+            for mount_point in "${source_image_mounts[@]}"; do
+              candidate=$(find_pkg_payload "$mount_point" "$expected" "$source_expected")
+              [ -z "$candidate" ] && continue
+              if [ -n "$result" ]; then
+                echo "Ambiguous package payload across mounted disk image entities" >&2
+                return 0
+              fi
+              result="$candidate"
+            done
+            [ -z "$result" ] || printf '%s\n' "$result"
+          }
+
           destroy_app_workspace() {
+            local attachment=""
+            local detach_output=""
+            cd "$WORKSPACE_DIR" || return 1
+            detach_source_image || return 1
             if [ "${app_attached:-false}" = true ] \
               && [ -z "${app_device:-}" ] \
               && [ -n "${app_sparse_image:-}" ]; then
-              app_device=$(hdiutil info -plist 2>/dev/null \
-                | plutil -convert json -o - -- - 2>/dev/null \
-                | python -c 'import json,pathlib,re,sys; target=pathlib.Path(sys.argv[1]).resolve(); data=json.load(sys.stdin); devices=[item.get("dev-entry") for image in data.get("images",[]) if image.get("image-path") and pathlib.Path(image["image-path"]).resolve()==target for item in image.get("system-entities",[]) if item.get("mount-point")]; valid=sorted({value for value in devices if isinstance(value,str) and re.fullmatch(r"/dev/disk[0-9]+(?:s[0-9]+)*",value)}); assert len(valid)==1; print(valid[0])' "$app_sparse_image" 2>/dev/null || true)
+              attachment=$(resolve_image_from_info "$app_sparse_image" 2>/dev/null || true)
+              app_device=$(printf '%s' "$attachment" | jq -r '.whole_device // empty' 2>/dev/null || true)
             fi
             if [ "${app_attached:-false}" = true ] && [ -z "${app_device:-}" ]; then
-              echo "Bounded workspace is attached but its device is unresolved; refusing destructive cleanup" >&2
+              if [ "${cleanup_error_reported:-false}" != true ]; then
+                echo "Bounded workspace is attached but its whole device is unresolved; refusing destructive cleanup" >&2
+                cleanup_error_reported=true
+              fi
               return 1
             fi
-            if [ -n "${app_device:-}" ]; then
-              if ! hdiutil detach "$app_device" -force >/dev/null 2>&1; then
-                echo "Could not detach bounded workspace device $app_device" >&2
+            if [ "${app_attached:-false}" = true ] \
+              && [ -n "${app_device:-}" ]; then
+              if ! detach_output=$(hdiutil detach "$app_device" -force 2>&1); then
+                if [ "${cleanup_error_reported:-false}" != true ]; then
+                  echo "Could not detach bounded workspace whole device $app_device: $detach_output" >&2
+                  cleanup_error_reported=true
+                  hdiutil info >&2 || true
+                fi
                 return 1
               fi
               app_attached=false
+              app_device=""
             fi
+            [ "${app_attached:-false}" = true ] || app_device=""
             [ -z "${app_mount_dir:-}" ] || rm -rf "$app_mount_dir" || return 1
             [ -z "${app_sparse_image:-}" ] || rm -f "$app_sparse_image" || return 1
             app_temp_dir=""
@@ -588,6 +779,7 @@ jobs:
             app_sparse_image=""
             app_device=""
             app_attached=false
+            cleanup_error_reported=false
           }
 
           create_app_workspace() {
@@ -595,6 +787,8 @@ jobs:
             local attach_plist=""
             local devices=""
             local image_base=""
+            local actual_mount=""
+            local info_status=0
             require_host_workspace_capacity || return 1
             safe_app=$(printf '%s' "$app_name" | tr -cd 'A-Za-z0-9._-')
             image_base=$(mktemp -u "${RUNNER_TEMP:-${TMPDIR:-/tmp}}/intunebrew-${safe_app}.XXXXXX")
@@ -603,21 +797,46 @@ jobs:
             hdiutil create -quiet -size "$WORKSPACE_CAPACITY" -fs APFS \
               -type SPARSE -volname "IntuneBrew-$safe_app" "$app_sparse_image" \
               || { destroy_app_workspace; return 1; }
-            attach_plist=$(hdiutil attach "$app_sparse_image" \
-              -mountpoint "$app_mount_dir" -nobrowse -plist) \
-              || { destroy_app_workspace; return 1; }
+            if ! attach_plist=$(hdiutil attach "$app_sparse_image" \
+              -mountpoint "$app_mount_dir" -nobrowse -plist); then
+              if devices=$(resolve_image_from_info "$app_sparse_image" 2>/dev/null); then
+                app_device=$(printf '%s' "$devices" | jq -r '.whole_device // empty' 2>/dev/null || true)
+                app_attached=true
+              else
+                info_status=$?
+                [ "$info_status" -eq 1 ] || app_attached=true
+              fi
+              destroy_app_workspace
+              return 1
+            fi
             app_attached=true
-            devices=$(printf '%s' "$attach_plist" \
-              | plutil -convert json -o - -- - 2>/dev/null \
-              | python -c 'import json,re,sys; data=json.load(sys.stdin); values={item.get("dev-entry") for item in data.get("system-entities",[]) if item.get("mount-point")}; valid=sorted(value for value in values if isinstance(value,str) and re.fullmatch(r"/dev/disk[0-9]+(?:s[0-9]+)*",value)); assert len(valid)==1; print(valid[0])') \
+            printf '%s' "$attach_plist" > "$app_mount_dir/workspace-attach.plist"
+            devices=$(python "$DISK_IMAGE_HELPER" attach \
+              --plist "$app_mount_dir/workspace-attach.plist") \
               || { destroy_app_workspace; return 1; }
-            app_device="$devices"
+            app_device=$(printf '%s' "$devices" | jq -r '.whole_device // empty')
+            actual_mount=$(printf '%s' "$devices" | jq -r \
+              'if (.mounted_entities | length) == 1 then .mounted_entities[0].mount_point else empty end')
+            if [ -z "$app_device" ] \
+              || ! python -c 'import pathlib,sys; assert pathlib.Path(sys.argv[1]).resolve()==pathlib.Path(sys.argv[2]).resolve()' \
+                "$actual_mount" "$app_mount_dir"; then
+              echo "Bounded workspace attach metadata did not match its requested mount" >&2
+              destroy_app_workspace
+              return 1
+            fi
+            rm -f "$app_mount_dir/workspace-attach.plist"
             app_temp_dir="$app_mount_dir"
             require_free_disk "$app_temp_dir" \
               || { destroy_app_workspace; return 1; }
           }
 
-          trap destroy_app_workspace EXIT
+          cleanup_on_exit() {
+            local status=$?
+            trap - EXIT
+            destroy_app_workspace || status=1
+            exit "$status"
+          }
+          trap cleanup_on_exit EXIT
 
           require_archive_quota() {
             local archive="$1"
@@ -799,7 +1018,10 @@ jobs:
           
           for app_info in $APPS_TO_BUILD; do
             IFS=':' read -r app_name ignored_url <<< "$app_info"
-            destroy_app_workspace
+            if ! destroy_app_workspace; then
+              echo "::error::Could not safely clean the prior app workspace"
+              exit 1
+            fi
             if ! create_app_workspace; then
               FAILED_APPS+=("$app_name")
               ERROR_LOG+=("$app_name: Could not create bounded APFS workspace")
@@ -866,7 +1088,10 @@ jobs:
                 --homepage "$homepage"; then
               FAILED_APPS+=("$app_name")
               ERROR_LOG+=("$app_name: Rejected unsafe or cross-origin download referer")
-              destroy_app_workspace
+              if ! destroy_app_workspace; then
+                echo "::error::Could not safely clean the rejected app workspace"
+                exit 1
+              fi
               continue
             fi
             echo "📦 Version: $version"
@@ -911,7 +1136,10 @@ jobs:
                 FAILED_APPS+=("$app_name")
                 ERROR_LOG+=("$app_name: Failed to update catalog JSON for exact existing package")
               fi
-              destroy_app_workspace
+              if ! destroy_app_workspace; then
+                echo "::error::Could not safely clean the reused app workspace"
+                exit 1
+              fi
               continue
             fi
             
@@ -1133,27 +1361,17 @@ jobs:
               fi
               record_observed_source_digest "${download_path}.dmg" "$WORKSPACE_DIR/Apps/${app_name}.json"
               
-              # Create mount point
-              echo "📂 Creating mount point at ${download_path}_mount"
-              # Remove mount point if it exists
-              if [ -d "${download_path}_mount" ]; then
-                echo "🧹 Removing existing mount point: ${download_path}_mount"
-                # Try to unmount first if it's mounted
-                hdiutil detach "${download_path}_mount" 2>/dev/null || true
-                rm -rf "${download_path}_mount"
-              fi
-              mkdir -p "${download_path}_mount"
-              
-              # Mount DMG
-              echo "💿 Mounting DMG..."
-              if hdiutil attach "${download_path}.dmg" -mountpoint "${download_path}_mount" -nobrowse 2>/dev/null; then
-                echo "✅ DMG mounted successfully"
-                echo "📁 Mount point contents:"
-                ls -la "${download_path}_mount"
+              echo "💿 Mounting DMG read-only..."
+              if attach_source_image "${download_path}.dmg"; then
+                echo "✅ DMG mounted successfully on ${source_image_mounts[*]}"
               else
+                attach_status=$?
+                if [ "$attach_status" -eq 2 ]; then
+                  echo "::error::DMG attachment cleanup could not detach its whole image device"
+                  exit 1
+                fi
                 echo "❌ Failed to mount DMG"
                 rm -f "${download_path}.dmg"
-                rm -rf "${download_path}_mount"
                 FAILED_APPS+=("$app_name")
                 ERROR_LOG+=("$app_name: Could not mount DMG from $url")
                 continue
@@ -1163,14 +1381,36 @@ jobs:
               declared_pkg=$(jq -r '.artifact_pkg // empty' "$WORKSPACE_DIR/Apps/${app_name}.json")
               source_app=$(jq -r '.artifact_app_source // empty' "$WORKSPACE_DIR/Apps/${app_name}.json")
               source_pkg=$(jq -r '.artifact_pkg_source // empty' "$WORKSPACE_DIR/Apps/${app_name}.json")
-              app_file=$(find_app_payload "${download_path}_mount" "$declared_app" "$source_app")
+              extract_dir="$app_temp_dir/extracted"
+              rm -rf "$extract_dir"
+              mkdir -p "$extract_dir"
+              app_file=$(find_app_in_source_image "$declared_app" "$source_app")
               pkg_file=""
-              [ -n "$app_file" ] || pkg_file=$(find_pkg_payload "${download_path}_mount" "$declared_pkg" "$source_pkg")
+              [ -n "$app_file" ] || pkg_file=$(find_pkg_in_source_image "$declared_pkg" "$source_pkg")
 
-              # The DMG must be unmounted whether this succeeds or not, so
-              # failures set a flag here and are recorded after the cleanup.
-              pkg_in_dmg_error=""
+              copied_app=""
+              copied_pkg=""
               if [ -n "$app_file" ]; then
+                copied_app="$extract_dir/$(basename "$app_file")"
+                ditto "$app_file" "$copied_app" || copied_app=""
+              elif [ -n "$pkg_file" ]; then
+                copied_pkg="$extract_dir/$(basename "$pkg_file")"
+                cp "$pkg_file" "$copied_pkg" || copied_pkg=""
+              fi
+              if ! detach_source_image; then
+                echo "::error::Could not detach source DMG before workspace cleanup"
+                exit 1
+              fi
+              rm -f "${download_path}.dmg"
+              app_file="$copied_app"
+              pkg_file="$copied_pkg"
+
+              # The source image is detached before packaging continues, so
+              # failures below can safely clean the bounded workspace.
+              pkg_in_dmg_error=""
+              if ! require_extracted_quota "$extract_dir"; then
+                pkg_in_dmg_error="Copied DMG payload exceeds quota or disk headroom"
+              elif [ -n "$app_file" ]; then
                 extracted_bundle_id=$(extract_bundle_id_from_plist "$app_file/Contents/Info.plist")
                 if ! require_bundle_id_match "$WORKSPACE_DIR/Apps/${app_name}.json" "$extracted_bundle_id"; then
                   pkg_in_dmg_error="Declared app bundle ID mismatch"
@@ -1224,11 +1464,8 @@ jobs:
 
               # Cleanup
               echo "🧹 Cleaning up..."
-              echo "💿 Unmounting DMG..."
-              hdiutil detach "${download_path}_mount" 2>/dev/null || true
               echo "🗑️ Removing temporary files..."
-              rm -f "${download_path}.dmg"
-              rm -rf "${download_path}_mount"
+              rm -rf "$extract_dir"
               echo "✨ Cleanup complete"
 
               if [ -n "$pkg_in_dmg_error" ]; then
@@ -1313,24 +1550,43 @@ jobs:
                     continue
                   fi
                   [ "$kind" != "dmg" ] || record_observed_source_digest "${download_path}.dmg" "$WORKSPACE_DIR/Apps/${app_name}.json"
-                  mkdir -p "$mount_dir"
-                  if ! hdiutil attach "${download_path}.dmg" -mountpoint "$mount_dir" -nobrowse >/dev/null; then
+                  if attach_source_image "${download_path}.dmg"; then
+                    :
+                  else
+                    attach_status=$?
+                    if [ "$attach_status" -eq 2 ]; then
+                      echo "::error::DMG attachment cleanup could not detach its whole image device"
+                      exit 1
+                    fi
                     FAILED_APPS+=("$app_name")
                     ERROR_LOG+=("$app_name: Could not mount DMG from $url")
                     rm -rf "$extract_dir" "$mount_dir"
                     rm -f "${download_path}.dmg"
                     continue
                   fi
-                  mounted_app=$(find_app_payload "$mount_dir" "$declared_app" "$source_app")
-                  mounted_pkg=$(find_pkg_payload "$mount_dir" "$declared_pkg" "$source_pkg")
+                  mounted_app=$(find_app_in_source_image "$declared_app" "$source_app")
+                  mounted_pkg=$(find_pkg_in_source_image "$declared_pkg" "$source_pkg")
+                  dmg_copy_error=""
                   if [ -n "$mounted_app" ]; then
-                    ditto "$mounted_app" "$extract_dir/$(basename "$mounted_app")"
+                    ditto "$mounted_app" "$extract_dir/$(basename "$mounted_app")" \
+                      || dmg_copy_error="Failed to copy app payload from DMG"
                   elif [ -n "$mounted_pkg" ]; then
-                    cp "$mounted_pkg" "$extract_dir/$(basename "$mounted_pkg")"
+                    cp "$mounted_pkg" "$extract_dir/$(basename "$mounted_pkg")" \
+                      || dmg_copy_error="Failed to copy package payload from DMG"
                   fi
-                  hdiutil detach "$mount_dir" >/dev/null 2>&1 || true
+                  if ! detach_source_image; then
+                    echo "::error::Could not detach source DMG before workspace cleanup"
+                    exit 1
+                  fi
                   rm -rf "$mount_dir"
                   rm -f "${download_path}.dmg"
+                  if [ -n "$dmg_copy_error" ] \
+                    || ! require_extracted_quota "$extract_dir"; then
+                    FAILED_APPS+=("$app_name")
+                    ERROR_LOG+=("$app_name: ${dmg_copy_error:-Copied DMG payload exceeds quota or disk headroom}")
+                    rm -rf "$extract_dir"
+                    continue
+                  fi
                   ;;
                 archive)
                   archive_path="${download_path}.archive"
@@ -1400,16 +1656,39 @@ jobs:
                   if [ -z "$app_file" ] && [ -z "$pkg_file" ]; then
                     nested_dmg=$(find "$extract_dir" -type f -name "*.dmg" -print -quit)
                     if [ -n "$nested_dmg" ]; then
-                      mkdir -p "$mount_dir"
-                      if hdiutil attach "$nested_dmg" -mountpoint "$mount_dir" -nobrowse >/dev/null; then
-                        mounted_app=$(find_app_payload "$mount_dir" "$declared_app" "$source_app")
-                        mounted_pkg=$(find_pkg_payload "$mount_dir" "$declared_pkg" "$source_pkg")
+                      if attach_source_image "$nested_dmg"; then
+                        mounted_app=$(find_app_in_source_image "$declared_app" "$source_app")
+                        mounted_pkg=$(find_pkg_in_source_image "$declared_pkg" "$source_pkg")
+                        nested_copy_error=""
                         if [ -n "$mounted_app" ]; then
-                          ditto "$mounted_app" "$extract_dir/$(basename "$mounted_app")"
+                          ditto "$mounted_app" "$extract_dir/$(basename "$mounted_app")" \
+                            || nested_copy_error="Failed to copy app payload from nested DMG"
                         elif [ -n "$mounted_pkg" ]; then
-                          cp "$mounted_pkg" "$extract_dir/$(basename "$mounted_pkg")"
+                          cp "$mounted_pkg" "$extract_dir/$(basename "$mounted_pkg")" \
+                            || nested_copy_error="Failed to copy package payload from nested DMG"
                         fi
-                        hdiutil detach "$mount_dir" >/dev/null 2>&1 || true
+                        if ! detach_source_image; then
+                          echo "::error::Could not detach nested DMG before workspace cleanup"
+                          exit 1
+                        fi
+                        rm -f "$nested_dmg"
+                        if [ -n "$nested_copy_error" ] \
+                          || ! require_extracted_quota "$extract_dir"; then
+                          FAILED_APPS+=("$app_name")
+                          ERROR_LOG+=("$app_name: ${nested_copy_error:-Copied nested DMG payload exceeds quota or disk headroom}")
+                          rm -rf "$extract_dir"
+                          continue
+                        fi
+                      else
+                        attach_status=$?
+                        if [ "$attach_status" -eq 2 ]; then
+                          echo "::error::Nested DMG attachment cleanup could not detach its whole image device"
+                          exit 1
+                        fi
+                        FAILED_APPS+=("$app_name")
+                        ERROR_LOG+=("$app_name: Could not mount nested DMG from $url")
+                        rm -rf "$extract_dir"
+                        continue
                       fi
                       rm -rf "$mount_dir"
                     fi
@@ -1490,7 +1769,10 @@ jobs:
                   rm -rf "$extract_dir"
                   SUCCESSFUL_APPS+=("$app_name")
                   echo "✅ Completed processing $app_name"
-                  destroy_app_workspace
+                  if ! destroy_app_workspace; then
+                    echo "::error::Could not safely clean the completed app workspace"
+                    exit 1
+                  fi
                   continue
                 else
                   echo "❌ No .app or .pkg file found for $app_name"
@@ -1564,11 +1846,17 @@ jobs:
             fi
 
             SUCCESSFUL_APPS+=("$app_name")
-            destroy_app_workspace
+            if ! destroy_app_workspace; then
+              echo "::error::Could not safely clean the completed app workspace"
+              exit 1
+            fi
             echo "✅ Completed processing $app_name"
             echo "------------------------------------------------"
           done
-          destroy_app_workspace
+          if ! destroy_app_workspace; then
+            echo "::error::Could not safely clean the final app workspace"
+            exit 1
+          fi
 
           # Never publish the collector's vendor URL or source-archive SHA for a
           # package that failed. Keep the last committed manifest until a build
